@@ -63,6 +63,7 @@ public class GlobalExceptionHandler {
         return build(ErrorCode.INTERNAL_ERROR.getStatus(), ErrorCode.INTERNAL_ERROR.getCode(), ErrorCode.INTERNAL_ERROR.getMessage());
     }
 
+
     private ResponseEntity<ApiResponse<Void>> build(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status).body(ApiResponse.fail(new ApiError(code, message)));
     }

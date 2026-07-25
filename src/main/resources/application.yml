@@ -23,11 +23,12 @@ spring:
         format_sql: true
     show-sql: true
 
-# Batch 설정 추가
+# Batch 설정
 # job.enabled: false : 서버가 시작될 때 정산이 자동 실행되는 것을 막고,
 # 나중에 스케줄러나 API가 명시적으로 실행하도록 설정
 # Spring Batch는 실행 이력을 저장하기 위한 메타데이터 테이블 사용을 위함
 # (최초 1회만 사용 또는 script로 생성되는지 확인 예정)
+
   sql:
     init:
       mode: never

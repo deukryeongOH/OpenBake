@@ -22,3 +22,7 @@ jwt:
   secret: test-secret-key-for-ci-do-not-use-in-production-32bytes+
   access-token-expiration: 1800000
   refresh-token-expiration: 1209600000
+
+seller:
+  settlement:
+    encryption-key: vda+GapT+dotms8HmcaQVkp9gbhfDH2YIteyLm2DTWw=

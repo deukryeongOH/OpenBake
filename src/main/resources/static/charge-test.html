@@ -20,8 +20,13 @@
     <p>서버가 <code>localhost:8080</code>에서 실행 중이어야 합니다.</p>
 
     <div class="step">
+        <h3>Step 0. JWT 토큰 입력</h3>
+        <label>Access Token: <input type="text" id="accessToken" style="width:100%" placeholder="Bearer 토큰 (로그인 후 받은 accessToken)"></label>
+        <pre>로그인 API로 받은 accessToken을 붙여넣으세요.</pre>
+    </div>
+
+    <div class="step">
         <h3>Step 1. 충전 금액 입력</h3>
-        <label>memberId: <input type="number" id="memberId" value="1"></label><br><br>
         <label>금액(원): <input type="number" id="amount" value="10000" step="1000"></label><br><br>
         <button onclick="createCharge()">충전 요청 생성</button>
         <pre id="step1Result">아직 실행 안 함</pre>
@@ -55,22 +60,27 @@
         // 결제위젯 문서용 테스트 키
         const CLIENT_KEY = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
 
-        let savedMemberId = null;
         let savedOrderId = null;
         let savedOrderName = null;
         let widgets = null;
 
+        function getAuthHeaders() {
+            const token = document.getElementById('accessToken').value;
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            };
+        }
+
         // Step 1: 충전 요청 생성
         async function createCharge() {
-            const memberId = document.getElementById('memberId').value;
             const amount = document.getElementById('amount').value;
-            savedMemberId = memberId;
 
             try {
                 const res = await fetch(`${API_BASE}/api/v1/deposit/charges`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memberId: Number(memberId), amount: Number(amount) })
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ amount: Number(amount) })
                 });
                 const data = await res.json();
                 document.getElementById('step1Result').textContent = JSON.stringify(data, null, 2);
@@ -89,7 +99,10 @@
         async function renderWidget(amount) {
             document.getElementById('step2Result').textContent = '위젯 로딩 중...';
 
-            const customerKey = 'test-customer-' + savedMemberId;
+            // TODO: customerKey는 사용자별로 고유해야 함 (토스가 결제 수단 저장/고객 식별에 사용).
+            //       JWT 도입으로 프론트가 memberId를 모르게 되어 고정값 사용 중.
+            //       제대로 하려면 잔액 조회 응답에서 memberId를 받거나 서버가 customerKey를 내려줘야 함.
+            const customerKey = 'test-customer-default';
             const tossPayments = TossPayments(CLIENT_KEY);
             widgets = tossPayments.widgets({ customerKey: customerKey });
 
@@ -117,7 +130,7 @@
                     await widgets.requestPayment({
                         orderId: savedOrderId,
                         orderName: savedOrderName || '예치금 충전',
-                        successUrl: window.location.origin + '/charge-test.html?success=true&memberId=' + savedMemberId,
+                        successUrl: window.location.origin + '/charge-test.html?success=true',
                         failUrl: window.location.origin + '/charge-test.html?success=false',
                     });
                 } catch (e) {
@@ -134,8 +147,6 @@
                 const paymentKey = params.get('paymentKey');
                 const orderId = params.get('orderId');
                 const amount = params.get('amount');
-                const memberId = params.get('memberId') || 1;
-
                 document.getElementById('step1Result').textContent = '이전 단계에서 완료됨';
                 document.getElementById('step2Result').textContent =
                     '결제 완료!\npaymentKey: ' + paymentKey +
@@ -146,9 +157,8 @@
                 try {
                     const res = await fetch(`${API_BASE}/api/v1/deposit/charges/confirm`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: getAuthHeaders(),
                         body: JSON.stringify({
-                            memberId: Number(memberId),
                             paymentKey: paymentKey,
                             orderId: orderId,
                             amount: Number(amount)
@@ -159,7 +169,6 @@
 
                     if (data.success) {
                         document.getElementById('step3Result').parentElement.classList.add('success');
-                        savedMemberId = memberId;
                     } else {
                         document.getElementById('step3Result').parentElement.classList.add('error');
                     }
@@ -175,9 +184,10 @@
 
         // Step 4: 잔액 확인
         async function checkBalance() {
-            const memberId = savedMemberId || document.getElementById('memberId').value;
             try {
-                const res = await fetch(`${API_BASE}/api/v1/deposit/account/${memberId}`);
+                const res = await fetch(`${API_BASE}/api/v1/deposit/account`, {
+                    headers: getAuthHeaders()
+                });
                 const data = await res.json();
                 document.getElementById('step4Result').textContent = JSON.stringify(data, null, 2);
 

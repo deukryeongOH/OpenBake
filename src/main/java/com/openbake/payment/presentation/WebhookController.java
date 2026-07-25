@@ -1,8 +1,6 @@
 package com.openbake.payment.presentation;
 
 import com.openbake.payment.application.ChargeReconcileService;
-import com.openbake.payment.domain.ChargeRequest;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
 import com.openbake.payment.presentation.dto.TossWebhookRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class WebhookController {
 
-    private final ChargeRequestRepository chargeRequestRepository;
     private final ChargeReconcileService chargeReconcileService;
 
     @PostMapping("/toss")
@@ -42,25 +39,8 @@ public class WebhookController {
                 return ResponseEntity.ok().build();
             }
 
-            String paymentKey = request.data().paymentKey();
-
-            ChargeRequest chargeRequest = chargeRequestRepository
-                    .findByPgPaymentKey(paymentKey)
-                    .orElse(null);
-
-            if (chargeRequest == null) {
-                log.warn("[웹훅] 매칭되는 충전 요청 없음: paymentKey={}", paymentKey);
-                return ResponseEntity.ok().build();
-            }
-
-            // 이미 완료된 건이면 스킵 (completeCharge에도 락+가드가 있지만 PG 조회 자체를 아낌)
-            if (chargeRequest.isDone()) {
-                log.info("[웹훅] 이미 처리 완료된 건: chargeRequestId={}", chargeRequest.getId());
-                return ResponseEntity.ok().build();
-            }
-
             // PG 조회 API로 실제 상태 확인 후 처리
-            chargeReconcileService.reconcile(chargeRequest);
+            chargeReconcileService.reconcileByPaymentKey(request.data().paymentKey());
 
         } catch (Exception e) {
             // 에러 응답 시 토스가 재시도를 반복하므로 예외를 삼키고 200 반환

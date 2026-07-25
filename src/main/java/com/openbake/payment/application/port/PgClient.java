@@ -1,4 +1,4 @@
-package com.openbake.payment.infrastructure.pg;
+package com.openbake.payment.application.port;
 
 import java.math.BigDecimal;
 

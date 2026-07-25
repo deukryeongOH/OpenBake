@@ -2,19 +2,10 @@ package com.openbake.seller.presentation;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.seller.application.SellerService;
-import com.openbake.seller.presentation.dto.AccountVerificationConfirmRequest;
-import com.openbake.seller.presentation.dto.AccountVerificationConfirmResponse;
-import com.openbake.seller.presentation.dto.AccountVerificationStartRequest;
-import com.openbake.seller.presentation.dto.AccountVerificationStartResponse;
-import com.openbake.seller.presentation.dto.BusinessVerificationRequest;
-import com.openbake.seller.presentation.dto.BusinessVerificationResponse;
+import com.openbake.seller.presentation.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/sellers")
@@ -39,6 +30,23 @@ public class SellerController {
             @PathVariable String verificationRequestId,
             @Valid @RequestBody AccountVerificationConfirmRequest request) {
         return ApiResponse.ok(sellerService.verifyAccount(verificationRequestId, request));
+    }
+
+    @PostMapping("/apply")
+    public ApiResponse<ApplicationCreateResponse> applySeller(@Valid @RequestBody ApplicationCreateRequest request) {
+        return ApiResponse.ok(sellerService.applySeller(request));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ApiResponse<ApplicationStatusUpdateResponse> updateApplicationStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody ApplicationStatusUpdateRequest request) {
+        return ApiResponse.ok(sellerService.updateApplicationStatus(id, request));
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<SellerResponse> getSeller(@PathVariable Long id) {
+        return ApiResponse.ok(sellerService.getSeller(id));
     }
 
 }

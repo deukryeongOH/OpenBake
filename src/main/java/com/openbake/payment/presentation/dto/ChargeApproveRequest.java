@@ -11,7 +11,6 @@ import java.math.BigDecimal;
  * 필드명은 API 명세(5-4)와 일치시킨다.
  */
 public record ChargeApproveRequest(
-        Long memberId,        // 인증 연동 전이므로 직접 받음
         String paymentKey,    // 토스페이먼츠가 발급한 결제 키
         String orderId,       // 충전 요청 시 생성한 주문번호
         BigDecimal amount     // 결제 금액 (위변조 검증용)

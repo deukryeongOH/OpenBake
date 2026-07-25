@@ -1,8 +1,9 @@
 package com.openbake.payment.application;
 
 import com.openbake.payment.domain.ChargeRequest;
-import com.openbake.payment.infrastructure.pg.PgClient;
-import com.openbake.payment.infrastructure.pg.PgPaymentStatus;
+import com.openbake.payment.infrastructure.ChargeRequestRepository;
+import com.openbake.payment.application.port.PgClient;
+import com.openbake.payment.application.port.PgPaymentStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,31 @@ public class ChargeReconcileService {
 
     private final ChargeService chargeService;
     private final PgClient pgClient;
+    private final ChargeRequestRepository chargeRequestRepository;
+
+    /**
+     * paymentKey로 충전 요청을 찾아 PG 조회 후 상태를 반영한다.
+     * 웹훅 컨트롤러가 호출한다.
+     *
+     * 매칭되는 요청이 없거나 이미 완료된 건이면 무시한다.
+     */
+    public void reconcileByPaymentKey(String paymentKey) {
+        ChargeRequest chargeRequest = chargeRequestRepository
+                .findByPgPaymentKey(paymentKey)
+                .orElse(null);
+
+        if (chargeRequest == null) {
+            log.warn("[reconcile] 매칭되는 충전 요청 없음: paymentKey={}", paymentKey);
+            return;
+        }
+
+        if (chargeRequest.isDone()) {
+            log.info("[reconcile] 이미 처리 완료된 건: chargeRequestId={}", chargeRequest.getId());
+            return;
+        }
+
+        reconcile(chargeRequest);
+    }
 
     /**
      * PG 조회 API로 실제 결제 상태를 확인하고 반영한다.

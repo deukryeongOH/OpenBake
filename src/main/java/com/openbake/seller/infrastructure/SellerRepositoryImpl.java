@@ -22,4 +22,10 @@ public class SellerRepositoryImpl implements SellerRepository {
     public Optional<Seller> findByMemberId(Long memberId) {
         return sellerJpaRepository.findByMemberId(memberId);
     }
+
+    @Override
+    public Seller save(Seller seller) {
+        return sellerJpaRepository.save(seller);
+    }
+
 }

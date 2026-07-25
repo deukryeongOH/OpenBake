@@ -1,5 +1,10 @@
 package com.openbake.payment.infrastructure.pg;
 
+import com.openbake.payment.application.port.PgApproveException;
+import com.openbake.payment.application.port.PgApproveResponse;
+import com.openbake.payment.application.port.PgClient;
+import com.openbake.payment.application.port.PgPaymentStatus;
+import com.openbake.payment.application.port.PgUnknownResultException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;

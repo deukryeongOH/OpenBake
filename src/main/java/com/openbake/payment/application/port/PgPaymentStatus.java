@@ -1,4 +1,4 @@
-package com.openbake.payment.infrastructure.pg;
+package com.openbake.payment.application.port;
 
 /**
  * PG 결제 조회 응답 — 토스페이먼츠 결제 조회 API에서 필요한 필드만 추출.

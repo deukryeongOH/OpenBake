@@ -96,5 +96,17 @@ public class Drop {
             throw new BusinessException(ErrorCode.INVALID_PICKUP_DATE); // 기본 메세지 사용
         }
     }
+    // 대기열 진입용 시간 검증 (재고 조회 없이 시간만 체크)
+    public boolean isAccessible(LocalDateTime now) {
+        // 이미 마감 처리된 드롭은 시각과 상관없이 거부
+        if (this.dropStatus == DropStatus.COMPLETED) {
+            return false;
+        }
+        // DB 상태가 UPCOMING이어도 실시간 시각이 시작과 종료 사이라면 통과
+        return !now.isBefore(this.dropStart) && !now.isAfter(this.dropEnd);
+    }
 
+    public void changeStatus(DropStatus dropStatus) {
+        this.dropStatus = dropStatus;
+    }
 }

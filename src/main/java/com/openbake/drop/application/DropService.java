@@ -4,7 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.presentation.dto.DropProductInfoRequest;
-import com.openbake.drop.presentation.dto.DropProductInfoResponse;
+import com.openbake.drop.application.dto.DropProductInfoResponse;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -85,8 +85,30 @@ public class DropService {
         LocalDateTime startOfDay = dropDate.atStartOfDay();
         LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
 
-        if (dropRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE); // D004, HTTP 409 반환
+        // 먼저 하루에 드롭은 한 번으로 제한되므로 먼저 검증
+        if (dropRepository.existsByDropStartBetween(startOfDay, endOfDay)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
+
+        // (확장성을 고려한 판매자 드롭 등록 제한 / 추후 하루에 드롭이 여러 개일 경우)
+        if (dropRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
+        }
+    }
+    @Transactional
+    public void changeDropStatusActive(Long dropId) {
+        Drop drop = findDrop(dropId);
+        drop.changeStatus(DropStatus.ACTIVE);
+    }
+
+    @Transactional
+    public void changeDropStatusCompleted(Long dropId) {
+        Drop drop = findDrop(dropId);
+        drop.changeStatus(DropStatus.COMPLETED);
+    }
+
+    private Drop findDrop(Long dropId){
+        return dropRepository.findById(dropId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
     }
 }

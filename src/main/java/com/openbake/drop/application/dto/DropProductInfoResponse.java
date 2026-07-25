@@ -1,4 +1,4 @@
-package com.openbake.drop.presentation.dto;
+package com.openbake.drop.application.dto;
 
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropInventory;

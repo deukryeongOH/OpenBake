@@ -2,7 +2,7 @@ package com.openbake.drop.application;
 
 import com.openbake.drop.domain.*;
 import com.openbake.drop.presentation.dto.DropProductInfoRequest;
-import com.openbake.drop.presentation.dto.DropProductInfoResponse;
+import com.openbake.drop.application.dto.DropProductInfoResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,6 @@ import static org.mockito.Mockito.verify;
 
 
 import static org.mockito.BDDMockito.given;
-import static org.mockito.ArgumentMatchers.any;
 @ExtendWith(MockitoExtension.class)
 class DropServiceTest {
 
@@ -41,9 +40,9 @@ class DropServiceTest {
     @BeforeEach
     void setUp() {
         Set<LocalDate> pickUpDates = Set.of(
-                LocalDate.parse("2026-08-01"),
-                LocalDate.parse("2026-08-02"),
-                LocalDate.parse("2026-08-03")
+                LocalDate.parse("2028-08-01"),
+                LocalDate.parse("2028-08-02"),
+                LocalDate.parse("2028-08-03")
         );
 
         request = new DropProductInfoRequest(
@@ -51,8 +50,8 @@ class DropServiceTest {
                 "원물 맛이 많이 나요.",
                 "C:\\Users\\deukr\\OneDrive\\바탕 화면\\두쫀쿠.jpg",
                 pickUpDates,
-                LocalDateTime.parse("2026-07-25T13:00:00"),
-                LocalDateTime.parse("2026-07-25T14:00:00"),
+                LocalDateTime.parse("2028-07-25T13:00:00"),
+                LocalDateTime.parse("2028-07-25T14:00:00"),
                 5,
                 8000,
                 200

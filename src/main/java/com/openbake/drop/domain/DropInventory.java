@@ -50,9 +50,19 @@ public class DropInventory {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "수량은 1개 이상 선택해주세요.");
         }
         if (this.remainQuantity < quantity) {
-            // 도메인 전용 에러코드 사용 (E002: 준비된 재고가 모두 소진되었습니다.)
             throw new BusinessException(ErrorCode.DROP_OUT_OF_STOCK);
         }
         this.remainQuantity -= quantity;
+    }
+
+    public void increaseStock(int quantity) {
+        if (quantity <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "수량은 1개 이상 이어야 합니다.");
+        }
+        if (this.remainQuantity + quantity > this.totalQuantity) {
+            throw new BusinessException(ErrorCode.INVALID_TOTAL_QUANTITY);
+        }
+        this.remainQuantity += quantity;
+
     }
 }

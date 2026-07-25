@@ -1,6 +1,7 @@
 package com.openbake.payment.presentation;
 
 import com.openbake.common.response.ApiResponse;
+import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.payment.application.ChargeFacade;
 import com.openbake.payment.application.ChargeService;
 import com.openbake.payment.presentation.dto.ChargeApproveRequest;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -26,6 +26,7 @@ public class ChargeController {
 
     private final ChargeService chargeService;
     private final ChargeFacade chargeFacade;
+    private final CurrentMemberProvider currentMemberProvider;
 
     /**
      * 충전 요청 생성.
@@ -34,8 +35,9 @@ public class ChargeController {
     @PostMapping
     public ResponseEntity<ApiResponse<ChargeCreateResponse>> createCharge(
             @RequestBody ChargeCreateRequest request) {
+        Long memberId = currentMemberProvider.getId();
         ChargeCreateResponse response = chargeService.createChargeRequest(
-                request.memberId(), request.amount());
+                memberId, request.amount());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
@@ -43,12 +45,11 @@ public class ChargeController {
      * 충전 상태 조회 (5-5).
      * PG_TIMEOUT(504) 이후 프론트가 5초 간격으로 폴링하거나,
      * 충전 내역에서 상태를 확인할 때 사용.
-     * 인증 연동 전이므로 memberId를 쿼리 파라미터로 받는다.
      */
     @GetMapping("/{chargeRequestId}")
     public ResponseEntity<ApiResponse<ChargeStatusResponse>> getChargeStatus(
-            @PathVariable Long chargeRequestId,
-            @RequestParam Long memberId) {
+            @PathVariable Long chargeRequestId) {
+        Long memberId = currentMemberProvider.getId();
         ChargeStatusResponse response = chargeService.getChargeStatus(chargeRequestId, memberId);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
@@ -61,8 +62,9 @@ public class ChargeController {
     @PostMapping("/confirm")
     public ResponseEntity<ApiResponse<ChargeApproveResponse>> approveCharge(
             @RequestBody ChargeApproveRequest request) {
+        Long memberId = currentMemberProvider.getId();
         ChargeApproveResponse response = chargeFacade.approve(
-                request.memberId(), request.paymentKey(),
+                memberId, request.paymentKey(),
                 request.orderId(), request.amount());
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

@@ -1,5 +1,6 @@
 package com.openbake.seller.domain;
 
+import com.openbake.common.exception.InvalidApplicationStatusException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -48,9 +49,11 @@ public class Seller {
     @Column(name = "settlement_bank_code", nullable = false)
     private String settlementBankCode;
 
+    @Convert(converter = SettlementAccountConverter.class)
     @Column(name = "settlement_account_number", nullable = false)
     private String settlementAccountNumber;
 
+    @Convert(converter = SettlementAccountConverter.class)
     @Column(name = "settlement_account_holder", nullable = false)
     private String settlementAccountHolder;
 
@@ -87,5 +90,20 @@ public class Seller {
         if (accountVerified) {
             this.accountVerifiedAt = LocalDateTime.now();
         }
+    }
+
+    public void approve() {
+        if (applicationStatus != ApplicationStatus.PENDING) {
+            throw new InvalidApplicationStatusException();
+        }
+        this.applicationStatus = ApplicationStatus.APPROVED;
+    }
+
+    public void reject(String rejectReason) {
+        if (applicationStatus != ApplicationStatus.PENDING) {
+            throw new InvalidApplicationStatusException();
+        }
+        this.applicationStatus = ApplicationStatus.REJECTED;
+        this.rejectReason = rejectReason;
     }
 }

@@ -100,3 +100,8 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-expiration: 1800000    # 30분 (ms)
   refresh-token-expiration: 1209600000 # 14일 (ms)
+
+seller:
+  settlement:
+    # Base64로 인코딩된 AES-256(32바이트) 키. `openssl rand -base64 32`로 생성.
+    encryption-key: ${SETTLEMENT_ENCRYPTION_KEY}

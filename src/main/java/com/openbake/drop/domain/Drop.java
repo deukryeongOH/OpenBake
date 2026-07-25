@@ -105,4 +105,8 @@ public class Drop {
         // DB 상태가 UPCOMING이어도 실시간 시각이 시작과 종료 사이라면 통과
         return !now.isBefore(this.dropStart) && !now.isAfter(this.dropEnd);
     }
+
+    public void changeStatus(DropStatus dropStatus) {
+        this.dropStatus = dropStatus;
+    }
 }

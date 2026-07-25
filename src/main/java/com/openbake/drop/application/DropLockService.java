@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DropLockService {
 
     private final DropRepository dropRepository;
+    private final DropService dropService;
     private final DropInventoryRepository dropInventoryRepository;
     private final DropEntryRepository dropEntryRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -34,6 +35,10 @@ public class DropLockService {
 
         DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
         dropInventory.decreaseQuantity(quantity);
+
+        if (dropInventory.getRemainQuantity() == 0) {
+            dropService.changeDropStatusCompleted(dropInventory.getDropId());
+        }
 
         dropEntry.completeReservation();
 

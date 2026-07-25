@@ -89,4 +89,20 @@ public class DropService {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE); // D004, HTTP 409 반환
         }
     }
+    @Transactional
+    public void changeDropStatusActive(Long dropId) {
+        Drop drop = findDrop(dropId);
+        drop.changeStatus(DropStatus.ACTIVE);
+    }
+
+    @Transactional
+    public void changeDropStatusCompleted(Long dropId) {
+        Drop drop = findDrop(dropId);
+        drop.changeStatus(DropStatus.COMPLETED);
+    }
+
+    private Drop findDrop(Long dropId){
+        return dropRepository.findById(dropId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
+    }
 }

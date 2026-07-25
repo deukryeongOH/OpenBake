@@ -1,5 +1,6 @@
 package com.openbake.drop.infrastructure.scheduler;
 
+import com.openbake.drop.application.DropService;
 import com.openbake.drop.application.queue.InMemoryQueueManager;
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
@@ -22,9 +24,12 @@ public class QueueScheduler {
 
     private final InMemoryQueueManager queueManager;
     private final DropRepository dropRepository;
+    private final DropService dropService;
 
     // 오늘의 드롭 정보 캐시. 매초 갱신하지 않고 자정/기동 시에만 DB를 조회한다.
     private final AtomicReference<CachedDrop> cachedDrop = new AtomicReference<>(CachedDrop.empty(LocalDate.now()));
+    private final AtomicBoolean checkStart = new AtomicBoolean(false);;
+    private final AtomicBoolean checkEnd = new AtomicBoolean(false);
 
     // 서버 기동 시 당일 드롭 정보를 1회 캐싱 (자정 스케줄을 못 탄 채로 기동될 수 있으므로)
     @PostConstruct
@@ -38,6 +43,9 @@ public class QueueScheduler {
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = today.atStartOfDay();
         LocalDateTime todayEnd = today.atTime(LocalTime.MAX);
+
+        checkStart.set(false);
+        checkEnd.set(false);
 
         Optional<Drop> findDrop = dropRepository.findByDropStartBetween(todayStart, todayEnd);
 
@@ -55,9 +63,17 @@ public class QueueScheduler {
             return; // 오늘 진행되는 드롭이 없음 (정상 상태)
         }
 
+        if (LocalDateTime.now().isAfter(drop.dropEnd) && checkEnd.compareAndSet(false, true)) {
+            dropService.changeDropStatusCompleted(drop.dropId);
+        }
+
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())) {
             return; // 드롭 진행 시간이 아님
+        }
+
+        if (LocalDateTime.now().isAfter(drop.dropStart) && checkStart.compareAndSet(false, true)) {
+            dropService.changeDropStatusActive(drop.dropId);
         }
 
         queueManager.allowEntries(drop.dropId(), ENTRIES_PER_TICK);

@@ -15,7 +15,5 @@ public interface DropJpaRepository extends JpaRepository<Drop, Long> {
     // 오늘 진행 예정인 드롭 확인
     Optional<Drop> findByDropStartBetween(LocalDateTime todayStart, LocalDateTime todayEnd);
 
-    // 현재 시각으로 진행 중인 드롭 반환
-    @Query("SELECT d FROM Drop d WHERE d.dropStart <= :now AND d.dropEnd >= :now")
-    Optional<Drop> findByCurrentTime(@Param("now") LocalDateTime now);
+    Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay);
 }

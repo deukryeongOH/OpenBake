@@ -85,8 +85,14 @@ public class DropService {
         LocalDateTime startOfDay = dropDate.atStartOfDay();
         LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
 
+        // 먼저 하루에 드롭은 한 번으로 제한되므로 먼저 검증
+        if (dropRepository.existsByDropStartBetween(startOfDay, endOfDay)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
+        }
+
+        // (확장성을 고려한 판매자 드롭 등록 제한 / 추후 하루에 드롭이 여러 개일 경우)
         if (dropRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE); // D004, HTTP 409 반환
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
     @Transactional

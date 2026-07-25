@@ -34,7 +34,7 @@ public class DropRepositoryAdapter implements DropRepository {
     }
 
     @Override
-    public Optional<Drop> findByCurrentTime(LocalDateTime now) {
-        return dropJpaRepository.findByCurrentTime(now);
+    public Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay) {
+        return dropJpaRepository.existsByDropStartBetween(startOfDay, endOfDay);
     }
 }

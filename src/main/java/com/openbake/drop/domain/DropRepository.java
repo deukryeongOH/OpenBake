@@ -16,6 +16,5 @@ public interface DropRepository {
     // dropId에 해당하는 드롭 반환
     Optional<Drop> findById(Long dropId);
 
-    // 현재 시각으로 오늘 진행하는 드롭 반환
-    Optional<Drop> findByCurrentTime(LocalDateTime now);
+    Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay);
 }

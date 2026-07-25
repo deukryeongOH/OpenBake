@@ -49,9 +49,11 @@ public class Seller {
     @Column(name = "settlement_bank_code", nullable = false)
     private String settlementBankCode;
 
+    @Convert(converter = SettlementAccountConverter.class)
     @Column(name = "settlement_account_number", nullable = false)
     private String settlementAccountNumber;
 
+    @Convert(converter = SettlementAccountConverter.class)
     @Column(name = "settlement_account_holder", nullable = false)
     private String settlementAccountHolder;
 

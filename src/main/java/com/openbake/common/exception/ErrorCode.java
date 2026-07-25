@@ -71,6 +71,16 @@ public enum ErrorCode {
     CART_INVALID_PICKUP_DATE(HttpStatus.BAD_REQUEST, "CA004", "선택할 수 없는 픽업 날짜입니다."),
     CART_PICKUP_DATE_UNAVAILABLE(HttpStatus.CONFLICT, "CA005", "이미 지난 픽업 날짜입니다."),
 
+    //order - OR
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "OR001", "존재하지 않는 주문입니다."),
+    ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "OR002", "취소할 수 없는 주문입니다."),
+    ORDER_NOT_CONFIRMABLE(HttpStatus.CONFLICT, "OR003", "구매확정할 수 없는 주문입니다."),
+    TERMS_NOT_AGREED(HttpStatus.BAD_REQUEST, "OR004", "약관에 동의해야 합니다."),
+    PICKUP_DATE_NOT_SELECTED(HttpStatus.CONFLICT, "OR005", "픽업 날짜를 선택해야 합니다."),
+    DUPLICATE_REQUEST(HttpStatus.CONFLICT, "OR006", "중복된 요청입니다."),
+    DROP_ALREADY_CLOSED(HttpStatus.CONFLICT, "OR007", "판매가 마감된 드롭입니다."),
+    INVALID_ORDER_STATE(HttpStatus.BAD_REQUEST, "OR008", "유효하지 않은 주문 상태입니다."),
+
     // Settlement - ST
     SETTLEMENT_BATCH_ALREADY_COMPLETED(HttpStatus.CONFLICT,"ST001","동일한 정산 기간의 배치가 이미 완료됐습니다."),
     SETTLEMENT_BATCH_ALREADY_RUNNING(HttpStatus.CONFLICT,"ST002", "동일한 정산 기간의 배치가 이미 실행 중입니다."),

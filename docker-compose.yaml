@@ -15,6 +15,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - openbake-net
 
   redis:
     image: redis:7
@@ -26,6 +28,45 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - openbake-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openbake-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/openbake
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - openbake-net
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: openbake-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - openbake-net
+
+networks:
+  openbake-net:
+    driver: bridge
 
 volumes:
   openbake-pg-data:

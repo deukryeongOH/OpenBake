@@ -23,6 +23,19 @@ spring:
         format_sql: true
     show-sql: true
 
+  # Batch 설정
+  # job.enabled: false : 서버 시작 시 정산 배치가 자동 실행되는 것을 막는다.
+  #   나중에 스케줄러나 API가 명시적으로 실행한다.
+  # Spring Batch 는 실행 이력용 메타데이터 테이블을 쓴다(script 로 생성 예정).
+  sql:
+    init:
+      mode: never
+      schema-locations: classpath:org/springframework/batch/core/schema-postgresql.sql
+
+  batch:
+    job:
+      enabled: false
+
 # ── ddl-auto 정책 (팀 결정 대기 중) ─────────────────────────
 # 강의는 create + H2 인메모리 (재시작마다 초기화되는 강의용 세팅).
 # 우리는 PostgreSQL을 5명이 공유하므로 그대로 쓸 수 없음.
@@ -45,19 +58,7 @@ payment:
     secret-key: ${TOSS_SECRET_KEY:test_sk_xxxxxxxxxxxxxxx}
     connect-timeout: 3000
     read-timeout: 15000
-# Batch 설정 추가
-# job.enabled: false : 서버가 시작될 때 정산이 자동 실행되는 것을 막고,
-# 나중에 스케줄러나 API가 명시적으로 실행하도록 설정
-# Spring Batch는 실행 이력을 저장하기 위한 메타데이터 테이블 사용을 위함
-# (최초 1회만 사용 또는 script로 생성되는지 확인 예정)
-  sql:
-    init:
-      mode: never
-      schema-locations: classpath:org/springframework/batch/core/schema-postgresql.sql
 
-  batch:
-    job:
-      enabled: false
 # 매월 1일 오후 3시 "0 0 15 1 * *"
 settlement:
   batch:

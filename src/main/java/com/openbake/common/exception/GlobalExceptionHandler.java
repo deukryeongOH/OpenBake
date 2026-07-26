@@ -2,8 +2,8 @@ package com.openbake.common.exception;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.response.ApiResponse.ApiError;
-import com.openbake.payment.infrastructure.pg.PgApproveException;
-import com.openbake.payment.infrastructure.pg.PgUnknownResultException;
+import com.openbake.payment.application.port.PgApproveException;
+import com.openbake.payment.application.port.PgUnknownResultException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -62,6 +62,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
         return build(ErrorCode.INTERNAL_ERROR.getStatus(), ErrorCode.INTERNAL_ERROR.getCode(), ErrorCode.INTERNAL_ERROR.getMessage());
     }
+
 
     private ResponseEntity<ApiResponse<Void>> build(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status).body(ApiResponse.fail(new ApiError(code, message)));

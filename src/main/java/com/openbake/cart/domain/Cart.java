@@ -64,4 +64,13 @@ public class Cart {
             this.items = null;
         }
     }
+    //만료 여부. 기준 시각을 밖에서 받아 조회/삭제/만료 배치가 모두 이 메서드를 쓴다.
+    public boolean isExpired(LocalDateTime now) {
+        return !now.isBefore(expiresAt);
+    }
+
+    //픽업 날짜 선택. 재선택 시 기존 값을 덮어쓴다.
+    public void updatePickupDate(LocalDate pickupDate) {
+        this.pickupDate = pickupDate;
+    }
 }

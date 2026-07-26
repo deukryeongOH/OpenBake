@@ -1,4 +1,4 @@
-package com.openbake.payment.infrastructure.pg;
+package com.openbake.payment.application.port;
 
 /**
  * PG 승인 응답 — 토스페이먼츠 승인 API의 응답에서 필요한 필드만 추출.

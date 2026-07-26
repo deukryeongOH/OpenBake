@@ -1,4 +1,4 @@
-package com.openbake.member.infrastructure;
+package com.openbake.common.security;
 
 import com.openbake.member.domain.Role;
 import org.springframework.security.core.context.SecurityContextHolder;

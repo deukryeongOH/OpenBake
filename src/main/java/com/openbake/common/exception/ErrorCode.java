@@ -36,20 +36,50 @@ public enum ErrorCode {
     AUTHENTICATION_FAILED(HttpStatus.UNAUTHORIZED, "ME003", "이메일 또는 비밀번호가 일치하지 않습니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "ME004", "권한이 없습니다.."),
 
+    // Seller Domain - SE
+    BUSINESS_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "SE001", "사업자 인증에 실패했습니다."),
+    INVALID_SETTLEMENT_ACCOUNT(HttpStatus.BAD_REQUEST, "SE002", "은행 코드 또는 계좌번호 형식이 올바르지 않습니다."),
+    ACCOUNT_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "SE003", "인증 코드가 일치하지 않습니다."),
+    ACCOUNT_VERIFICATION_EXPIRED(HttpStatus.GONE, "SE004", "인증 유효 시간이 만료되었습니다."),
+    DUPLICATE_SELLER_APPLICATION(HttpStatus.CONFLICT, "SE005", "이미 판매자 신청을 완료한 회원입니다."),
+    ACCOUNT_NOT_VERIFIED(HttpStatus.CONFLICT, "SE006", "계좌 인증이 완료되지 않았습니다."),
+    ADMIN_ACCESS_DENIED(HttpStatus.FORBIDDEN, "SE007", "권한이 없습니다."),
+
     // Drop Domain
-    DROP_NOT_FOUND(HttpStatus.NOT_FOUND, "D001", "존재하지 않는 드롭입니다."),
-    INVALID_DROP_TIME(HttpStatus.BAD_REQUEST, "D002", "드롭 시작 시간 또는 마감 시간이 유효하지 않습니다."),
-    INVALID_PICKUP_DATE(HttpStatus.BAD_REQUEST, "D003", "픽업 가능 날짜는 드롭 마감일 이후여야 합니다."),
-    DUPLICATE_DROP_DATE(HttpStatus.CONFLICT, "D004", "해당 날짜에는 이미 등록된 드롭이 존재합니다."),
-    INVALID_QUANTITY_LIMIT(HttpStatus.BAD_REQUEST, "D005", "1인당 제한 수량은 총 수량보다 클 수 없습니다."),
+    DROP_NOT_FOUND(HttpStatus.NOT_FOUND, "DR001", "존재하지 않는 드롭입니다."),
+    INVALID_DROP_TIME(HttpStatus.BAD_REQUEST, "DR002", "드롭 시작 시간 또는 마감 시간이 유효하지 않습니다."),
+    INVALID_PICKUP_DATE(HttpStatus.BAD_REQUEST, "DR003", "픽업 가능 날짜는 드롭 마감일 이후여야 합니다."),
+    DUPLICATE_DROP_DATE(HttpStatus.CONFLICT, "DR004", "해당 날짜에는 이미 등록된 드롭이 존재합니다."),
+    INVALID_QUANTITY_LIMIT(HttpStatus.BAD_REQUEST, "DR005", "1인당 제한 수량은 총 수량보다 클 수 없습니다."),
+    INVALID_QUANTITY_LIMIT_PER_PERSON(HttpStatus.BAD_REQUEST, "DR0013", "1인당 제한 수량보다 많이 선택했습니다."),
 
     // Drop Entry Domain
-    ALREADY_ENTERED(HttpStatus.CONFLICT, "E001", "이미 응모 완료된 드롭입니다."),
-    DROP_OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "E002", "준비된 재고가 모두 소진되었습니다."),
-    DROP_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "E003", "현재 응모 가능한 드롭 기간이 아닙니다."),
+    ALREADY_ENTERED(HttpStatus.CONFLICT, "DR006", "이미 응모 완료된 드롭입니다."),
+    DROP_OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "DR007", "준비된 재고가 모두 소진되었습니다."),
+    DROP_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "DR008", "현재 응모 가능한 드롭 기간이 아닙니다."),
+    UNAUTHORIZED_QUEUE_ACCESS(HttpStatus.BAD_REQUEST, "DR009", "드롭에 입장 할 수 없습니다. 조금만 더 기다려주세요."),
+    PLEASE_WAIT(HttpStatus.BAD_REQUEST, "DR010", "대기열 진행 중... 조금만 더 기다려주세요."),
+    NEVER_ENTERED(HttpStatus.NOT_FOUND, "DR011", "드롭에 참여한 기록이 없습니다. 드롭에 참여한 후 다시 시도해주세요."),
+    LOCK_ACQUISITION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "DR012", "락을 획득하는 과정에서 시스템 오류가 발생했습니다."),
+    NOT_ENTERED_STATUS(HttpStatus.BAD_REQUEST, "DR014", "재고를 선점할 수 있는 상태가 아닙니다."),
+    INVALID_TOTAL_QUANTITY(HttpStatus.BAD_REQUEST, "DR015", "복구할 재고와 남아있는 재고의 합이 총 발매 수량보다 클 수 없습니다."),
 
     //cart - CA
     CART_ALREADY_EXISTS(HttpStatus.CONFLICT, "CA001", "이미 장바구니에 담긴 상품이 있습니다."),
+    CART_NOT_FOUND(HttpStatus.NOT_FOUND, "CA002", "장바구니가 없습니다."),
+    CART_EXPIRED(HttpStatus.CONFLICT, "CA003", "장바구니가 만료되었습니다. 다시 담아주세요."),
+    CART_INVALID_PICKUP_DATE(HttpStatus.BAD_REQUEST, "CA004", "선택할 수 없는 픽업 날짜입니다."),
+    CART_PICKUP_DATE_UNAVAILABLE(HttpStatus.CONFLICT, "CA005", "이미 지난 픽업 날짜입니다."),
+
+    //order - OR
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "OR001", "존재하지 않는 주문입니다."),
+    ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "OR002", "취소할 수 없는 주문입니다."),
+    ORDER_NOT_CONFIRMABLE(HttpStatus.CONFLICT, "OR003", "구매확정할 수 없는 주문입니다."),
+    TERMS_NOT_AGREED(HttpStatus.BAD_REQUEST, "OR004", "약관에 동의해야 합니다."),
+    PICKUP_DATE_NOT_SELECTED(HttpStatus.CONFLICT, "OR005", "픽업 날짜를 선택해야 합니다."),
+    DUPLICATE_REQUEST(HttpStatus.CONFLICT, "OR006", "중복된 요청입니다."),
+    DROP_ALREADY_CLOSED(HttpStatus.CONFLICT, "OR007", "판매가 마감된 드롭입니다."),
+    INVALID_ORDER_STATE(HttpStatus.BAD_REQUEST, "OR008", "유효하지 않은 주문 상태입니다."),
 
     // Settlement - ST
     SETTLEMENT_BATCH_ALREADY_COMPLETED(HttpStatus.CONFLICT,"ST001","동일한 정산 기간의 배치가 이미 완료됐습니다."),

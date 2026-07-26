@@ -94,7 +94,6 @@ public class DepositService {
             case CHARGE -> "예치금 충전";
             case PAYMENT -> "주문 결제";
             case REFUND -> "주문 환불";
-            case PAYOUT -> "정산 지급";
         };
     }
 }

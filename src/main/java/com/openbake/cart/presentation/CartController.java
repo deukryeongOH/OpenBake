@@ -6,6 +6,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,5 +30,26 @@ public class CartController {
             @AuthenticationPrincipal Long memberId,
             @Valid @RequestBody CartCreateRequest request) {
         return ApiResponse.ok(cartService.create(memberId, request));
+    }
+
+    //장바구니 조회. 대상은 인증 토큰의 회원으로 특정한다. 상태 200.
+    @GetMapping
+    public ApiResponse<CartDetailResponse> getCart(@AuthenticationPrincipal Long memberId) {
+        return ApiResponse.ok(cartService.getCart(memberId));
+    }
+
+    //픽업 날짜 선택. 상태 200.
+    @PatchMapping("/pickup-date")
+    public ApiResponse<CartPickupDateResponse> updatePickupDate(
+            @AuthenticationPrincipal Long memberId,
+            @Valid @RequestBody CartPickupDateRequest request) {
+        return ApiResponse.ok(cartService.updatePickupDate(memberId, request));
+    }
+
+    //장바구니 삭제(재고 복구). 본문 없이 204 를 반환한다.
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCart(@AuthenticationPrincipal Long memberId) {
+        cartService.deleteCart(memberId);
     }
 }

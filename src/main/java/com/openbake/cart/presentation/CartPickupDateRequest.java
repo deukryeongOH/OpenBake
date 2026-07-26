@@ -1,5 +1,6 @@
 package com.openbake.cart.presentation;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,5 +14,6 @@ import java.time.LocalDate;
 @Builder
 
 public class CartPickupDateRequest {
+    @NotNull(message = "픽업 날짜는 필수입니다.")
     private LocalDate pickupDate;
 }

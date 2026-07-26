@@ -1,10 +1,10 @@
 package com.openbake.payment.application;
 
 import com.openbake.payment.domain.ChargeRequest;
-import com.openbake.payment.infrastructure.pg.PgApproveException;
-import com.openbake.payment.infrastructure.pg.PgApproveResponse;
-import com.openbake.payment.infrastructure.pg.PgClient;
-import com.openbake.payment.infrastructure.pg.PgUnknownResultException;
+import com.openbake.payment.application.port.PgApproveException;
+import com.openbake.payment.application.port.PgApproveResponse;
+import com.openbake.payment.application.port.PgClient;
+import com.openbake.payment.application.port.PgUnknownResultException;
 import com.openbake.payment.presentation.dto.ChargeApproveResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

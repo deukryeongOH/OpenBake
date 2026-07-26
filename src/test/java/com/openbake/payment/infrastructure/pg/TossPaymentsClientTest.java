@@ -1,5 +1,8 @@
 package com.openbake.payment.infrastructure.pg;
 
+import com.openbake.payment.application.port.PgApproveException;
+import com.openbake.payment.application.port.PgApproveResponse;
+import com.openbake.payment.application.port.PgUnknownResultException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

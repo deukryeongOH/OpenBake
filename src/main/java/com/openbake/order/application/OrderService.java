@@ -8,11 +8,23 @@ import com.openbake.common.exception.ErrorCode;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
+import com.openbake.order.domain.OrderState;
+import com.openbake.order.presentation.dto.OrderCancelResponse;
+import com.openbake.order.presentation.dto.OrderConfirmResponse;
 import com.openbake.order.presentation.dto.OrderCreateRequest;
 import com.openbake.order.presentation.dto.OrderCreateResponse;
+import com.openbake.order.presentation.dto.OrderDetailResponse;
+import com.openbake.order.presentation.dto.OrderPageResponse;
+import com.openbake.order.presentation.dto.OrderSummaryResponse;
 import com.openbake.payment.application.DepositService;
 import com.openbake.payment.application.PaymentService;
+import com.openbake.seller.application.CurrentSellerProvider;
+import com.openbake.seller.domain.Seller;
+import com.openbake.seller.domain.SellerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +40,11 @@ public class OrderService {
     private final CartRepository cartRepository;
     private final PaymentService paymentService;
     private final DepositService depositService;
+    private final CurrentSellerProvider currentSellerProvider;
+    private final SellerRepository sellerRepository;
+
+    //목록 페이지 크기 상한. 명세서 기준 최대 50.
+    private static final int MAX_PAGE_SIZE = 50;
 
     // TODO(drop): 드롭 조회 포트가 없어 스냅샷 소스를 임시 상수로 둔다.
     //   포트가 생기면 dropId 로 조회해 sellerId/상품명/가격을 읽어 교체한다.
@@ -95,5 +112,173 @@ public class OrderService {
                 .balanceAfter(balanceAfter)
                 .paidAt(saved.getPaidAt())
                 .build();
+    }
+
+    /**
+     * 주문 목록 조회(본인, 최신순). orderState 가 있으면 해당 상태만 필터한다.
+     */
+    @Transactional(readOnly = true)
+    public OrderPageResponse getOrders(Long memberId, String orderState, int page, int size) {
+        int cappedSize = Math.min(size, MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(page, cappedSize);
+
+        Page<Order> orders;
+        if (orderState == null || orderState.isBlank()) {
+            orders = orderRepository.findByMemberIdOrderByOrderIdDesc(memberId, pageable);
+        } else {
+            OrderState state = parseOrderState(orderState);
+            orders = orderRepository.findByMemberIdAndOrderStateOrderByOrderIdDesc(memberId, state, pageable);
+        }
+
+        return OrderPageResponse.builder()
+                .content(orders.map(this::toSummary).getContent())
+                .page(orders.getNumber())
+                .size(orders.getSize())
+                .totalElements(orders.getTotalElements())
+                .totalPages(orders.getTotalPages())
+                .build();
+    }
+
+    /**
+     * 주문 상세 조회. 본인 주문만 볼 수 있다.
+     */
+    @Transactional(readOnly = true)
+    public OrderDetailResponse getOrderDetail(Long memberId, Long orderId) {
+        Order order = getOwnedOrder(memberId, orderId);
+        OrderItem item = order.getOrderItem();
+
+        // TODO(drop): dropCloseAt = drop.dropEnd 를 조회해야 한다. 포트가 없어 지금은 null.
+        //   cancelable 도 원래 (PAID && now < dropCloseAt) 인데, 마감 시각을 못 읽어
+        //   당분간 PAID 여부만으로 판정한다.
+        LocalDateTime dropCloseAt = null;
+        boolean cancelable = order.getOrderState() == OrderState.PAID;
+
+        OrderDetailResponse.OrderItemInfo itemInfo = OrderDetailResponse.OrderItemInfo.builder()
+                .dropId(item.getDropId())
+                .dropName(item.getDropNameSnapshot())
+                .price(item.getPriceSnapshot())
+                .quantity(item.getQuantity())
+                .build();
+
+        OrderDetailResponse.SellerInfo sellerInfo = OrderDetailResponse.SellerInfo.builder()
+                .sellerId(order.getSellerId())
+                .sellerName(resolveSellerName(order.getSellerId()))
+                .build();
+
+        return OrderDetailResponse.builder()
+                .orderId(order.getOrderId())
+                .orderItem(itemInfo)
+                .seller(sellerInfo)
+                .pickupDate(order.getPickupDate())
+                .dropCloseAt(dropCloseAt)
+                .cancelable(cancelable)
+                .orderState(order.getOrderState())
+                .paidAt(order.getPaidAt())
+                .confirmedAt(order.getConfirmAt())
+                .canceledAt(order.getCancelAt())
+                .build();
+    }
+
+    /**
+     * 주문 취소. 본인 주문만. 전액 환불 + 재고 복구를 같은 트랜잭션에서 처리한다.
+     */
+    @Transactional
+    public OrderCancelResponse cancel(Long memberId, Long orderId) {
+        Order order = getOwnedOrder(memberId, orderId);
+
+        // TODO(drop): dropCloseAt 을 읽어 now >= dropCloseAt 이면 DROP_ALREADY_CLOSED 로 막아야 한다.
+        //   마감 시각 조회 포트가 없어 지금은 상태(PAID)만으로 판정한다.
+
+        // 상태 전이 — PAID 가 아니면 ORDER_NOT_CANCELABLE
+        order.cancel();
+
+        // 예치금 전액 환불
+        paymentService.refund(orderId);
+
+        // TODO(drop): 재고 복구 — 선점했던 수량을 되돌린다.
+
+        BigDecimal balanceAfter = depositService.getBalance(memberId).balance();
+
+        return OrderCancelResponse.builder()
+                .orderId(order.getOrderId())
+                .orderState(order.getOrderState())
+                .refundAmount(order.getTotalAmount())
+                .balanceAfter(balanceAfter)
+                .canceledAt(order.getCancelAt())
+                .build();
+    }
+
+    /**
+     * 구매 확정(판매자). 해당 주문의 판매자만 확정할 수 있다.
+     * 주문 상태와 결제 상태를 같은 트랜잭션에서 함께 바꾼다.
+     */
+    @Transactional
+    public OrderConfirmResponse confirm(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        // 판매자 판정 — 로그인한 판매자의 sellerId 와 주문의 sellerId 가 같아야 한다.
+        //   member 에 seller role 이 없어 role 로는 판정할 수 없다.
+        Long sellerId = currentSellerProvider.getSellerId()
+                .orElseThrow(() -> new BusinessException(ErrorCode.ACCESS_DENIED));
+        if (!sellerId.equals(order.getSellerId())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
+        }
+
+        // 상태 전이 — PAID 가 아니면 ORDER_NOT_CONFIRMABLE(배치 자동확정과 중복 요청 방어)
+        order.confirm();
+
+        // 결제 상태도 CONFIRMED 로 전이한다.
+        paymentService.confirmPayment(orderId);
+
+        // TODO(settlement): 구매확정 Outbox 이벤트 발행.
+        //   commissionRateSnapshot 소스가 미정이라 별도 작업으로 분리한다.
+
+        return OrderConfirmResponse.builder()
+                .orderId(order.getOrderId())
+                .orderState(order.getOrderState())
+                .confirmedAt(order.getConfirmAt())
+                .build();
+    }
+
+    //본인 주문만 반환. 없으면 ORDER_NOT_FOUND, 타인 주문이면 ACCESS_DENIED(403).
+    private Order getOwnedOrder(Long memberId, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+        if (!order.getMemberId().equals(memberId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
+        }
+        return order;
+    }
+
+    //정의되지 않은 상태값이면 INVALID_ORDER_STATE.
+    private OrderState parseOrderState(String value) {
+        try {
+            return OrderState.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATE);
+        }
+    }
+
+    //목록 항목 조립. dropName 은 스냅샷, sellerName 은 seller 조회.
+    private OrderSummaryResponse toSummary(Order order) {
+        OrderItem item = order.getOrderItem();
+        return OrderSummaryResponse.builder()
+                .orderId(order.getOrderId())
+                .dropName(item.getDropNameSnapshot())
+                .sellerName(resolveSellerName(order.getSellerId()))
+                .quantity(item.getQuantity())
+                .totalAmount(order.getTotalAmount())
+                .orderState(order.getOrderState())
+                .pickupDate(order.getPickupDate())
+                .paidAt(order.getPaidAt())
+                .build();
+    }
+
+    //판매자 상호명 조회. 판매자가 없으면 null.
+    private String resolveSellerName(Long sellerId) {
+        return sellerRepository.findById(sellerId)
+                .map(Seller::getBakeryName)
+                .orElse(null);
     }
 }

@@ -80,7 +80,7 @@ public class DropEntry {
     }
 
     // 재고 부족으로 인한 주문 실패 또는 결제 실패
-    public void failPaymentOrOrder(){
+    public void failPayment(){
         this.entryStatus = EntryStatus.FAILED;
     }
 }

@@ -1,5 +1,6 @@
 package com.openbake.drop.application.event;
 
+import com.openbake.drop.application.dto.OrderCanceledEvent;
 import com.openbake.drop.application.dto.PaymentCompletedEvent;
 import com.openbake.drop.application.dto.PaymentFailedEvent;
 import com.openbake.drop.domain.*;
@@ -81,5 +82,24 @@ class DropEventListenerTest {
         // then
         assertThat(reservedEntry.getEntryStatus()).isEqualTo(EntryStatus.FAILED);
         assertThat(dropInventory.getRemainQuantity()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("주문 취소 이벤트 처리 - DropEntry 상태가 CANCELLED로 변경되고 재고 복구")
+    void handleOrderCanceled_Success(){
+        //given
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .willReturn(Optional.of(reservedEntry));
+        given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
+
+        OrderCanceledEvent event = new OrderCanceledEvent(dropId, memberId, 10);
+
+        //when
+        dropEventListener.handleOrderCanceled(event);
+
+        //then
+        assertThat(reservedEntry.getEntryStatus()).isEqualTo(EntryStatus.CANCELLED);
+        assertThat(dropInventory.getRemainQuantity()).isEqualTo(100);
+
     }
 }

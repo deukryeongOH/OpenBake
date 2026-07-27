@@ -11,8 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 주문 상세. cancelable 은 서버가 계산해 내려준다(클라이언트가 판단하지 않는다).
- * dropCloseAt 은 저장값이 아니라 조회 시점에 드롭에서 읽은 값이다.
+ * 주문 상세.
  */
 @Getter
 @Builder
@@ -23,8 +22,6 @@ public class OrderDetailResponse {
     private OrderItemInfo orderItem;
     private SellerInfo seller;
     private LocalDate pickupDate;
-    private LocalDateTime dropCloseAt;
-    private boolean cancelable;
     private OrderState orderState;
     private LocalDateTime paidAt;
     private LocalDateTime confirmedAt;

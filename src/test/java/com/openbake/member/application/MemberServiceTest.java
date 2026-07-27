@@ -3,6 +3,7 @@ package com.openbake.member.application;
 import com.openbake.common.exception.AccessDeniedException;
 import com.openbake.common.exception.AuthenticationFailedException;
 import com.openbake.common.exception.EntityNotFoundException;
+import com.openbake.common.security.Authorities;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.member.domain.AccessTokenRepository;
 import com.openbake.member.domain.AuthCredential;
@@ -10,7 +11,6 @@ import com.openbake.member.domain.AuthProvider;
 import com.openbake.member.domain.Member;
 import com.openbake.member.domain.MemberStatus;
 import com.openbake.member.domain.RefreshTokenRepository;
-import com.openbake.member.domain.Role;
 import com.openbake.member.infrastructure.AuthCredentialRepositoryImpl;
 import com.openbake.member.infrastructure.MemberRepositoryImpl;
 import com.openbake.member.presentation.dto.member.MemberResponse;
@@ -62,7 +62,7 @@ class MemberServiceTest {
     @Test
     @DisplayName("본인이 조회하면 회원 정보를 반환한다")
     void getMemberById_self_success() {
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(false);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(false);
         given(currentMemberProvider.getId()).willReturn(1L);
 
         Member member = Member.create("홍길동", "010-1234-5678");
@@ -83,7 +83,7 @@ class MemberServiceTest {
     @Test
     @DisplayName("admin이 다른 회원을 조회해도 회원 정보를 반환한다")
     void getMemberById_admin_success() {
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(true);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
 
         Member member = Member.create("홍길동", "010-1234-5678");
         ReflectionTestUtils.setField(member, "id", 1L);
@@ -100,7 +100,7 @@ class MemberServiceTest {
     @Test
     @DisplayName("본인도 admin도 아니면 AccessDeniedException을 던지고 조회하지 않는다")
     void getMemberById_notOwnerNotAdmin_throwsException() {
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(false);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(false);
         given(currentMemberProvider.getId()).willReturn(2L);
 
         assertThatThrownBy(() -> memberService.getMemberById(1L))
@@ -112,7 +112,7 @@ class MemberServiceTest {
     @Test
     @DisplayName("존재하지 않는 회원이면 EntityNotFoundException을 던진다")
     void getMemberById_memberNotFound_throwsException() {
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(false);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(false);
         given(currentMemberProvider.getId()).willReturn(1L);
         given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
@@ -123,7 +123,7 @@ class MemberServiceTest {
     @Test
     @DisplayName("회원은 있는데 연동된 인증 정보가 없으면 EntityNotFoundException을 던진다")
     void getMemberById_credentialNotFound_throwsException() {
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(false);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(false);
         given(currentMemberProvider.getId()).willReturn(1L);
 
         Member member = Member.create("홍길동", "010-1234-5678");

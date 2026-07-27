@@ -2,12 +2,11 @@ package com.openbake.drop.application.queue;
 
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-public class InMemoryQueueManager implements QueueManager{
+public class InMemoryQueueManager {
 
     // dropId별 DropQueue 객체 관리
     private final Map<Long, DropQueue> dropQueueMap = new ConcurrentHashMap<>();
@@ -23,12 +22,12 @@ public class InMemoryQueueManager implements QueueManager{
 
         // 메소드 전체에 안하는 이유 (dropId = 1이 완료될 때까지 dropId = 2는 진입 대기)
         synchronized (queue) {  // DropQueue 객체에만 락을 검
-            if (queue.checkMemberIsActive(memberId)) {
+            if (queue.getActiveUsers().contains(memberId)) {
                 return 0L; // 이미 드롭 입장함.
             }
-            if (queue.addWaitingMember(memberId)) {
-                queue.addQueueingMember(memberId);
-                queue.issueTicketForMember(memberId);
+
+            if (queue.getWaitingUsers().add(memberId)) {
+                queue.getWaitingQueue().add(memberId);
             }
 
             return getRank(dropId, memberId);
@@ -41,36 +40,44 @@ public class InMemoryQueueManager implements QueueManager{
         if (queue == null) {
             return -1L; // 대기열 자체가 존재하지 않음.
         }
-        if (queue.checkMemberIsActive(memberId)) {
+
+        if (queue.getActiveUsers().contains(memberId)) {
             return 0L; // 0순위 (입장 허용 상태)
         }
 
-        if (!queue.checkMemberIsWaiting(memberId)) {
+        if (!queue.getWaitingUsers().contains(memberId)) {
             return -1L; // 대기열에 없음
         }
 
-        return queue.returnNowRank(memberId);
+        long rank = 1;
+        // Queue 순회해 순번 계산 (1등 부터 시작)
+        for (Long id : queue.getWaitingQueue()) {
+            if (id.equals(memberId)) {
+                return rank;
+            }
+            rank++;
+        }
+
+        return -1L; // queue에 없음.
     }
 
     // 대기열 상위 n명을 active set으로 이동 (이건 schedular가 호출)
     public void allowEntries(Long dropId, int cnt) {
         DropQueue queue = dropQueueMap.get(dropId);
-        if (queue == null || queue.isSoldOut()) {
+        if (queue == null) {
             return;
         }
 
         synchronized (queue) {
             for(int i = 0; i < cnt; i++){
-                Long memberId = queue.pollingNext();
+                Long memberId = queue.getWaitingQueue().poll();
 
                 if (memberId == null) {
                     break; // 대기열 빔.
                 }
 
-                queue.removeWaitingMember(memberId); // 대기열에서 없애고
-                queue.addActiveMember(memberId, LocalDateTime.now().plusMinutes(10)); // active로 옮김 (10분 후 만료)
-                queue.increaseEntryCount();
-                queue.removeTicket(memberId);
+                queue.getWaitingUsers().remove(memberId); // 대기열에서 없애고
+                queue.getActiveUsers().add(memberId); // active로 옮김
             }
 
         }
@@ -81,7 +88,7 @@ public class InMemoryQueueManager implements QueueManager{
     public void removeActiveUser(Long dropId, Long memberId) {
         DropQueue queue = dropQueueMap.get(dropId);
         if (queue != null) {
-            queue.removeActiveMember(memberId);
+            queue.getActiveUsers().remove(memberId);
         }
     }
 
@@ -92,27 +99,6 @@ public class InMemoryQueueManager implements QueueManager{
             return false;
         }
 
-        return queue.checkMemberIsActive(memberId);
-    }
-
-    // DropQueue에서 drop 제거
-    public void finishDrop(Long dropId){
-        dropQueueMap.remove(dropId);
-    }
-
-    // Active Member 만료되었는지 확인
-    public void checkActiveMembers(Long dropId){
-        DropQueue dropQueue = dropQueueMap.get(dropId);
-        if (dropQueue == null) {
-            return ;
-        }
-        dropQueue.checkMemberIsExpired();
-    }
-
-    public void markSoldOut(Long dropId) {
-        DropQueue dropQueue = dropQueueMap.get(dropId);
-        if (dropQueue != null) {
-            dropQueue.markSoldOut();
-        }
+        return queue.getActiveUsers().contains(memberId);
     }
 }

@@ -357,7 +357,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("유효한 refreshToken으로 로그아웃하면 저장된 refreshToken을 삭제한다")
+    @DisplayName("유효한 refreshToken으로 로그아웃하면 저장된 refreshToken을 삭제하고 accessToken을 블랙리스트 처리한다")
     void logout_success() {
         LogoutRequest request = new LogoutRequest("valid-refresh-token");
 
@@ -367,6 +367,7 @@ class AuthServiceTest {
         authService.logout(request);
 
         verify(refreshTokenRepository).deleteByMemberId(1L);
+        verify(accessTokenRepository).blacklistByMemberId(1L);
     }
 
     @Test
@@ -380,5 +381,6 @@ class AuthServiceTest {
                 .isInstanceOf(InvalidRefreshTokenException.class);
 
         verify(refreshTokenRepository, never()).deleteByMemberId(any());
+        verify(accessTokenRepository, never()).blacklistByMemberId(any());
     }
 }

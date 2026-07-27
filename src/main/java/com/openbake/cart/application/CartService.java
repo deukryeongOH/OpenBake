@@ -10,15 +10,16 @@ import com.openbake.cart.presentation.CartPickupDateRequest;
 import com.openbake.cart.presentation.CartPickupDateResponse;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.application.DropLockFacade;
-import com.openbake.drop.application.dto.CartExpiredEvent;
+import com.openbake.drop.application.DropLockService;
 import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.DropEntry;
+import com.openbake.drop.domain.DropEntryRepository;
 import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.EntryStatus;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,27 +38,29 @@ public class CartService {
     private final CartRepository cartRepository;
     private final DropRepository dropRepository;
     private final SellerRepository sellerRepository;
-    //재고 차감은 drop 에 요청한다(장바구니 생성 시).
-    private final DropLockFacade dropLockFacade;
-    //재고 복구는 직접 하지 않는다. 이탈 이벤트를 발행하면 drop 이 받아서 복구한다.
-    private final ApplicationEventPublisher eventPublisher;
+    //재고 선점 여부 확인용(담기 시 drop 이 만든 응모 상태를 조회).
+    private final DropEntryRepository dropEntryRepository;
+    //재고 복구 요청용(이탈 시 동기 호출). 차감은 cart 가 하지 않는다.
+    private final DropLockService dropLockService;
 
     //만료 시간은 정책값이라 코드에 박지 않고 설정에서 받는다.
     @Value("${openbake.cart.ttl}")
     private Duration cartTtl;
 
     /**
-     * 장바구니 생성. 재고 차감 후 장바구니를 만든다.
-     * 재고 차감 자체는 drop 이 담당하므로 cart 는 drop 에 차감을 요청(reserveStock)하고,
-     * 성공하면 장바구니를 생성한다. 차감과 생성이 같은 트랜잭션이라 생성이 실패하면
-     * 차감도 함께 롤백된다(오버셀·재고 누수 방지).
+     * 장바구니 생성.
+     * 재고 차감은 cart 가 하지 않는다. 드롭 상세에서 "담기"를 누르면 drop 이 재고를 선점/차감하고,
+     * 그 뒤 이 API 가 호출돼 장바구니를 만든다. cart 는 drop 이 실제로 선점했는지(DropEntry=RESERVED)만
+     * 확인하고 장바구니를 기록한다.
      */
     @Transactional
     public CartCreateResponse create(Long memberId, CartCreateRequest request) {
         LocalDateTime now = LocalDateTime.now();
+        Long dropId = request.getDropId();
+
         //기존 장바구니 처리
         // 유효한 장바구니가 있으면 CART_ALREADY_EXISTS
-        // 만료된 장바구니면 치우고(이탈 이벤트로 재고 복구) 새로 담게 해준다.
+        // 만료된 장바구니면 선점 재고를 복구시키고 치운 뒤 새로 담게 해준다.
         Optional<Cart> found = cartRepository.findByMemberId(memberId);
         if (found.isPresent()) {
             Cart existing = found.get();
@@ -67,19 +70,24 @@ public class CartService {
                 throw new BusinessException(ErrorCode.CART_ALREADY_EXISTS);
             }
 
-            //만료된 장바구니. 선점된 로직을 복구해야하므로, 이탈 이벤트를 발행하고 정리한다.
-            //(삭제 전에 dropId/quantity 를 읽어 이벤트에 담는다. 지우면 값을 못 읽는다)
-            publishExpiredIfPresent(existing);
+            //만료된 장바구니. 선점 재고를 drop 에 복구시키고 정리한다.
+            //(삭제 전에 dropId/quantity 를 읽어야 하므로 먼저 복구 요청을 보낸다)
+            rollbackStockIfPresent(existing);
             cartRepository.delete(existing);
             //flush 까지 해야 아래 INSERT 가 member_id UNIQUE 제약에 걸리지 않는다.
             cartRepository.flush();
         }
 
-        //재고 차감은 drop 이 담당 — cart 가 요청한다. 매진·미응모 등이면 여기서 예외로 롤백된다.
-        dropLockFacade.reserveStock(request.getDropId(), memberId, request.getQuantity());
+        //재고 선점 확인 — drop 이 담기 시점에 선점(RESERVED)했는지 확인한다.
+        //응모가 없거나 RESERVED 가 아니면 정상적인 담기 흐름을 거치지 않은 것이므로 막는다.
+        DropEntry entry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED));
+        if (entry.getEntryStatus() != EntryStatus.RESERVED) {
+            throw new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED);
+        }
 
         Cart cart = Cart.create(memberId, now.plus(cartTtl));
-        cart.addItem(CartItem.create(request.getDropId(), request.getQuantity()));
+        cart.addItem(CartItem.create(dropId, request.getQuantity()));
 
         Cart saved;
         try {
@@ -95,7 +103,7 @@ public class CartService {
 
         return CartCreateResponse.builder()
                 .cartId(saved.getCartId())
-                .dropId(request.getDropId())
+                .dropId(dropId)
                 .quantity(request.getQuantity())
                 .expiresAt(saved.getExpiresAt())
                 .createdAt(saved.getCreatedAt())
@@ -206,27 +214,26 @@ public class CartService {
     }
 
     /**
-     * 장바구니 삭제. 선점했던 재고를 놓아준다.
-     * 재고 복구는 직접 하지 않고 이탈 이벤트를 발행하면 drop 이 받아서 복구한다.
+     * 장바구니 삭제. 선점했던 재고를 drop 에서 복구시킨다(동기 호출).
      * 만료된 장바구니도 삭제 대상이므로 여기서는 CART_EXPIRED 를 던지지 않는다.
      *
      * (주의: 여기서 행을 지우면 만료 배치의 조회 범위에서 사라지므로,
-     *  복구 이벤트를 반드시 삭제 전에 발행해야 재고가 새지 않는다.)
+     *  복구 요청을 반드시 삭제 전에 보내야 재고가 새지 않는다.)
      */
     @Transactional
     public void deleteCart(Long memberId) {
         Cart cart = cartRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
-        //삭제 전에 이탈 이벤트를 발행한다. 지우고 나면 dropId/quantity 를 읽을 수 없다.
-        publishExpiredIfPresent(cart);
+        //삭제 전에 재고 복구를 요청한다. 지우고 나면 dropId/quantity 를 읽을 수 없다.
+        rollbackStockIfPresent(cart);
 
         //cart_items 는 cascade = ALL + orphanRemoval 이라 함께 삭제된다.
         cartRepository.delete(cart);
     }
 
     /**
-     * 만료된 장바구니를 일괄 정리한다. 선점 재고를 놓아주고(이벤트 발행) 삭제한다.
+     * 만료된 장바구니를 일괄 정리한다. 선점 재고를 복구시키고 삭제한다.
      * DELETE 를 호출하지 않고 이탈한 경우(브라우저 종료 등)의 실질적인 재고 회수 수단이다.
      *
      * @return 정리한 장바구니 수
@@ -239,8 +246,8 @@ public class CartService {
         }
 
         for (Cart cart : expiredCarts) {
-            //삭제 전에 이탈 이벤트를 발행한다. 벌크 삭제를 쓰면 이 값을 잃어 복구를 못 시킨다.
-            publishExpiredIfPresent(cart);
+            //삭제 전에 재고 복구를 요청한다. 벌크 삭제를 쓰면 이 값을 잃어 복구를 못 시킨다.
+            rollbackStockIfPresent(cart);
         }
 
         cartRepository.deleteAll(expiredCarts);
@@ -248,15 +255,13 @@ public class CartService {
     }
 
     /**
-     * 장바구니 이탈(삭제/만료/기존에 남아있는거 정리) 시, 선점했던 재고를 놓아주도록 이벤트를 발행한다.
-     * drop 의 CartExpiredEvent 리스너가 받아서 entry 상태 변경 + 재고 복구를 수행한다.
-     * 재고는 drop 소유라 cart 가 직접 되돌리지 않는다.
+     * 장바구니 이탈(삭제/만료/기존 정리) 시, 선점했던 재고를 drop 에 복구 요청한다(동기 호출).
+     * drop 의 rollbackStock 이 entry 상태 변경 + 재고 복구를 수행한다. 재고 소유는 drop.
      */
-    private void publishExpiredIfPresent(Cart cart) {
+    private void rollbackStockIfPresent(Cart cart) {
         CartItem item = cart.getItems();
         if (item != null) {
-            eventPublisher.publishEvent(
-                    new CartExpiredEvent(item.getDropId(), cart.getMemberId(), item.getQuantity()));
+            dropLockService.rollbackStock(item.getDropId(), cart.getMemberId(), item.getQuantity());
         }
     }
 }

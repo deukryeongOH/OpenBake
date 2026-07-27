@@ -5,7 +5,6 @@ import com.openbake.common.exception.ErrorCode;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -16,7 +15,6 @@ import java.time.LocalDateTime;
 @EntityListeners(AuditingEntityListener.class) //@CreatedDate 설정.
 @Table(name = "carts")
 @Getter
-@Setter
 @NoArgsConstructor
 
 public class Cart {
@@ -57,13 +55,6 @@ public class Cart {
         items.setCart(this); //너는 이 장바구니거야.
     }
 
-    //아이템 삭제
-    public void removeItem() {
-        if (this.items != null) {
-            this.items.setCart(null);
-            this.items = null;
-        }
-    }
     //만료 여부. 기준 시각을 밖에서 받아 조회/삭제/만료 배치가 모두 이 메서드를 쓴다.
     public boolean isExpired(LocalDateTime now) {
         return !now.isBefore(expiresAt);

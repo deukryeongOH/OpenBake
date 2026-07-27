@@ -8,7 +8,6 @@ import java.util.Optional;
 
 public interface CartRepository extends JpaRepository<Cart, Long> {
     Optional<Cart> findByMemberId(Long memberId);
-    boolean existsByMemberId(Long memberId);
 
     //만료 배치용. 재고를 복구하려면 dropId/quantity 를 알아야 하므로
     //벌크 삭제가 아니라 먼저 조회한다.

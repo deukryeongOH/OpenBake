@@ -25,7 +25,7 @@ public class CartController {
     private final CurrentMemberProvider currentMemberProvider;
 
     //경로에 cartId 가 없다. 대상 장바구니는 로그인 회원으로 특정한다.
-    //재고 차감은 내부에서 drop 에 요청하고, 성공하면 장바구니를 생성한다.
+    //재고 차감은 drop 이 담기 시점에 이미 처리한다. 여기서는 선점 확인 후 장바구니만 생성한다.
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<CartCreateResponse> create(@Valid @RequestBody CartCreateRequest request) {

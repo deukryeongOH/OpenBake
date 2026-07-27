@@ -1,6 +1,5 @@
 package com.openbake.common.security;
 
-import com.openbake.member.domain.Role;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -11,8 +10,8 @@ public class CurrentMemberProvider {
         return (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }
 
-    public boolean hasRole(Role role) {
+    public boolean hasAuthority(String authority) {
         return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                .anyMatch(authority -> authority.getAuthority().equals("ROLE_" + role.name()));
+                .anyMatch(a -> a.getAuthority().equals(authority));
     }
 }

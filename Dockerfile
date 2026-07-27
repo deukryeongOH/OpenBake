@@ -4,9 +4,13 @@ WORKDIR /app
 
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle ./gradle
+COPY common/build.gradle common/build.gradle
+COPY member-service/build.gradle member-service/build.gradle
 RUN chmod +x gradlew && ./gradlew --version
 
 COPY src ./src
+COPY common/src ./common/src
+COPY member-service/src ./member-service/src
 RUN ./gradlew clean bootJar -x test --no-daemon
 
 # ---- Run stage ----

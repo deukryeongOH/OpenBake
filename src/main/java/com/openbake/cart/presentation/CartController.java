@@ -24,6 +24,7 @@ public class CartController {
 
     //경로에 cartId 가 없다. 대상 장바구니는 인증 토큰의 회원으로 특정한다.
     //JwtAuthenticationFilter 가 인증 주체에 memberId(Long) 를 넣어두므로 그대로 받는다.
+    //재고 차감은 내부에서 drop 에 요청하고, 성공하면 장바구니를 생성한다.
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<CartCreateResponse> create(

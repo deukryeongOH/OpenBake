@@ -3,6 +3,7 @@ package com.openbake.member.application;
 import com.openbake.common.exception.AccessDeniedException;
 import com.openbake.common.exception.AuthenticationFailedException;
 import com.openbake.common.exception.EntityNotFoundException;
+import com.openbake.common.security.Authorities;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.member.domain.*;
 import com.openbake.member.infrastructure.AuthCredentialRepositoryImpl;
@@ -29,7 +30,7 @@ public class MemberService {
 
     @Transactional(readOnly = true)
     public MemberResponse getMemberById(Long id) {
-        if (!currentMemberProvider.hasRole(Role.ADMIN) && !currentMemberProvider.getId().equals(id)) {
+        if (!currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN) && !currentMemberProvider.getId().equals(id)) {
             throw new AccessDeniedException();
         }
 

@@ -129,6 +129,7 @@ public class AuthService {
         Long memberId = jwtTokenProvider.getMemberId(request.refreshToken());
 
         refreshTokenRepository.deleteByMemberId(memberId);
+        accessTokenRepository.blacklistByMemberId(memberId);
     }
 
     private TokenPair issueTokens(Long memberId, Role role) {

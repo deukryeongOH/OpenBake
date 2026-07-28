@@ -93,10 +93,4 @@ public class Order {
         this.orderState = OrderState.CANCELED;
         this.cancelAt = LocalDateTime.now();
     }
-
-
-    //취소 가능 여부. 드롭 마감 시각은 도메인이 조회할 수 없어 밖에서 주입받는다.
-    public boolean isCancelable(LocalDateTime now, LocalDateTime dropCloseAt) {
-        return this.orderState == OrderState.PAID && now.isBefore(dropCloseAt);
-    }
 }

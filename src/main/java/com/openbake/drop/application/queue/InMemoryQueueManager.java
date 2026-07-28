@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -101,18 +102,25 @@ public class InMemoryQueueManager implements QueueManager{
     }
 
     // Active Member 만료되었는지 확인
-    public void checkActiveMembers(Long dropId){
+    public Set<Long> checkActiveMembers(Long dropId){
         DropQueue dropQueue = dropQueueMap.get(dropId);
         if (dropQueue == null) {
-            return ;
+            return Set.of();
         }
-        dropQueue.checkMemberIsExpired();
+        return dropQueue.checkMemberIsExpired();
     }
 
     public void markSoldOut(Long dropId) {
         DropQueue dropQueue = dropQueueMap.get(dropId);
         if (dropQueue != null) {
             dropQueue.markSoldOut();
+        }
+    }
+
+    public void unmarkSoldOut(Long dropId) {
+        DropQueue dropQueue = dropQueueMap.get(dropId);
+        if (dropQueue != null) {
+            dropQueue.unmarkSoldOut();
         }
     }
 }

@@ -77,7 +77,14 @@ public class DropEnterService {
         Drop findDrop = dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
 
-        DropEntry dropEntry = DropEntry.createInitialEntry(dropId, memberId);
+        DropEntry dropEntry;
+        if (dropEntryRepository.existsByDropIdAndMemberId(dropId, memberId)) { // 이미 입장한 적이 있으면
+            dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId).orElseThrow();
+            dropEntry.changeStatusEnter(); // 입장으로 상태 값 변경 (유니크 제약 조건으로 인해 객체를 찾아서 상태 값만 변경)
+        }
+        else{
+            dropEntry = DropEntry.createInitialEntry(dropId, memberId);
+        }
         dropEntryRepository.save(dropEntry);
 
         // 5. 입장 처리 완료 후 대기열 권한 제거

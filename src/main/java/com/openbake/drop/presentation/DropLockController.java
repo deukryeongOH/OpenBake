@@ -5,6 +5,7 @@ import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.drop.application.DropLockFacade;
 import com.openbake.drop.presentation.dto.DropReserveRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +18,7 @@ public class DropLockController {
     private final CurrentMemberProvider provider;
 
     @PostMapping("/{dropId}/lock-start")
-    public ApiResponse<String> reserveStock(@PathVariable("dropId") Long dropId, @RequestBody DropReserveRequest request){
+    public ApiResponse<String> reserveStock(@PathVariable("dropId") Long dropId, @Valid @RequestBody DropReserveRequest request){
         Long memberId = provider.getId();
         dropLockFacade.reserveStock(dropId, memberId, request.getQuantity());
 

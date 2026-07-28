@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -36,5 +37,25 @@ public class DropRepositoryAdapter implements DropRepository {
     @Override
     public Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay) {
         return dropJpaRepository.existsByDropStartBetween(startOfDay, endOfDay);
+    }
+
+    @Override
+    public boolean existsByDropStartBetweenAndIdNot(LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId) {
+        return dropJpaRepository.existsByDropStartBetweenAndIdNot(startOfDay, endOfDay, excludeDropId);
+    }
+
+    @Override
+    public boolean existsBySellerIdAndDropStartBetweenAndIdNot(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId) {
+        return dropJpaRepository.existsBySellerIdAndDropStartBetweenAndIdNot(sellerId, startOfDay, endOfDay, excludeDropId);
+    }
+
+    @Override
+    public List<Drop> findAllBySellerId(Long sellerId) {
+        return dropJpaRepository.findAllBySellerId(sellerId);
+    }
+
+    @Override
+    public void delete(Drop drop) {
+        dropJpaRepository.delete(drop);
     }
 }

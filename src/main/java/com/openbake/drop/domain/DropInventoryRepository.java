@@ -4,4 +4,6 @@ public interface DropInventoryRepository {
     DropInventory save(DropInventory dropInventory);
 
     DropInventory findByDropId(Long dropId);
+
+    void delete(DropInventory dropInventory);
 }

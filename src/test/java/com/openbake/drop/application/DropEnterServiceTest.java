@@ -37,6 +37,9 @@ class DropEnterServiceTest {
     @Mock
     private DropRepository dropRepository;
 
+    @Mock
+    private DropInventoryRepository dropInventoryRepository;
+
     @InjectMocks
     private DropEnterService dropEnterService;
 
@@ -44,6 +47,7 @@ class DropEnterServiceTest {
     private final Long memberId = 10L;
 
     private Drop activeDrop;
+    private DropInventory dropInventory;
 
     @BeforeEach
     void setUp() {
@@ -69,6 +73,12 @@ class DropEnterServiceTest {
         ReflectionTestUtils.setField(activeDrop, "id", dropId);
         // 진행 시간 검증(isAccessible)을 통과시키기 위해 시작 시각을 현재 시각 이전으로 조정
         ReflectionTestUtils.setField(activeDrop, "dropStart", now.minusMinutes(10));
+
+        dropInventory = DropInventory.builder()
+                .dropId(dropId)
+                .totalQuantity(100)
+                .remainQuantity(97)
+                .build();
     }
 
     @Test
@@ -123,6 +133,7 @@ class DropEnterServiceTest {
         // given
         given(queueManager.isActive(dropId, memberId)).willReturn(true);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
+        given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
         given(dropEntryRepository.save(any(DropEntry.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -135,6 +146,8 @@ class DropEnterServiceTest {
         assertThat(response.imageUrl()).isEqualTo(activeDrop.getDropProduct().getImageUrl());
         assertThat(response.price()).isEqualTo(activeDrop.getDropProduct().getPrice());
         assertThat(response.limitQuantity()).isEqualTo(activeDrop.getLimitQuantity());
+        assertThat(response.remainQuantity()).isEqualTo(dropInventory.getRemainQuantity());
+        assertThat(response.pickupDates()).isEqualTo(activeDrop.getPickUpAvailableDate());
 
         verify(dropEntryRepository).save(any(DropEntry.class));
         verify(queueManager).removeActiveUser(dropId, memberId);

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface DropJpaRepository extends JpaRepository<Drop, Long> {
@@ -16,4 +17,10 @@ public interface DropJpaRepository extends JpaRepository<Drop, Long> {
     Optional<Drop> findByDropStartBetween(LocalDateTime todayStart, LocalDateTime todayEnd);
 
     Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay);
+
+    boolean existsByDropStartBetweenAndIdNot(LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
+
+    boolean existsBySellerIdAndDropStartBetweenAndIdNot(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
+
+    List<Drop> findAllBySellerId(Long sellerId);
 }

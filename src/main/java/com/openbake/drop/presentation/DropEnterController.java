@@ -39,7 +39,7 @@ public class DropEnterController {
     }
 
     @GetMapping("/today/drop") // 오늘 진행하는 드롭ID 가져오기 (대기열 선행 작업, ID가 있어야 대기열 생성가능)
-    public ApiResponse<?> getDropId(){
+    public ApiResponse<Long> getDropId(){
         Long dropId = dropEnterService.getTodayDropId();
         return ApiResponse.ok(dropId);
     }

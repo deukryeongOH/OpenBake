@@ -1,15 +1,7 @@
 package com.openbake.settlement.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import com.openbake.seller.domain.SettlementAccountConverter;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -61,6 +53,29 @@ public class SettlementPayout {
     @Column(nullable = false, length = 30)
     private SettlementPayoutStatus status;
 
+    @Column(
+            name = "bank_code_snapshot",
+            nullable = false,
+            length = 20
+    )
+    private String bankCodeSnapshot;
+
+    @Convert(converter = SettlementAccountConverter.class)
+    @Column(
+            name = "account_number_snapshot",
+            nullable = false,
+            length = 500
+    )
+    private String accountNumberSnapshot;
+
+    @Convert(converter = SettlementAccountConverter.class)
+    @Column(
+            name = "account_holder_snapshot",
+            nullable = false,
+            length = 500
+    )
+    private String accountHolderSnapshot;
+
     @Column(name = "external_transaction_id", length = 100)
     private String externalTransactionId;
 
@@ -80,17 +95,36 @@ public class SettlementPayout {
             Long settlementId,
             Long sellerId,
             BigDecimal payoutAmount,
-            String idempotencyKey
+            String idempotencyKey,
+            String bankCode,
+            String accountNumber,
+            String accountHolder
     ) {
         validateIdempotencyKey(idempotencyKey);
+        validatePayoutAmount(payoutAmount);
+        validateAccount(
+                bankCode,
+                accountNumber,
+                accountHolder
+        );
 
-        SettlementPayout payout = new SettlementPayout();
+        SettlementPayout payout =
+                new SettlementPayout();
+
         payout.settlementId = settlementId;
         payout.sellerId = sellerId;
         payout.payoutAmount = payoutAmount;
         payout.idempotencyKey = idempotencyKey;
-        payout.status = SettlementPayoutStatus.REQUESTED;
-        payout.requestedAt = OffsetDateTime.now();
+
+        payout.bankCodeSnapshot = bankCode;
+        payout.accountNumberSnapshot = accountNumber;
+        payout.accountHolderSnapshot = accountHolder;
+
+        payout.status =
+                SettlementPayoutStatus.REQUESTED;
+
+        payout.requestedAt =
+                OffsetDateTime.now();
 
         return payout;
     }
@@ -146,6 +180,43 @@ public class SettlementPayout {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new IllegalArgumentException(
                     "멱등키는 필수입니다."
+            );
+        }
+    }
+
+    private static void validatePayoutAmount(
+            BigDecimal payoutAmount
+    ) {
+        if (payoutAmount == null
+                || payoutAmount.signum() <= 0) {
+            throw new IllegalArgumentException(
+                    "지급 금액은 0보다 커야 합니다."
+            );
+        }
+    }
+
+    private static void validateAccount(
+            String bankCode,
+            String accountNumber,
+            String accountHolder
+    ) {
+        if (bankCode == null || bankCode.isBlank()) {
+            throw new IllegalArgumentException(
+                    "은행 코드는 필수입니다."
+            );
+        }
+
+        if (accountNumber == null
+                || accountNumber.isBlank()) {
+            throw new IllegalArgumentException(
+                    "계좌번호는 필수입니다."
+            );
+        }
+
+        if (accountHolder == null
+                || accountHolder.isBlank()) {
+            throw new IllegalArgumentException(
+                    "예금주명은 필수입니다."
             );
         }
     }

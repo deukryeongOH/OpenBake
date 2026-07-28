@@ -29,4 +29,9 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
         return dropEntryJpaRepository.save(dropEntry);
     }
 
+    @Override
+    public boolean existsByDropIdAndMemberId(Long dropId, Long memberId) {
+        return dropEntryJpaRepository.existsByDropIdAndMemberId(dropId, memberId);
+    }
+
 }

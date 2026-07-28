@@ -42,7 +42,7 @@ public class DropEntry {
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private EntryStatus entryStatus; // 진입 내역
+    private EntryStatus entryStatus; // 진입 내역 (최초 실패 시각)
 
     @CreatedDate // JPA (엔티티 저장 시점에 JPA가 자동으로 시간 주입)
     @Column(nullable = false, updatable = false)
@@ -68,19 +68,24 @@ public class DropEntry {
     }
 
     // 주문/재고 선점 성공 시 상태 변경
-    public void completeReservation() { this.entryStatus = EntryStatus.RESERVED;}
+    public void reserveEntry() { this.entryStatus = EntryStatus.RESERVED;}
 
-    // 취소
+    // 주문 취소 or 장바구니 만료
     public void cancelEntry() {
         this.entryStatus = EntryStatus.CANCELLED;
     }
 
-    public void completePayment(){
+    // 결제 완료
+    public void completeEntry(){
         this.entryStatus = EntryStatus.COMPLETED;
     }
 
     // 재고 부족으로 인한 주문 실패 또는 결제 실패
-    public void failPayment(){
+    public void failEntry(){
         this.entryStatus = EntryStatus.FAILED;
+    }
+
+    public void changeStatusEnter() {
+        this.entryStatus = EntryStatus.ENTERED;
     }
 }

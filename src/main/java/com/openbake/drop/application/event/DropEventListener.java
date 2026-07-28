@@ -34,7 +34,7 @@ public class DropEventListener {
             if (entry.getEntryStatus() != EntryStatus.RESERVED) {
                 return ;
             }
-            entry.completePayment();
+            entry.completeEntry();
         });
     }
 
@@ -42,7 +42,7 @@ public class DropEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handlePaymentFailed(PaymentFailedEvent event){
         // 결제 실패 시 entry 상태 값 변경 후 재고 복구
-        changeEntryStatusAndRecoverStock(event.dropId(), event.memberId(), event.quantity(), DropEntry::failPayment);
+        changeEntryStatusAndRecoverStock(event.dropId(), event.memberId(), event.quantity(), DropEntry::failEntry);
     }
 
 

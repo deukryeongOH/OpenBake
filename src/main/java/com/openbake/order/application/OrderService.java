@@ -5,8 +5,8 @@ import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderOutboxEvent;
@@ -319,7 +319,7 @@ public class OrderService {
         String payloadJson;
         try {
             payloadJson = objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             //확정 트랜잭션 안이므로 직렬화 실패 시 전체 롤백된다.
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "구매확정 이벤트 직렬화에 실패했습니다.");
         }

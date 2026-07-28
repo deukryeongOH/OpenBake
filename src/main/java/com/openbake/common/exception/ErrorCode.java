@@ -63,6 +63,8 @@ public enum ErrorCode {
     LOCK_ACQUISITION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "DR012", "락을 획득하는 과정에서 시스템 오류가 발생했습니다."),
     NOT_ENTERED_STATUS(HttpStatus.BAD_REQUEST, "DR014", "재고를 선점할 수 있는 상태가 아닙니다."),
     INVALID_TOTAL_QUANTITY(HttpStatus.BAD_REQUEST, "DR015", "복구할 재고와 남아있는 재고의 합이 총 발매 수량보다 클 수 없습니다."),
+    DROP_OWNER_MISMATCH(HttpStatus.FORBIDDEN, "DR016", "본인이 등록한 드롭이 아닙니다."),
+    DROP_NOT_EDITABLE(HttpStatus.CONFLICT, "DR017", "이미 시작되었거나 종료된 드롭은 수정/삭제할 수 없습니다."),
 
     //cart - CA
     CART_ALREADY_EXISTS(HttpStatus.CONFLICT, "CA001", "이미 장바구니에 담긴 상품이 있습니다."),

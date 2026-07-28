@@ -23,6 +23,7 @@ public class DropEnterService {
 
     private final DropEntryRepository dropEntryRepository;
     private final InMemoryQueueManager queueManager;
+    private final DropInventoryRepository dropInventoryRepository;
     private final DropRepository dropRepository;
 
     @Transactional(readOnly = true)
@@ -77,6 +78,8 @@ public class DropEnterService {
         Drop findDrop = dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
 
+        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
+
         DropEntry dropEntry;
         if (dropEntryRepository.existsByDropIdAndMemberId(dropId, memberId)) { // 이미 입장한 적이 있으면
             dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId).orElseThrow();
@@ -90,7 +93,7 @@ public class DropEnterService {
         // 5. 입장 처리 완료 후 대기열 권한 제거
         queueManager.removeActiveUser(dropId, memberId);
 
-        return ConfirmEntryResponse.of(findDrop.getDropProduct(), findDrop.getLimitQuantity());
+        return ConfirmEntryResponse.of(findDrop.getDropProduct(), findDrop.getLimitQuantity(), dropInventory.getRemainQuantity(), findDrop.getPickUpAvailableDate());
     }
 
 

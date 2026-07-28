@@ -175,6 +175,15 @@ public class CartService {
     }
 
     /**
+     * memberId 로 카트 존재 여부만 확인한다. drop 쪽 방치된 재고 선점 회수 배치가
+     * "카트가 실제로 만들어졌는지"를 판단할 때 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasCart(Long memberId) {
+        return cartRepository.existsByMemberId(memberId);
+    }
+
+    /**
      * 픽업 날짜 선택. 재선택 시 덮어쓴다.
      */
     @Transactional

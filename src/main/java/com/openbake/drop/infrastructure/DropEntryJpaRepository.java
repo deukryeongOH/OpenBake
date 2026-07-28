@@ -10,6 +10,7 @@ import java.util.Optional;
 public interface DropEntryJpaRepository extends JpaRepository<DropEntry, Long> {
 
     // 현재 입장 중이거나 재고를 선점한 상태인지 확인
-    boolean existsByDropIdAndMemberIdAndEntryStatusIn(Long dropId, Long memberId, List<EntryStatus> statuss);
+    boolean existsByDropIdAndMemberIdAndEntryStatusIn(Long dropId, Long memberId, List<EntryStatus> status);
     Optional<DropEntry> findByDropIdAndMemberId(Long dropId, Long memberId);
+    boolean existsByDropIdAndMemberId(Long dropId, Long memberId);
 }

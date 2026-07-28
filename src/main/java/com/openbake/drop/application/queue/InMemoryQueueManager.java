@@ -55,7 +55,7 @@ public class InMemoryQueueManager implements QueueManager{
     // 대기열 상위 n명을 active set으로 이동 (이건 schedular가 호출)
     public void allowEntries(Long dropId, int cnt) {
         DropQueue queue = dropQueueMap.get(dropId);
-        if (queue == null) {
+        if (queue == null || queue.isSoldOut()) {
             return;
         }
 
@@ -100,11 +100,19 @@ public class InMemoryQueueManager implements QueueManager{
         dropQueueMap.remove(dropId);
     }
 
+    // Active Member 만료되었는지 확인
     public void checkActiveMembers(Long dropId){
         DropQueue dropQueue = dropQueueMap.get(dropId);
         if (dropQueue == null) {
-            throw new IllegalArgumentException("대기열 자체가 없습니다.");
+            return ;
         }
         dropQueue.checkMemberIsExpired();
+    }
+
+    public void markSoldOut(Long dropId) {
+        DropQueue dropQueue = dropQueueMap.get(dropId);
+        if (dropQueue != null) {
+            dropQueue.markSoldOut();
+        }
     }
 }

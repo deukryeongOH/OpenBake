@@ -2,11 +2,12 @@ package com.openbake.drop.application.queue;
 
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-public class InMemoryQueueManager {
+public class InMemoryQueueManager implements QueueManager{
 
     // dropId별 DropQueue 객체 관리
     private final Map<Long, DropQueue> dropQueueMap = new ConcurrentHashMap<>();
@@ -22,12 +23,12 @@ public class InMemoryQueueManager {
 
         // 메소드 전체에 안하는 이유 (dropId = 1이 완료될 때까지 dropId = 2는 진입 대기)
         synchronized (queue) {  // DropQueue 객체에만 락을 검
-            if (queue.getActiveUsers().contains(memberId)) {
+            if (queue.checkMemberIsActive(memberId)) {
                 return 0L; // 이미 드롭 입장함.
             }
-
-            if (queue.getWaitingUsers().add(memberId)) {
-                queue.getWaitingQueue().add(memberId);
+            if (queue.addWaitingMember(memberId)) {
+                queue.addQueueingMember(memberId);
+                queue.issueTicketForMember(memberId);
             }
 
             return getRank(dropId, memberId);
@@ -40,44 +41,36 @@ public class InMemoryQueueManager {
         if (queue == null) {
             return -1L; // 대기열 자체가 존재하지 않음.
         }
-
-        if (queue.getActiveUsers().contains(memberId)) {
+        if (queue.checkMemberIsActive(memberId)) {
             return 0L; // 0순위 (입장 허용 상태)
         }
 
-        if (!queue.getWaitingUsers().contains(memberId)) {
+        if (!queue.checkMemberIsWaiting(memberId)) {
             return -1L; // 대기열에 없음
         }
 
-        long rank = 1;
-        // Queue 순회해 순번 계산 (1등 부터 시작)
-        for (Long id : queue.getWaitingQueue()) {
-            if (id.equals(memberId)) {
-                return rank;
-            }
-            rank++;
-        }
-
-        return -1L; // queue에 없음.
+        return queue.returnNowRank(memberId);
     }
 
     // 대기열 상위 n명을 active set으로 이동 (이건 schedular가 호출)
     public void allowEntries(Long dropId, int cnt) {
         DropQueue queue = dropQueueMap.get(dropId);
-        if (queue == null) {
+        if (queue == null || queue.isSoldOut()) {
             return;
         }
 
         synchronized (queue) {
             for(int i = 0; i < cnt; i++){
-                Long memberId = queue.getWaitingQueue().poll();
+                Long memberId = queue.pollingNext();
 
                 if (memberId == null) {
                     break; // 대기열 빔.
                 }
 
-                queue.getWaitingUsers().remove(memberId); // 대기열에서 없애고
-                queue.getActiveUsers().add(memberId); // active로 옮김
+                queue.removeWaitingMember(memberId); // 대기열에서 없애고
+                queue.addActiveMember(memberId, LocalDateTime.now().plusMinutes(10)); // active로 옮김 (10분 후 만료)
+                queue.increaseEntryCount();
+                queue.removeTicket(memberId);
             }
 
         }
@@ -88,7 +81,7 @@ public class InMemoryQueueManager {
     public void removeActiveUser(Long dropId, Long memberId) {
         DropQueue queue = dropQueueMap.get(dropId);
         if (queue != null) {
-            queue.getActiveUsers().remove(memberId);
+            queue.removeActiveMember(memberId);
         }
     }
 
@@ -99,6 +92,27 @@ public class InMemoryQueueManager {
             return false;
         }
 
-        return queue.getActiveUsers().contains(memberId);
+        return queue.checkMemberIsActive(memberId);
+    }
+
+    // DropQueue에서 drop 제거
+    public void finishDrop(Long dropId){
+        dropQueueMap.remove(dropId);
+    }
+
+    // Active Member 만료되었는지 확인
+    public void checkActiveMembers(Long dropId){
+        DropQueue dropQueue = dropQueueMap.get(dropId);
+        if (dropQueue == null) {
+            return ;
+        }
+        dropQueue.checkMemberIsExpired();
+    }
+
+    public void markSoldOut(Long dropId) {
+        DropQueue dropQueue = dropQueueMap.get(dropId);
+        if (dropQueue != null) {
+            dropQueue.markSoldOut();
+        }
     }
 }

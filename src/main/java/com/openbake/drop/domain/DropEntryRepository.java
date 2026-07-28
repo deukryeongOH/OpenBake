@@ -10,4 +10,7 @@ public interface DropEntryRepository {
     Optional<DropEntry> findByDropIdAndMemberId(Long dropId, Long memberId);
 
     DropEntry save(DropEntry dropEntry);
+
+    // 재입장 여부 판단
+    boolean existsByDropIdAndMemberId(Long dropId, Long memberId);
 }

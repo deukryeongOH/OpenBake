@@ -49,6 +49,7 @@ public class DropLockFacade {
                 lock.unlock();
             }
         }
-        dropLockService.confirmEventPublisher(dropId, memberId, quantity);
+//        dropLockService.confirmEventPublisher(dropId, memberId, quantity); 세미에서는 모놀리식 동기 호출로 진행
+
     }
 }

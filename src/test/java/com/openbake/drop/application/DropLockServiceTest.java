@@ -31,9 +31,9 @@ class DropLockServiceTest {
 
     @Mock
     private DropEntryRepository dropEntryRepository;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
+//
+//    @Mock
+//    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private DropLockService dropLockService;
@@ -115,19 +115,19 @@ class DropLockServiceTest {
         dropLockService.checkLimitQuantityPerPerson(dropId, 3);
     }
 
-    @Test
-    @DisplayName("재고 선점 이벤트 발행 성공")
-    void confirmEventPublisher_Success() {
-        // when
-        dropLockService.confirmEventPublisher(dropId, memberId, 3);
-
-        // then
-        ArgumentCaptor<DropQuantityReservedEvent> captor = ArgumentCaptor.forClass(DropQuantityReservedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        DropQuantityReservedEvent event = captor.getValue();
-        assertThat(event.dropId()).isEqualTo(dropId);
-        assertThat(event.memberId()).isEqualTo(memberId);
-        assertThat(event.quantity()).isEqualTo(3);
-    }
+//    @Test
+//    @DisplayName("재고 선점 이벤트 발행 성공")
+//    void confirmEventPublisher_Success() {
+//        // when
+////        dropLockService.confirmEventPublisher(dropId, memberId, 3);
+//
+//        // then
+//        ArgumentCaptor<DropQuantityReservedEvent> captor = ArgumentCaptor.forClass(DropQuantityReservedEvent.class);
+//        verify(eventPublisher).publishEvent(captor.capture());
+//
+//        DropQuantityReservedEvent event = captor.getValue();
+//        assertThat(event.dropId()).isEqualTo(dropId);
+//        assertThat(event.memberId()).isEqualTo(memberId);
+//        assertThat(event.quantity()).isEqualTo(3);
+//    }
 }

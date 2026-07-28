@@ -63,12 +63,13 @@ public class QueueScheduler {
             return; // 오늘 진행되는 드롭이 없음 (정상 상태)
         }
 
-        if (LocalDateTime.now().isAfter(drop.dropEnd) && checkEnd.compareAndSet(false, true)) {
+        if ((LocalDateTime.now().isAfter(drop.dropEnd) && checkEnd.compareAndSet(false, true))) {
             dropService.changeDropStatusCompleted(drop.dropId);
         }
 
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())) {
+            queueManager.finishDrop(drop.dropId);
             return; // 드롭 진행 시간이 아님
         }
 
@@ -79,6 +80,22 @@ public class QueueScheduler {
         queueManager.allowEntries(drop.dropId(), ENTRIES_PER_TICK);
     }
 
+    // 대기열은 통과했지만 수량을 선택하고 장바구니로 넘어가지 않는 Member 지속적으로 만료
+    @Scheduled(fixedRate = 120000)
+    public void checkActiveMembers() {
+        CachedDrop drop = cachedDrop.get();
+
+        if (drop.dropId() == null) {
+            return; // 오늘 진행되는 드롭이 없음 (정상 상태)
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())) {
+            return; // 드롭 진행 시간이 아님
+        }
+
+        queueManager.checkActiveMembers(drop.dropId);
+    }
     private record CachedDrop(LocalDate cachedDate, Long dropId, LocalDateTime dropStart, LocalDateTime dropEnd) {
         static CachedDrop empty(LocalDate date) {
             return new CachedDrop(date, null, null, null);

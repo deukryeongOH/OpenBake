@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -53,6 +55,18 @@ public class DropLockService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NEVER_ENTERED));
 
         dropEntry.failEntry(); // entryStatus를 fail로 바꿈.
+
+        reviveIfSoldOutCompleted(dropId, dropInventory);
+    }
+
+    private void reviveIfSoldOutCompleted(Long dropId, DropInventory dropInventory) {
+        Drop drop = dropRepository.findById(dropId).orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
+
+        boolean stillWithinDropWindow = LocalDateTime.now().isBefore(drop.getDropEnd());
+        if (drop.getDropStatus() == DropStatus.COMPLETED && stillWithinDropWindow && dropInventory.getRemainQuantity() > 0) {
+            dropService.changeDropStatusActive(dropId);
+            queueManager.unmarkSoldOut(dropId);
+        }
     }
 
     public void checkEntryStatus(Long dropId, Long memberId) {
@@ -60,6 +74,9 @@ public class DropLockService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NEVER_ENTERED));
 
         if (dropEntry.getEntryStatus() != EntryStatus.ENTERED) {
+            throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
+        }
+        if (!queueManager.isActive(dropId, memberId)) {
             throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
         }
     }

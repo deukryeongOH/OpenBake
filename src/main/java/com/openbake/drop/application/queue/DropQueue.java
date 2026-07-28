@@ -3,6 +3,7 @@ package com.openbake.drop.application.queue;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -37,6 +38,10 @@ public class DropQueue {
         soldOut.set(true);
     }
 
+    public void unmarkSoldOut() {
+        soldOut.set(false);
+    }
+
     public boolean isSoldOut(){
         return soldOut.get();
     }
@@ -57,12 +62,16 @@ public class DropQueue {
         return true;
     }
 
-    public void checkMemberIsExpired(){
+    public Set<Long> checkMemberIsExpired(){
+        Set<Long> memberIdSet = new HashSet<>();
         for (Long memberId : activeMembers.keySet()) {
             if (activeMembers.get(memberId).isBefore(LocalDateTime.now())) {
                 activeMembers.remove(memberId);
+                memberIdSet.add(memberId);
             }
         }
+
+        return memberIdSet;
     }
 
     public boolean checkMemberIsWaiting(Long memberId) {

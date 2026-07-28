@@ -1,5 +1,7 @@
 package com.openbake.drop.application;
 
+import com.openbake.common.exception.BusinessException;
+import com.openbake.drop.application.queue.TodayDropCache;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.presentation.dto.DropProductInfoRequest;
 import com.openbake.drop.application.dto.DropProductInfoResponse;
@@ -14,11 +16,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.Set;
 
 import static com.openbake.drop.domain.DropStatus.UPCOMING;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 
@@ -31,6 +37,9 @@ class DropServiceTest {
 
     @Mock
     private DropInventoryRepository dropInventoryRepository; // 추가된 Repository Mock
+
+    @Mock
+    private TodayDropCache todayDropCache;
 
     @InjectMocks
     private DropService dropService;
@@ -59,7 +68,7 @@ class DropServiceTest {
     }
 
     @Test
-    @DisplayName("드롭 상품 등록 성공 - Drop과 DropInventory가 정상 저장되어야 한다")
+    @DisplayName("드롭 상품 등록 성공 - Drop과 DropInventory가 정상 저장되고 오늘 드롭 캐시가 갱신되어야 한다")
     void registerDropProduct_Success() {
         // given
         Long sellerId = 1L;
@@ -115,5 +124,168 @@ class DropServiceTest {
         // 4. 실제 DB 저장 메소드가 호출되었는지 검증
         verify(dropRepository).save(any(Drop.class));
         verify(dropInventoryRepository).save(any(DropInventory.class));
+        // 5. 자정 캐시가 오늘 새로 등록된 드롭을 놓치지 않도록 즉시 갱신되어야 한다
+        verify(todayDropCache).refresh();
+    }
+
+    @Test
+    @DisplayName("같은 날짜에 이미 등록된 드롭이 있으면 등록에 실패하고, 오늘 드롭 캐시는 갱신하지 않는다")
+    void registerDropProduct_Fail_DuplicateDate_DoesNotRefreshCache() {
+        // given
+        given(dropRepository.existsByDropStartBetween(any(), any())).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> dropService.registerDropProduct(request, 1L))
+                .isInstanceOf(BusinessException.class);
+
+        verify(todayDropCache, never()).refresh();
+    }
+
+    @Test
+    @DisplayName("드롭 수정 성공 - Drop/DropInventory가 갱신되고 오늘 드롭 캐시가 즉시 갱신되어야 한다")
+    void updateDropProduct_Success() {
+        // given
+        Long dropId = 100L;
+        Long sellerId = 1L;
+
+        DropProduct existingProduct = DropProduct.builder()
+                .name("옛날쿠키")
+                .description("이전 설명")
+                .imageUrl("old.jpg")
+                .price(5000)
+                .build();
+
+        Drop existingDrop = Drop.builder()
+                .dropStatus(UPCOMING)
+                .dropProduct(existingProduct)
+                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
+                .limitQuantity(3)
+                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .sellerId(sellerId)
+                .build();
+        ReflectionTestUtils.setField(existingDrop, "id", dropId);
+
+        DropInventory dropInventory = DropInventory.builder()
+                .dropId(dropId)
+                .totalQuantity(100)
+                .remainQuantity(60)
+                .build();
+
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(existingDrop));
+        given(dropRepository.existsByDropStartBetweenAndIdNot(any(), any(), eq(dropId))).willReturn(false);
+        given(dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(eq(sellerId), any(), any(), eq(dropId))).willReturn(false);
+        given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
+
+        // when
+        DropProductInfoResponse response = dropService.updateDropProduct(dropId, sellerId, request);
+
+        // then
+        assertThat(response.name()).isEqualTo(request.name());
+        assertThat(response.dropStart()).isEqualTo(request.dropStart());
+        assertThat(response.dropEnd()).isEqualTo(request.dropEnd());
+        assertThat(response.totalQuantity()).isEqualTo(request.totalQuantity());
+        assertThat(dropInventory.getRemainQuantity()).isEqualTo(request.totalQuantity());
+
+        // 시작/종료 시각이 바뀌었을 수 있으므로 캐시가 즉시 갱신되어야 한다
+        verify(todayDropCache).refresh();
+    }
+
+    @Test
+    @DisplayName("본인 소유가 아닌 드롭은 수정할 수 없고, 오늘 드롭 캐시도 갱신하지 않는다")
+    void updateDropProduct_Fail_OwnerMismatch_DoesNotRefreshCache() {
+        // given
+        Long dropId = 100L;
+        Long ownerId = 1L;
+        Long requesterId = 2L;
+
+        DropProduct dropProduct = DropProduct.builder()
+                .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
+        Drop drop = Drop.builder()
+                .dropStatus(UPCOMING)
+                .dropProduct(dropProduct)
+                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
+                .limitQuantity(3)
+                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .sellerId(ownerId)
+                .build();
+        ReflectionTestUtils.setField(drop, "id", dropId);
+
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+
+        // when & then
+        assertThatThrownBy(() -> dropService.updateDropProduct(dropId, requesterId, request))
+                .isInstanceOf(BusinessException.class);
+
+        verify(todayDropCache, never()).refresh();
+    }
+
+    @Test
+    @DisplayName("드롭 삭제 성공 - Drop/DropInventory가 삭제되고 오늘 드롭 캐시가 즉시 갱신되어야 한다")
+    void deleteDropProduct_Success() {
+        // given
+        Long dropId = 100L;
+        Long sellerId = 1L;
+
+        DropProduct dropProduct = DropProduct.builder()
+                .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
+        Drop drop = Drop.builder()
+                .dropStatus(UPCOMING)
+                .dropProduct(dropProduct)
+                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
+                .limitQuantity(3)
+                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .sellerId(sellerId)
+                .build();
+        ReflectionTestUtils.setField(drop, "id", dropId);
+
+        DropInventory dropInventory = DropInventory.builder()
+                .dropId(dropId)
+                .totalQuantity(100)
+                .remainQuantity(100)
+                .build();
+
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
+
+        // when
+        dropService.deleteDropProduct(dropId, sellerId);
+
+        // then
+        verify(dropInventoryRepository).delete(dropInventory);
+        verify(dropRepository).delete(drop);
+        // 삭제된 드롭이 캐시에 남아 스케줄러가 존재하지 않는 드롭을 참조하지 않도록 즉시 갱신되어야 한다
+        verify(todayDropCache).refresh();
+    }
+
+    @Test
+    @DisplayName("이미 시작/종료된 드롭은 삭제할 수 없고, 오늘 드롭 캐시도 갱신하지 않는다")
+    void deleteDropProduct_Fail_NotEditable_DoesNotRefreshCache() {
+        // given
+        Long dropId = 100L;
+        Long sellerId = 1L;
+
+        DropProduct dropProduct = DropProduct.builder()
+                .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
+        Drop drop = Drop.builder()
+                .dropStatus(DropStatus.ACTIVE)
+                .dropProduct(dropProduct)
+                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
+                .limitQuantity(3)
+                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .sellerId(sellerId)
+                .build();
+        ReflectionTestUtils.setField(drop, "id", dropId);
+
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+
+        // when & then
+        assertThatThrownBy(() -> dropService.deleteDropProduct(dropId, sellerId))
+                .isInstanceOf(BusinessException.class);
+
+        verify(todayDropCache, never()).refresh();
     }
 }

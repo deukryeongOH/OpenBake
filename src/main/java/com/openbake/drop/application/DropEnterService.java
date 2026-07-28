@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 
 @Service
@@ -100,5 +101,14 @@ public class DropEnterService {
     public QueueRankResponse getRank(Long dropId, Long memberId){ // DB 조회가 일어나지 않기에 @Transaction X
         Long rank = queueManager.getRank(dropId, memberId);
         return QueueRankResponse.of(rank);
+    }
+
+    @Transactional
+    public void failExpiredEntries(Long dropId, Set<Long> memberIds) {
+        for (Long memberId : memberIds) {
+            dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
+                    .filter(entry -> entry.getEntryStatus() == EntryStatus.ENTERED)
+                    .ifPresent(DropEntry::failEntry);
+        }
     }
 }

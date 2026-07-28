@@ -17,7 +17,7 @@ public class DropLockController {
     private final CurrentMemberProvider provider;
 
     @PostMapping("/{dropId}/lock-start")
-    public ApiResponse<?> reserveStock(@PathVariable("dropId") Long dropId, @RequestBody DropReserveRequest request){
+    public ApiResponse<String> reserveStock(@PathVariable("dropId") Long dropId, @RequestBody DropReserveRequest request){
         Long memberId = provider.getId();
         dropLockFacade.reserveStock(dropId, memberId, request.getQuantity());
 

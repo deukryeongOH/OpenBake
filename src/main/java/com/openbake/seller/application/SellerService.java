@@ -1,8 +1,8 @@
 package com.openbake.seller.application;
 
 import com.openbake.common.exception.*;
+import com.openbake.common.security.Authorities;
 import com.openbake.common.security.CurrentMemberProvider;
-import com.openbake.member.domain.Role;
 import com.openbake.seller.domain.*;
 import com.openbake.seller.infrastructure.MockBankRegistry;
 import com.openbake.seller.infrastructure.MockBusinessRegistry;
@@ -120,7 +120,7 @@ public class SellerService {
     }
 
     public ApplicationStatusUpdateResponse updateApplicationStatus(Long id, ApplicationStatusUpdateRequest request) {
-        if (!currentMemberProvider.hasRole(Role.ADMIN)) {
+        if (!currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)) {
             throw new AdminAccessDeniedException();
         }
 

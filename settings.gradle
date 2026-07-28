@@ -1,1 +1,4 @@
 rootProject.name = 'openbake'
+
+include 'common'
+include 'member-service'

@@ -1,16 +1,14 @@
 package com.openbake.drop.application;
 
-import com.openbake.drop.application.dto.DropQuantityReservedEvent;
+import com.openbake.drop.application.queue.InMemoryQueueManager;
 import com.openbake.drop.domain.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -18,7 +16,6 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class DropLockServiceTest {
@@ -27,13 +24,16 @@ class DropLockServiceTest {
     private DropRepository dropRepository;
 
     @Mock
+    private DropService dropService;
+
+    @Mock
     private DropInventoryRepository dropInventoryRepository;
 
     @Mock
     private DropEntryRepository dropEntryRepository;
-//
-//    @Mock
-//    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private InMemoryQueueManager queueManager;
 
     @InjectMocks
     private DropLockService dropLockService;
@@ -114,20 +114,4 @@ class DropLockServiceTest {
         // when & then (예외 없이 통과)
         dropLockService.checkLimitQuantityPerPerson(dropId, 3);
     }
-
-//    @Test
-//    @DisplayName("재고 선점 이벤트 발행 성공")
-//    void confirmEventPublisher_Success() {
-//        // when
-////        dropLockService.confirmEventPublisher(dropId, memberId, 3);
-//
-//        // then
-//        ArgumentCaptor<DropQuantityReservedEvent> captor = ArgumentCaptor.forClass(DropQuantityReservedEvent.class);
-//        verify(eventPublisher).publishEvent(captor.capture());
-//
-//        DropQuantityReservedEvent event = captor.getValue();
-//        assertThat(event.dropId()).isEqualTo(dropId);
-//        assertThat(event.memberId()).isEqualTo(memberId);
-//        assertThat(event.quantity()).isEqualTo(3);
-//    }
 }

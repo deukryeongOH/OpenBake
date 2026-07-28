@@ -34,6 +34,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/webhooks/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/sellers/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/sellers/*").permitAll()
                         /** 2. 관리자 전용 내부 API: 현재는 정산만 사용중 */
                         .requestMatchers("/internal/v1/**").hasRole("ADMIN")

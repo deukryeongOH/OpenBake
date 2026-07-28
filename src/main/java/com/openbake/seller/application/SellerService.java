@@ -138,6 +138,25 @@ public class SellerService {
         return new ApplicationStatusUpdateResponse(saved.getId(), saved.getApplicationStatus(), saved.getRejectReason(), saved.getUpdatedAt());
     }
 
+    public MySellerResponse getMySeller() {
+        Long memberId = currentMemberProvider.getId();
+        Seller seller = sellerRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));
+
+        return new MySellerResponse(
+                seller.getId(),
+                seller.getMemberId(),
+                seller.getBakeryName(),
+                seller.getBusinessNumber(),
+                seller.getApplicationStatus(),
+                seller.getRejectReason(),
+                seller.getSettlementBankCode(),
+                maskAccountNumber(seller.getSettlementAccountNumber()),
+                seller.isAccountVerified(),
+                seller.getAccountVerifiedAt()
+        );
+    }
+
     public SellerResponse getSeller(Long id) {
         Seller seller = sellerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));

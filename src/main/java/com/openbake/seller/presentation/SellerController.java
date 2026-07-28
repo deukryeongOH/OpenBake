@@ -91,6 +91,18 @@ public class SellerController {
     }
 
     @Operation(
+            summary = "내 판매자 신청 조회",
+            description = "로그인한 회원 본인의 판매자 신청 정보를 조회합니다. memberId 기준으로 조회하며, 본인 조회이므로 반려 사유(rejectReason)도 포함됩니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "C003 대상을 찾을 수 없습니다. (아직 판매자 신청을 한 적 없음)")
+    })
+    @GetMapping("/me")
+    public ApiResponse<MySellerResponse> getMySeller() {
+        return ApiResponse.ok(sellerService.getMySeller());
+    }
+
+    @Operation(
             summary = "판매자 조회",
             description = "판매자 ID로 상세 정보를 조회합니다. 인증 없이 누구나 조회 가능한 공개 API입니다. 계좌번호는 마스킹되어 내려갑니다."
     )

@@ -23,6 +23,7 @@ import com.openbake.seller.presentation.dto.ApplicationCreateRequest;
 import com.openbake.seller.presentation.dto.ApplicationCreateResponse;
 import com.openbake.seller.presentation.dto.BusinessVerificationRequest;
 import com.openbake.seller.presentation.dto.BusinessVerificationResponse;
+import com.openbake.seller.presentation.dto.MySellerResponse;
 import com.openbake.seller.presentation.dto.SellerResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -322,6 +323,29 @@ class SellerControllerTest {
         mockMvc.perform(patch("/api/v1/sellers/1/status")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("C003"));
+    }
+
+    @Test
+    @DisplayName("내 판매자 신청 조회 성공 시 200과 반려 사유 필드를 포함해 반환한다")
+    void getMySeller_success() throws Exception {
+        given(sellerService.getMySeller()).willReturn(new MySellerResponse(
+                1L, 1L, "세종베이커리", "123-45-67890", ApplicationStatus.REJECTED,
+                "사업장 주소 불일치", "088", "110-***-4567", true, LocalDateTime.now()));
+
+        mockMvc.perform(get("/api/v1/sellers/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.applicationStatus").value("REJECTED"))
+                .andExpect(jsonPath("$.data.rejectReason").value("사업장 주소 불일치"));
+    }
+
+    @Test
+    @DisplayName("판매자 신청 이력이 없으면 내 판매자 신청 조회 시 404와 C003을 반환한다")
+    void getMySeller_notFound() throws Exception {
+        willThrow(new EntityNotFoundException("대상을 찾을 수 없습니다.")).given(sellerService).getMySeller();
+
+        mockMvc.perform(get("/api/v1/sellers/me"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("C003"));
     }

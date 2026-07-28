@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashSet;
 import java.util.List;
 
 @Service
@@ -130,12 +131,16 @@ public class DropService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
     }
 
+    // pickUpAvailableDate가 LAZY 컬렉션이라, 세션이 열려 있는 이 트랜잭션 안에서
+    // 새 HashSet으로 복사해둬야 한다. 그냥 참조만 넘기면 세션이 끝난 뒤(JSON 직렬화 시점)
+    // 초기화를 시도하다 LazyInitializationException이 난다.
+    @Transactional(readOnly = true)
     public DropProductInfo getDropProductInfo(Long dropId) {
         Drop findDrop = findDrop(dropId);
         DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
         return DropProductInfo.of(findDrop.getDropProduct().getName(), findDrop.getDropProduct().getDescription(),
                 findDrop.getDropProduct().getImageUrl(), findDrop.getDropStart(), findDrop.getDropEnd(),
-                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), findDrop.getPickUpAvailableDate());
+                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), new HashSet<>(findDrop.getPickUpAvailableDate()));
     }
 
     // 판매자 본인이 등록한 드롭 목록 조회

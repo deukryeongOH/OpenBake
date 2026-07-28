@@ -60,6 +60,8 @@ public class OrderService {
     //구매확정 이벤트 발신함 + 직렬화.
     private final OrderOutboxEventRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    //결제 실패 시 재고 복구·장바구니 정리(별도 트랜잭션).
+    private final OrderReservationReleaser reservationReleaser;
 
     //목록 페이지 크기 상한. 명세서 기준 최대 50.
     private static final int MAX_PAGE_SIZE = 50;
@@ -116,10 +118,17 @@ public class OrderService {
         order.addItem(OrderItem.create(dropId, quantity, priceSnapshot, dropNameSnapshot));
         Order saved = orderRepository.saveAndFlush(order);
 
-        // 7. 결제 — 예치금 차감. 잔액 부족 시 여기서 INSUFFICIENT_BALANCE 로 터진다(롤백).
-        paymentService.pay(saved.getOrderId(), memberId, totalAmount);
+        // 7. 결제 — 예치금 차감. 실패(잔액 부족 등) 시 담기 때 선점된 재고를 복구하고 장바구니를 정리한다.
+        //    재고 차감은 담기 시점에 drop 이 이미 커밋했으므로, 여기 트랜잭션 롤백만으로는 안 돌아온다.
+        //    그래서 별도 트랜잭션(REQUIRES_NEW)으로 복구·정리한 뒤 예외를 다시 던져 주문/결제는 롤백한다.
+        try {
+            paymentService.pay(saved.getOrderId(), memberId, totalAmount);
+        } catch (RuntimeException e) {
+            reservationReleaser.releaseOnPaymentFailure(memberId);
+            throw e;
+        }
 
-        // 8. 장바구니 삭제 — 재고는 복구하지 않는다(주문이 선점을 확정한 것이므로).
+        // 8. 장바구니 삭제 — 결제 성공 시. 재고는 복구하지 않는다(주문이 선점을 확정한 것이므로).
         cartRepository.delete(cart);
 
         // 9. 결제 후 잔액 조회

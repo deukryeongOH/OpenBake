@@ -72,6 +72,7 @@ public enum ErrorCode {
     CART_PICKUP_DATE_UNAVAILABLE(HttpStatus.CONFLICT, "CA005", "이미 지난 픽업 날짜입니다."),
     CART_STOCK_NOT_RESERVED(HttpStatus.CONFLICT, "CA006", "재고 선점이 확인되지 않았습니다. 다시 담아주세요."),
 
+
     //order - OR
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "OR001", "존재하지 않는 주문입니다."),
     ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "OR002", "취소할 수 없는 주문입니다."),

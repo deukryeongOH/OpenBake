@@ -1,21 +1,27 @@
 package com.openbake.payment.presentation.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * 충전 상태 조회 응답 (5-5).
- * PG_TIMEOUT(504) 이후 프론트가 폴링하거나, 충전 내역에서 상태를 확인할 때 사용.
- */
 public record ChargeStatusResponse(
+        @Schema(description = "충전 요청 ID", example = "1")
         Long chargeRequestId,
+        @Schema(description = "충전 금액", example = "50000")
         BigDecimal amount,
+        @Schema(description = "충전 상태 (READY/IN_PROGRESS/DONE/FAILED/EXPIRED)", example = "IN_PROGRESS")
         String status,
+        @Schema(description = "결제 수단", example = "CARD")
         String method,
+        @Schema(description = "PG 실패 코드", example = "REJECT_CARD_PAYMENT")
         String failureCode,
+        @Schema(description = "PG 실패 사유", example = "카드 한도 초과")
         String failureReason,
+        @Schema(description = "충전 요청 시각", example = "2026-07-17T13:58:40")
         LocalDateTime requestedAt,
+        @Schema(description = "PG 승인 시각", example = "2026-07-17T14:02:31")
         LocalDateTime approvedAt,
+        @Schema(description = "충전 요청 만료 시각", example = "2026-07-17T14:28:40")
         LocalDateTime expiresAt
 ) {
 }

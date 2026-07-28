@@ -1,6 +1,8 @@
 package com.openbake.settlement.application;
 
 import com.openbake.common.exception.EntityNotFoundException;
+import com.openbake.settlement.application.port.SellerSettlementAccountReader;
+import com.openbake.settlement.application.port.SellerSettlementAccountSnapshot;
 import com.openbake.settlement.domain.Settlement;
 import com.openbake.settlement.domain.SettlementPayout;
 import com.openbake.settlement.domain.SettlementPayoutRepository;
@@ -16,6 +18,8 @@ public class SettlementPayoutService {
 
     private final SettlementRepository settlementRepository;
     private final SettlementPayoutRepository payoutRepository;
+    private final SellerSettlementAccountReader
+            sellerSettlementAccountReader;
 
     public SettlementPayoutResult start(
             Long settlementId,
@@ -46,14 +50,27 @@ public class SettlementPayoutService {
 
         Settlement settlement = findSettlement(settlementId);
 
+        /**
+         * 관리자 로그인 정보가 아니라,
+         * 지급 대상 정산서의 sellerId로 조회합니다.
+         */
+        SellerSettlementAccountSnapshot account =
+                sellerSettlementAccountReader.getAccount(
+                        settlement.getSellerId()
+                );
+
         settlement.startPaying();
 
-        SettlementPayout payout = SettlementPayout.create(
-                settlement.getId(),
-                settlement.getSellerId(),
-                settlement.getPayoutAmount(),
-                idempotencyKey
-        );
+        SettlementPayout payout =
+                SettlementPayout.create(
+                        settlement.getId(),
+                        settlement.getSellerId(),
+                        settlement.getPayoutAmount(),
+                        idempotencyKey,
+                        account.bankCode(),
+                        account.accountNumber(),
+                        account.accountHolder()
+                );
 
         payout.startProcessing();
 

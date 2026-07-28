@@ -9,8 +9,8 @@ import com.openbake.common.exception.DuplicateSellerApplicationException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.common.exception.InvalidApplicationStatusException;
 import com.openbake.common.exception.InvalidSettlementAccountException;
+import com.openbake.common.security.Authorities;
 import com.openbake.common.security.CurrentMemberProvider;
-import com.openbake.member.domain.Role;
 import com.openbake.seller.domain.AccountVerificationRepository;
 import com.openbake.seller.domain.AccountVerificationSession;
 import com.openbake.seller.domain.ApplicationStatus;
@@ -272,7 +272,7 @@ class SellerServiceTest {
     @Test
     @DisplayName("admin 권한이 없으면 승인/반려 처리 시 예외가 발생한다")
     void updateApplicationStatus_notAdmin() {
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(false);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(false);
         ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
 
         assertThatThrownBy(() -> sellerService.updateApplicationStatus(1L, request))
@@ -282,7 +282,7 @@ class SellerServiceTest {
     @Test
     @DisplayName("존재하지 않는 판매자 ID면 예외가 발생한다")
     void updateApplicationStatus_notFound() {
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(true);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.empty());
         ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
 
@@ -295,7 +295,7 @@ class SellerServiceTest {
     void updateApplicationStatus_approve_success() {
         Seller seller = new Seller(1L, "세종베이커리", "123-45-67890", "서울시", "이세종",
                 true, "088", "1101234567", "이세종", true);
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(true);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.of(seller));
         given(sellerRepository.save(seller)).willReturn(seller);
         ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
@@ -310,7 +310,7 @@ class SellerServiceTest {
     void updateApplicationStatus_reject_success() {
         Seller seller = new Seller(1L, "세종베이커리", "123-45-67890", "서울시", "이세종",
                 true, "088", "1101234567", "이세종", true);
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(true);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.of(seller));
         given(sellerRepository.save(seller)).willReturn(seller);
         ApplicationStatusUpdateRequest request =
@@ -328,7 +328,7 @@ class SellerServiceTest {
         Seller seller = new Seller(1L, "세종베이커리", "123-45-67890", "서울시", "이세종",
                 true, "088", "1101234567", "이세종", true);
         seller.approve();
-        given(currentMemberProvider.hasRole(Role.ADMIN)).willReturn(true);
+        given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.of(seller));
         ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
 

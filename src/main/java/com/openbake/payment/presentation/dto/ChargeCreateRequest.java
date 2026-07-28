@@ -1,9 +1,10 @@
 package com.openbake.payment.presentation.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 
-// 충전 요청 생성 — 클라이언트가 "얼마 충전할래요" 보내는 요청
 public record ChargeCreateRequest(
-        BigDecimal amount // 충전 금액
+        @Schema(description = "충전 금액 (1,000원 단위, 최소 1,000원, 최대 500,000원)", example = "50000")
+        BigDecimal amount
 ) {
 }

@@ -2,6 +2,7 @@ package com.openbake.drop.domain;
 
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface DropRepository {
@@ -17,4 +18,14 @@ public interface DropRepository {
     Optional<Drop> findById(Long dropId);
 
     Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay);
+
+    // 수정 시 "하루 1개 제한" 재검증용. 수정 대상 드롭 자신은 제외하고 확인한다.
+    boolean existsByDropStartBetweenAndIdNot(LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
+
+    boolean existsBySellerIdAndDropStartBetweenAndIdNot(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
+
+    // 판매자 본인이 등록한 드롭 목록 조회
+    List<Drop> findAllBySellerId(Long sellerId);
+
+    void delete(Drop drop);
 }

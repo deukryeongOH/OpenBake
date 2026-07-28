@@ -109,4 +109,27 @@ public class Drop {
     public void changeStatus(DropStatus dropStatus) {
         this.dropStatus = dropStatus;
     }
+
+    // 시작 전(UPCOMING)인 드롭만 판매자가 수정/삭제할 수 있다 (시작 후에는 대기열/재고 선점 데이터와 어긋날 수 있음)
+    public boolean isEditable() {
+        return this.dropStatus == DropStatus.UPCOMING;
+    }
+
+    public void update(DropProduct dropProduct, Set<LocalDate> pickUpAvailableDates, int limitQuantity, LocalDateTime dropStart, LocalDateTime dropEnd) {
+        validateDropPeriod(dropStart, dropEnd);
+        validatePickUpDates(dropEnd, pickUpAvailableDates);
+        if (limitQuantity <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "1인당 제한 수량은 1개 이상이어야 합니다.");
+        }
+        if (dropProduct == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "상품 정보는 필수입니다.");
+        }
+
+        this.dropProduct = dropProduct;
+        this.limitQuantity = limitQuantity;
+        this.dropStart = dropStart;
+        this.dropEnd = dropEnd;
+        this.pickUpAvailableDate.clear();
+        this.pickUpAvailableDate.addAll(pickUpAvailableDates);
+    }
 }

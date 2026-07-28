@@ -2,6 +2,7 @@ package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.application.dto.DropProductInfo;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.presentation.dto.DropProductInfoRequest;
 import com.openbake.drop.application.dto.DropProductInfoResponse;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -95,6 +97,22 @@ public class DropService {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
+
+    // 수정 시 "하루 1개 제한" 재검증. 하루에 드롭이 하나뿐이라, 수정 대상 자기 자신을 빼지 않으면
+    // 날짜를 안 바꾸는 수정조차 "이미 그 날짜에 드롭이 있다"고 오판해서 막히므로 자신은 제외하고 확인한다.
+    private void validateOneDropPerDayExcludingSelf(Long dropId, Long sellerId, LocalDateTime dropStart) {
+        LocalDate dropDate = dropStart.toLocalDate();
+        LocalDateTime startOfDay = dropDate.atStartOfDay();
+        LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
+
+        if (dropRepository.existsByDropStartBetweenAndIdNot(startOfDay, endOfDay, dropId)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
+        }
+
+        if (dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(sellerId, startOfDay, endOfDay, dropId)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
+        }
+    }
     @Transactional
     public void changeDropStatusActive(Long dropId) {
         Drop drop = findDrop(dropId);
@@ -110,5 +128,62 @@ public class DropService {
     private Drop findDrop(Long dropId){
         return dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
+    }
+
+    public DropProductInfo getDropProductInfo(Long dropId) {
+        Drop findDrop = findDrop(dropId);
+        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
+        return DropProductInfo.of(findDrop.getDropProduct().getName(), findDrop.getDropProduct().getDescription(),
+                findDrop.getDropProduct().getImageUrl(), findDrop.getDropStart(), findDrop.getDropEnd(),
+                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), findDrop.getPickUpAvailableDate());
+    }
+
+    // 판매자 본인이 등록한 드롭 목록 조회
+    @Transactional(readOnly = true)
+    public List<DropProductInfoResponse> getMyDrops(Long sellerId) {
+        return dropRepository.findAllBySellerId(sellerId).stream()
+                .map(drop -> DropProductInfoResponse.of(drop, dropInventoryRepository.findByDropId(drop.getId())))
+                .toList();
+    }
+
+    // 판매자 본인의 드롭 수정 (시작 전인 드롭만 가능)
+    @Transactional
+    public DropProductInfoResponse updateDropProduct(Long dropId, Long sellerId, DropProductInfoRequest request) {
+        Drop drop = findDrop(dropId);
+        validateOwner(drop, sellerId);
+        validateEditable(drop);
+        validateOneDropPerDayExcludingSelf(dropId, sellerId, request.dropStart());
+        validateLimitQuantityWithTotalQuantity(request.limitQuantity(), request.totalQuantity());
+
+        DropProduct dropProduct = createDropProduct(request);
+        drop.update(dropProduct, request.pickUpAvailableDates(), request.limitQuantity(), request.dropStart(), request.dropEnd());
+
+        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
+        dropInventory.resetQuantity(request.totalQuantity());
+
+        return DropProductInfoResponse.of(drop, dropInventory);
+    }
+
+    // 판매자 본인의 드롭 삭제 (시작 전인 드롭만 가능)
+    @Transactional
+    public void deleteDropProduct(Long dropId, Long sellerId) {
+        Drop drop = findDrop(dropId);
+        validateOwner(drop, sellerId);
+        validateEditable(drop);
+
+        dropInventoryRepository.delete(dropInventoryRepository.findByDropId(dropId));
+        dropRepository.delete(drop);
+    }
+
+    private void validateOwner(Drop drop, Long sellerId) {
+        if (!drop.getSellerId().equals(sellerId)) {
+            throw new BusinessException(ErrorCode.DROP_OWNER_MISMATCH);
+        }
+    }
+
+    private void validateEditable(Drop drop) {
+        if (!drop.isEditable()) {
+            throw new BusinessException(ErrorCode.DROP_NOT_EDITABLE);
+        }
     }
 }

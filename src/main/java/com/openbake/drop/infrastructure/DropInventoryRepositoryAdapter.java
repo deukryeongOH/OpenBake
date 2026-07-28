@@ -19,4 +19,9 @@ public class DropInventoryRepositoryAdapter implements DropInventoryRepository {
     public DropInventory findByDropId(Long dropId) {
         return dropInventoryJpaRepository.findByDropId(dropId);
     }
+
+    @Override
+    public void delete(DropInventory dropInventory) {
+        dropInventoryJpaRepository.delete(dropInventory);
+    }
 }

@@ -16,12 +16,18 @@ import com.openbake.order.presentation.dto.OrderCreateResponse;
 import com.openbake.order.presentation.dto.OrderDetailResponse;
 import com.openbake.order.presentation.dto.OrderPageResponse;
 import com.openbake.order.presentation.dto.OrderSummaryResponse;
+import com.openbake.drop.application.DropLockService;
+import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.DropRepository;
 import com.openbake.payment.application.DepositService;
 import com.openbake.payment.application.PaymentService;
 import com.openbake.seller.application.CurrentSellerProvider;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
+import com.openbake.settlement.application.event.PurchaseConfirmedEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -42,15 +51,21 @@ public class OrderService {
     private final DepositService depositService;
     private final CurrentSellerProvider currentSellerProvider;
     private final SellerRepository sellerRepository;
+    //재고 복구 요청(취소 시). 차감은 order 가 하지 않고 복구만 drop 에 동기 호출한다.
+    private final DropLockService dropLockService;
+    //주문 생성 스냅샷 소스(판매자/가격/상품명) 조회용.
+    private final DropRepository dropRepository;
+    //결제 실패 시 재고 복구·장바구니 정리(별도 트랜잭션).
+    private final OrderReservationReleaser reservationReleaser;
+    //구매확정 이벤트 발행. 정산 리스너가 커밋 후 별도 트랜잭션에서 받는다.
+    private final ApplicationEventPublisher eventPublisher;
 
     //목록 페이지 크기 상한. 명세서 기준 최대 50.
     private static final int MAX_PAGE_SIZE = 50;
 
-    // TODO(drop): 드롭 조회 포트가 없어 스냅샷 소스를 임시 상수로 둔다.
-    //   포트가 생기면 dropId 로 조회해 sellerId/상품명/가격을 읽어 교체한다.
-    private static final Long STUB_SELLER_ID = 1L;
-    private static final BigDecimal STUB_PRICE = BigDecimal.valueOf(10000);
-    private static final String STUB_DROP_NAME = "임시 상품명";
+    //자동 구매확정 기준 일수. 결제 완료 후 이 일수가 지나면 자동 확정한다(정책값).
+    @Value("${openbake.order.auto-confirm-days:1}")
+    private long autoConfirmDays;
 
     /**
      * 주문 생성(결제). 주문 대상은 본문이 아니라 회원의 장바구니에서 읽는다.
@@ -85,10 +100,14 @@ public class OrderService {
         Long dropId = item.getDropId();
         int quantity = item.getQuantity();
 
-        // 5. 스냅샷 값 — TODO(drop) 로 임시 상수. totalAmount = 단가 × 수량
-        Long sellerId = STUB_SELLER_ID;
-        BigDecimal priceSnapshot = STUB_PRICE;
-        String dropNameSnapshot = STUB_DROP_NAME;
+        // 5. 스냅샷 값 — 장바구니의 dropId 로 드롭을 조회해 주문 시점 값을 복사한다.
+        //    가격/상품명/판매자는 주문 시점에 고정(스냅샷)되어 이후 드롭이 바뀌어도 유지된다.
+        Drop drop = dropRepository.findById(dropId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
+        Long sellerId = drop.getSellerId();
+        //가격은 drop 이 int 라 BigDecimal 로 변환한다.
+        BigDecimal priceSnapshot = BigDecimal.valueOf(drop.getDropProduct().getPrice());
+        String dropNameSnapshot = drop.getDropProduct().getName();
         BigDecimal totalAmount = priceSnapshot.multiply(BigDecimal.valueOf(quantity));
 
         // 6. 주문 생성 — 결제에 넘길 orderId 가 필요하므로 즉시 flush 해 PK 를 확보한다.
@@ -96,10 +115,17 @@ public class OrderService {
         order.addItem(OrderItem.create(dropId, quantity, priceSnapshot, dropNameSnapshot));
         Order saved = orderRepository.saveAndFlush(order);
 
-        // 7. 결제 — 예치금 차감. 잔액 부족 시 여기서 INSUFFICIENT_BALANCE 로 터진다(롤백).
-        paymentService.pay(saved.getOrderId(), memberId, totalAmount);
+        // 7. 결제 — 예치금 차감. 실패(잔액 부족 등) 시 담기 때 선점된 재고를 복구하고 장바구니를 정리한다.
+        //    재고 차감은 담기 시점에 drop 이 이미 커밋했으므로, 여기 트랜잭션 롤백만으로는 안 돌아온다.
+        //    그래서 별도 트랜잭션(REQUIRES_NEW)으로 복구·정리한 뒤 예외를 다시 던져 주문/결제는 롤백한다.
+        try {
+            paymentService.pay(saved.getOrderId(), memberId, totalAmount);
+        } catch (RuntimeException e) {
+            reservationReleaser.releaseOnPaymentFailure(memberId);
+            throw e;
+        }
 
-        // 8. 장바구니 삭제 — 재고는 복구하지 않는다(주문이 선점을 확정한 것이므로).
+        // 8. 장바구니 삭제 — 결제 성공 시. 재고는 복구하지 않는다(주문이 선점을 확정한 것이므로).
         cartRepository.delete(cart);
 
         // 9. 결제 후 잔액 조회
@@ -147,12 +173,6 @@ public class OrderService {
         Order order = getOwnedOrder(memberId, orderId);
         OrderItem item = order.getOrderItem();
 
-        // TODO(drop): dropCloseAt = drop.dropEnd 를 조회해야 한다. 포트가 없어 지금은 null.
-        //   cancelable 도 원래 (PAID && now < dropCloseAt) 인데, 마감 시각을 못 읽어
-        //   당분간 PAID 여부만으로 판정한다.
-        LocalDateTime dropCloseAt = null;
-        boolean cancelable = order.getOrderState() == OrderState.PAID;
-
         OrderDetailResponse.OrderItemInfo itemInfo = OrderDetailResponse.OrderItemInfo.builder()
                 .dropId(item.getDropId())
                 .dropName(item.getDropNameSnapshot())
@@ -170,8 +190,6 @@ public class OrderService {
                 .orderItem(itemInfo)
                 .seller(sellerInfo)
                 .pickupDate(order.getPickupDate())
-                .dropCloseAt(dropCloseAt)
-                .cancelable(cancelable)
                 .orderState(order.getOrderState())
                 .paidAt(order.getPaidAt())
                 .confirmedAt(order.getConfirmAt())
@@ -186,16 +204,16 @@ public class OrderService {
     public OrderCancelResponse cancel(Long memberId, Long orderId) {
         Order order = getOwnedOrder(memberId, orderId);
 
-        // TODO(drop): dropCloseAt 을 읽어 now >= dropCloseAt 이면 DROP_ALREADY_CLOSED 로 막아야 한다.
-        //   마감 시각 조회 포트가 없어 지금은 상태(PAID)만으로 판정한다.
-
         // 상태 전이 — PAID 가 아니면 ORDER_NOT_CANCELABLE
         order.cancel();
 
         // 예치금 전액 환불
         paymentService.refund(orderId);
 
-        // TODO(drop): 재고 복구 — 선점했던 수량을 되돌린다.
+        // 재고 복구 — 선점했던 수량을 drop 에 되돌린다(동기 호출). 재고 소유는 drop 이다.
+        // 차감은 order 가 하지 않았고(담기 시점에 drop 이 함), 복구만 예외 상황에서 요청한다.
+        OrderItem item = order.getOrderItem();
+        dropLockService.rollbackStock(item.getDropId(), memberId, item.getQuantity());
 
         BigDecimal balanceAfter = depositService.getBalance(memberId).balance();
 
@@ -225,20 +243,79 @@ public class OrderService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
 
-        // 상태 전이 — PAID 가 아니면 ORDER_NOT_CONFIRMABLE(배치 자동확정과 중복 요청 방어)
-        order.confirm();
-
-        // 결제 상태도 CONFIRMED 로 전이한다.
-        paymentService.confirmPayment(orderId);
-
-        // TODO(settlement): 구매확정 Outbox 이벤트 발행.
-        //   commissionRateSnapshot 소스가 미정이라 별도 작업으로 분리한다.
+        confirmOrder(order);
 
         return OrderConfirmResponse.builder()
                 .orderId(order.getOrderId())
                 .orderState(order.getOrderState())
                 .confirmedAt(order.getConfirmAt())
                 .build();
+    }
+
+    /**
+     * 자동 구매확정 배치. 결제 완료 후 지정 일수가 지나도록 확정되지 않은(PAID) 주문을 확정한다.
+     * 정산 누락을 막는 안전망이다. 스케줄러가 주문 단위로 이 메서드를 호출한다(주문별 트랜잭션).
+     */
+    @Transactional
+    public void autoConfirm(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+        //조회 후 확정 사이에 판매자가 수동 확정/취소했을 수 있다. PAID 가 아니면 건너뛴다(멱등).
+        if (order.getOrderState() != OrderState.PAID) {
+            return;
+        }
+        confirmOrder(order);
+    }
+
+    /**
+     * 자동 확정 대상 주문 ID 조회. 결제 완료 시각이 (현재 - N일) 이전인 PAID 주문.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> findAutoConfirmTargetIds() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(autoConfirmDays);
+        return orderRepository.findByOrderStateAndPaidAtBefore(OrderState.PAID, cutoff)
+                .stream()
+                .map(Order::getOrderId)
+                .toList();
+    }
+
+    /**
+     * 구매확정 공통 처리. 수동 확정과 자동 확정이 공유한다.
+     * 주문 상태 전이 + 결제 상태 전이 + 정산 이벤트 발행을 같은 트랜잭션에서 수행한다.
+     */
+    private void confirmOrder(Order order) {
+        // 상태 전이 — PAID 가 아니면 ORDER_NOT_CONFIRMABLE
+        order.confirm();
+
+        // 결제 상태도 CONFIRMED 로 전이한다.
+        paymentService.confirmPayment(order.getOrderId());
+
+        // 정산으로 구매확정 이벤트를 발행한다.
+        publishPurchaseConfirmed(order);
+    }
+
+    /**
+     * 구매확정 이벤트를 정산으로 발행한다.
+     *
+     * 확정 트랜잭션 안에서 발행하지만 정산 리스너가 AFTER_COMMIT 이라,
+     * 확정이 롤백되면 정산은 실행되지 않고 커밋된 뒤에야 별도 트랜잭션에서 처리된다.
+     */
+    private void publishPurchaseConfirmed(Order order) {
+        OrderItem item = order.getOrderItem();
+
+        eventPublisher.publishEvent(new PurchaseConfirmedEvent(
+                //정산이 중복 수신을 걸러내는 멱등 키.
+                UUID.randomUUID().toString(),
+                order.getOrderId(),
+                item.getOrderItemId(),
+                order.getSellerId(),
+                item.getDropId(),
+                item.getDropNameSnapshot(),
+                item.getQuantity(),
+                order.getTotalAmount(),
+                //confirmAt(LocalDateTime) → 정산이 요구하는 OffsetDateTime 으로 변환(시스템 존 기준).
+                order.getConfirmAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
+        ));
     }
 
     //본인 주문만 반환. 없으면 ORDER_NOT_FOUND, 타인 주문이면 ACCESS_DENIED(403).

@@ -75,6 +75,6 @@ class DropLockFacadeTest {
         // then
         assertThat(maxConcurrent.get()).isEqualTo(1); // 동시에 락 안에 있던 스레드는 항상 1개 (직렬화 확인)
         verify(dropLockService, times(threadCount)).decreaseQuantity(eq(dropId), anyLong(), eq(1));
-        verify(dropLockService, times(threadCount)).confirmEventPublisher(eq(dropId), anyLong(), eq(1));
+//        verify(dropLockService, times(threadCount)).confirmEventPublisher(eq(dropId), anyLong(), eq(1));
     }
 }

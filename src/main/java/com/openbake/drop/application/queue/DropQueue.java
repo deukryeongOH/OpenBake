@@ -8,6 +8,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 
@@ -26,8 +27,18 @@ public class DropQueue {
     // 입장 번호
     private final AtomicLong entryCount = new AtomicLong(0);
 
+    private final AtomicBoolean soldOut = new AtomicBoolean(false);
+
     public long issueTicket(){
         return ticketNumber.incrementAndGet();
+    }
+
+    public void markSoldOut() {
+        soldOut.set(true);
+    }
+
+    public boolean isSoldOut(){
+        return soldOut.get();
     }
 
     public void addQueueingMember(Long memberId) {

@@ -3,11 +3,9 @@ package com.openbake.cart.domain;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "cart_items")
-@Setter
 @Getter
 @NoArgsConstructor
 public class CartItem {
@@ -34,4 +32,8 @@ public class CartItem {
         return item;
     }
 
+    //연관관계 편의 메서드. Cart.addItem 에서만 호출한다.
+    void setCart(Cart cart) {
+        this.cart = cart;
+    }
 }

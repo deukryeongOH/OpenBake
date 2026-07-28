@@ -5,12 +5,8 @@ import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
-import com.openbake.order.domain.OrderOutboxEvent;
-import com.openbake.order.domain.OrderOutboxEventRepository;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
 import com.openbake.order.presentation.dto.OrderCancelResponse;
@@ -28,8 +24,10 @@ import com.openbake.payment.application.PaymentService;
 import com.openbake.seller.application.CurrentSellerProvider;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
+import com.openbake.settlement.application.event.PurchaseConfirmedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -57,11 +55,10 @@ public class OrderService {
     private final DropLockService dropLockService;
     //주문 생성 스냅샷 소스(판매자/가격/상품명) 조회용.
     private final DropRepository dropRepository;
-    //구매확정 이벤트 발신함 + 직렬화.
-    private final OrderOutboxEventRepository outboxRepository;
-    private final ObjectMapper objectMapper;
     //결제 실패 시 재고 복구·장바구니 정리(별도 트랜잭션).
     private final OrderReservationReleaser reservationReleaser;
+    //구매확정 이벤트 발행. 정산 리스너가 커밋 후 별도 트랜잭션에서 받는다.
+    private final ApplicationEventPublisher eventPublisher;
 
     //목록 페이지 크기 상한. 명세서 기준 최대 50.
     private static final int MAX_PAGE_SIZE = 50;
@@ -293,18 +290,22 @@ public class OrderService {
         // 결제 상태도 CONFIRMED 로 전이한다.
         paymentService.confirmPayment(order.getOrderId());
 
-        // 구매확정 이벤트를 발신함(Outbox)에 저장한다. 상태 변경과 같은 트랜잭션이므로
-        // 확정이 롤백되면 이벤트도 저장되지 않는다. 실제 전송은 릴레이가 맡는다.
-        saveOutboxEvent(order);
+        // 정산으로 구매확정 이벤트를 발행한다.
+        publishPurchaseConfirmed(order);
     }
 
-    //구매확정 이벤트를 정산 수신 DTO 형태로 직렬화해 발신함에 저장한다.
-    private void saveOutboxEvent(Order order) {
+    /**
+     * 구매확정 이벤트를 정산으로 발행한다.
+     *
+     * 확정 트랜잭션 안에서 발행하지만 정산 리스너가 AFTER_COMMIT 이라,
+     * 확정이 롤백되면 정산은 실행되지 않고 커밋된 뒤에야 별도 트랜잭션에서 처리된다.
+     */
+    private void publishPurchaseConfirmed(Order order) {
         OrderItem item = order.getOrderItem();
-        String eventId = UUID.randomUUID().toString();
 
-        PurchaseConfirmedPayload payload = new PurchaseConfirmedPayload(
-                eventId,
+        eventPublisher.publishEvent(new PurchaseConfirmedEvent(
+                //정산이 중복 수신을 걸러내는 멱등 키.
+                UUID.randomUUID().toString(),
                 order.getOrderId(),
                 item.getOrderItemId(),
                 order.getSellerId(),
@@ -314,17 +315,7 @@ public class OrderService {
                 order.getTotalAmount(),
                 //confirmAt(LocalDateTime) → 정산이 요구하는 OffsetDateTime 으로 변환(시스템 존 기준).
                 order.getConfirmAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
-        );
-
-        String payloadJson;
-        try {
-            payloadJson = objectMapper.writeValueAsString(payload);
-        } catch (JacksonException e) {
-            //확정 트랜잭션 안이므로 직렬화 실패 시 전체 롤백된다.
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "구매확정 이벤트 직렬화에 실패했습니다.");
-        }
-
-        outboxRepository.save(OrderOutboxEvent.createPurchaseConfirmed(eventId, order.getOrderId(), payloadJson));
+        ));
     }
 
     //본인 주문만 반환. 없으면 ORDER_NOT_FOUND, 타인 주문이면 ACCESS_DENIED(403).

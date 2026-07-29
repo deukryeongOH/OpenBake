@@ -16,9 +16,13 @@ import com.openbake.order.presentation.dto.OrderCreateResponse;
 import com.openbake.order.presentation.dto.OrderDetailResponse;
 import com.openbake.order.presentation.dto.OrderPageResponse;
 import com.openbake.order.presentation.dto.OrderSummaryResponse;
+import com.openbake.order.presentation.dto.SellerOrderPageResponse;
+import com.openbake.order.presentation.dto.SellerOrderSummaryResponse;
 import com.openbake.drop.application.DropLockService;
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
+import com.openbake.member.domain.Member;
+import com.openbake.member.domain.MemberRepository;
 import com.openbake.payment.application.DepositService;
 import com.openbake.payment.application.PaymentService;
 import com.openbake.seller.application.CurrentSellerProvider;
@@ -51,6 +55,8 @@ public class OrderService {
     private final DepositService depositService;
     private final CurrentSellerProvider currentSellerProvider;
     private final SellerRepository sellerRepository;
+    //판매자 판매내역 조회 시 구매자 표시 이름 조회용.
+    private final MemberRepository memberRepository;
     //재고 복구 요청(취소 시). 차감은 order 가 하지 않고 복구만 drop 에 동기 호출한다.
     private final DropLockService dropLockService;
     //주문 생성 스냅샷 소스(판매자/가격/상품명) 조회용.
@@ -158,6 +164,35 @@ public class OrderService {
 
         return OrderPageResponse.builder()
                 .content(orders.map(this::toSummary).getContent())
+                .page(orders.getNumber())
+                .size(orders.getSize())
+                .totalElements(orders.getTotalElements())
+                .totalPages(orders.getTotalPages())
+                .build();
+    }
+
+    /**
+     * 판매자 본인 판매내역 목록 조회(최신순). orderState 가 있으면 해당 상태만 필터한다.
+     * 판매자 판정은 confirm() 과 동일하게 로그인 계정의 sellerId 존재 여부로 한다(미등록 계정은 403).
+     */
+    @Transactional(readOnly = true)
+    public SellerOrderPageResponse getSellerOrders(String orderState, int page, int size) {
+        Long sellerId = currentSellerProvider.getSellerId()
+                .orElseThrow(() -> new BusinessException(ErrorCode.ACCESS_DENIED));
+
+        int cappedSize = Math.min(size, MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(page, cappedSize);
+
+        Page<Order> orders;
+        if (orderState == null || orderState.isBlank()) {
+            orders = orderRepository.findBySellerIdOrderByOrderIdDesc(sellerId, pageable);
+        } else {
+            OrderState state = parseOrderState(orderState);
+            orders = orderRepository.findBySellerIdAndOrderStateOrderByOrderIdDesc(sellerId, state, pageable);
+        }
+
+        return SellerOrderPageResponse.builder()
+                .content(orders.map(this::toSellerSummary).getContent())
                 .page(orders.getNumber())
                 .size(orders.getSize())
                 .totalElements(orders.getTotalElements())
@@ -356,6 +391,31 @@ public class OrderService {
     private String resolveSellerName(Long sellerId) {
         return sellerRepository.findById(sellerId)
                 .map(Seller::getBakeryName)
+                .orElse(null);
+    }
+
+    //판매자 판매내역 목록 항목 조립. dropId/dropName 은 스냅샷, buyerName 은 member 조회.
+    private SellerOrderSummaryResponse toSellerSummary(Order order) {
+        OrderItem item = order.getOrderItem();
+        return SellerOrderSummaryResponse.builder()
+                .orderId(order.getOrderId())
+                .dropId(item.getDropId())
+                .dropName(item.getDropNameSnapshot())
+                .buyerName(resolveMemberName(order.getMemberId()))
+                .quantity(item.getQuantity())
+                .totalAmount(order.getTotalAmount())
+                .orderState(order.getOrderState())
+                .pickupDate(order.getPickupDate())
+                .paidAt(order.getPaidAt())
+                .confirmedAt(order.getConfirmAt())
+                .canceledAt(order.getCancelAt())
+                .build();
+    }
+
+    //구매자 표시 이름 조회. 회원이 없으면 null.
+    private String resolveMemberName(Long memberId) {
+        return memberRepository.findById(memberId)
+                .map(Member::getName)
                 .orElse(null);
     }
 }

@@ -27,5 +27,12 @@ public interface DropRepository {
     // 판매자 본인이 등록한 드롭 목록 조회
     List<Drop> findAllBySellerId(Long sellerId);
 
+    // 특정 기간 동안 특정 상태(UPCOMING/ACTIVE)인 드롭 목록 조회. dropStart 오름차순.
+    List<Drop> findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
+            List<DropStatus> dropStatuses,
+            LocalDateTime from,
+            LocalDateTime to
+    );
+
     void delete(Drop drop);
 }

@@ -1,6 +1,7 @@
 package com.openbake.drop.infrastructure;
 
 import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.DropStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,4 +24,10 @@ public interface DropJpaRepository extends JpaRepository<Drop, Long> {
     boolean existsBySellerIdAndDropStartBetweenAndIdNot(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
 
     List<Drop> findAllBySellerId(Long sellerId);
+
+    List<Drop> findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
+            List<DropStatus> dropStatuses,
+            LocalDateTime from,
+            LocalDateTime to
+    );
 }

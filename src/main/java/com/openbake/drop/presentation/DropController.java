@@ -77,6 +77,18 @@ public class DropController {
     }
 
     @Operation(
+            summary = "예정된 드롭 목록 조회 (날짜별)",
+            description = "오늘부터 지정한 일수(days) 동안 시작 전(UPCOMING) 또는 진행 중(ACTIVE)인 드롭을 dropStart 오름차순으로 조회합니다. days를 생략하면 7일치를 조회합니다."
+    )
+    @GetMapping("/upcoming")
+    public ApiResponse<List<DropProductInfoResponse>> getUpcomingDrops(
+            @Parameter(description = "오늘부터 조회할 일수", example = "7")
+            @RequestParam(defaultValue = "7") int days) {
+        List<DropProductInfoResponse> response = dropService.getUpcomingDrops(days);
+        return ApiResponse.ok(response);
+    }
+
+    @Operation(
             summary = "드롭 수정",
             description = "판매자 본인이 등록한 드롭을 수정합니다. 아직 시작되지 않은 드롭만 수정할 수 있습니다."
     )

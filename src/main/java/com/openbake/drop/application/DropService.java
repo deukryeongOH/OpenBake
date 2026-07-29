@@ -3,6 +3,7 @@ package com.openbake.drop.application;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.DropProductInfo;
+import com.openbake.drop.application.queue.TodayDropCache;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.presentation.dto.DropProductInfoRequest;
 import com.openbake.drop.application.dto.DropProductInfoResponse;
@@ -24,6 +25,7 @@ public class DropService {
 
     private final DropRepository dropRepository;
     private final DropInventoryRepository dropInventoryRepository;
+    private final TodayDropCache todayDropCache;
 
     @Transactional
     public DropProductInfoResponse registerDropProduct(DropProductInfoRequest request, Long sellerId) {
@@ -41,6 +43,9 @@ public class DropService {
         DropInventory dropInventory = createDropInventory(savedDrop, request);
 
         DropInventory savedDropInventory = dropInventoryRepository.save(dropInventory);
+
+        // 자정 캐시가 오늘 새로 등록된 드롭을 놓치지 않도록 즉시 갱신
+        todayDropCache.refresh();
 
         return DropProductInfoResponse.of(savedDrop, savedDropInventory);
     }
@@ -189,6 +194,9 @@ public class DropService {
         DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
         dropInventory.resetQuantity(request.totalQuantity());
 
+        // 오늘 드롭의 시작/마감 시각이 바뀌었을 수 있으므로 캐시를 즉시 갱신
+        todayDropCache.refresh();
+
         return DropProductInfoResponse.of(drop, dropInventory);
     }
 
@@ -201,6 +209,9 @@ public class DropService {
 
         dropInventoryRepository.delete(dropInventoryRepository.findByDropId(dropId));
         dropRepository.delete(drop);
+
+        // 삭제된 드롭이 캐시에 남아 스케줄러가 존재하지 않는 드롭을 참조하지 않도록 즉시 갱신
+        todayDropCache.refresh();
     }
 
     private void validateOwner(Drop drop, Long sellerId) {

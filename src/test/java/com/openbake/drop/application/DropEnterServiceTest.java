@@ -152,4 +152,54 @@ class DropEnterServiceTest {
         verify(dropEntryRepository).save(any(DropEntry.class));
         verify(queueManager).removeActiveUser(dropId, memberId);
     }
+
+    @Test
+    @DisplayName("만료된 멤버 중 ENTERED 상태인 경우 FAILED로 전환한다")
+    void failExpiredEntries_FailsEnteredEntries() {
+        // given
+        Long otherMemberId = 20L;
+        DropEntry enteredEntry = DropEntry.builder()
+                .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.ENTERED).build();
+        DropEntry otherEnteredEntry = DropEntry.builder()
+                .dropId(dropId).memberId(otherMemberId).entryStatus(EntryStatus.ENTERED).build();
+
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .willReturn(Optional.of(enteredEntry));
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, otherMemberId))
+                .willReturn(Optional.of(otherEnteredEntry));
+
+        // when
+        dropEnterService.failExpiredEntries(dropId, Set.of(memberId, otherMemberId));
+
+        // then
+        assertThat(enteredEntry.getEntryStatus()).isEqualTo(EntryStatus.FAILED);
+        assertThat(otherEnteredEntry.getEntryStatus()).isEqualTo(EntryStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("이미 RESERVED/COMPLETED 등으로 넘어간 멤버는 건드리지 않는다")
+    void failExpiredEntries_SkipsNonEnteredStatus() {
+        // given
+        DropEntry reservedEntry = DropEntry.builder()
+                .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.RESERVED).build();
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .willReturn(Optional.of(reservedEntry));
+
+        // when
+        dropEnterService.failExpiredEntries(dropId, Set.of(memberId));
+
+        // then
+        assertThat(reservedEntry.getEntryStatus()).isEqualTo(EntryStatus.RESERVED);
+    }
+
+    @Test
+    @DisplayName("confirmEntry를 한 번도 호출하지 않아 DropEntry가 없는 멤버는 예외 없이 건너뛴다")
+    void failExpiredEntries_SkipsWhenNoDropEntryExists() {
+        // given
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .willReturn(Optional.empty());
+
+        // when & then (예외 없이 통과)
+        dropEnterService.failExpiredEntries(dropId, Set.of(memberId));
+    }
 }

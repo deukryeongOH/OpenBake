@@ -1,5 +1,6 @@
 package com.openbake.order.presentation.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,6 +13,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class OrderCreateRequest {
 
+    @Schema(description = "약관 동의 여부. false 또는 누락이면 결제가 진행되지 않는다(OR004).", example = "true")
     @NotNull
     private Boolean termsAgreed;
 }

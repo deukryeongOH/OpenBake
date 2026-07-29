@@ -2,6 +2,7 @@ package com.openbake.seller.presentation;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.seller.application.SellerService;
+import com.openbake.seller.domain.ApplicationStatus;
 import com.openbake.seller.presentation.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -11,6 +12,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "Seller", description = "사업자/계좌 인증, 판매자 입점 신청·승인, 판매자 조회")
 @RestController
@@ -114,6 +117,21 @@ public class SellerController {
     public ApiResponse<SellerResponse> getSeller(
             @Parameter(description = "조회할 판매자 ID", example = "1") @PathVariable Long id) {
         return ApiResponse.ok(sellerService.getSeller(id));
+    }
+
+    @Operation(
+            summary = "판매자 입점 신청 목록 조회 (admin)",
+            description = "입점 신청 상태(applicationStatus)로 필터링된 판매자 목록을 조회합니다. 관리자 전용이며, 파라미터를 생략하면 PENDING 상태만 반환합니다. 관리자 전용 조회이므로 rejectReason도 포함됩니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "ME002 유효하지 않은 인증 토큰입니다."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "SE007 권한이 없습니다.")
+    })
+    @GetMapping
+    public ApiResponse<List<MySellerResponse>> getPendingSellers(
+            @Parameter(description = "필터링할 입점 신청 상태. 생략 시 PENDING", example = "PENDING")
+            @RequestParam(required = false, defaultValue = "PENDING") ApplicationStatus applicationStatus) {
+        return ApiResponse.ok(sellerService.getPendingSellers(applicationStatus));
     }
 
 }

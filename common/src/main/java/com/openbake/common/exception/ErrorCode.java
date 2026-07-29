@@ -34,7 +34,7 @@ public enum ErrorCode {
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "ME001", "이미 존재하는 리소스입니다."),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "ME002", "유효하지 않은 인증 토큰입니다."),
     AUTHENTICATION_FAILED(HttpStatus.UNAUTHORIZED, "ME003", "이메일 또는 비밀번호가 일치하지 않습니다."),
-    ACCESS_DENIED(HttpStatus.FORBIDDEN, "ME004", "권한이 없습니다.."),
+    ACCESS_DENIED(HttpStatus.FORBIDDEN, "ME004", "권한이 없습니다."),
 
     // Seller Domain - SE
     BUSINESS_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "SE001", "사업자 인증에 실패했습니다."),

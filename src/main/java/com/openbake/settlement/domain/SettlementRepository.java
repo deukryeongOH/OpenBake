@@ -33,4 +33,18 @@ public interface SettlementRepository {
             Long settlementId,
             Long sellerId
     );
+
+    /**
+     * 관리자용 정산 목록 검색. 각 필터는 null이면 조건에서 제외한다.
+     * 다음 페이지 존재 여부 판정을 위해 size + 1건을 조회해서 반환한다
+     * (MonthlySettlementBatchQueryService.getExecutions와 동일한 관례).
+     */
+    List<Settlement> search(
+            Long sellerId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            SettlementStatus status,
+            int page,
+            int size
+    );
 }

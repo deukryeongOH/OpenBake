@@ -156,6 +156,29 @@ public class DropService {
                 .toList();
     }
 
+    // 오늘부터 days일 동안 예정된(UPCOMING/ACTIVE) 드롭 목록 조회. dropStart 오름차순.
+    @Transactional(readOnly = true)
+    public List<DropProductInfoResponse> getUpcomingDrops(int days) {
+        validateDays(days);
+
+        LocalDateTime from = LocalDate.now().atStartOfDay();
+        LocalDateTime to = LocalDate.now().plusDays(days).atTime(LocalTime.MAX);
+
+        return dropRepository.findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
+                        List.of(DropStatus.UPCOMING, DropStatus.ACTIVE),
+                        from,
+                        to
+                ).stream()
+                .map(drop -> DropProductInfoResponse.of(drop, dropInventoryRepository.findByDropId(drop.getId())))
+                .toList();
+    }
+
+    private void validateDays(int days) {
+        if (days <= 0) {
+            throw new IllegalArgumentException("days는 0보다 커야 합니다.");
+        }
+    }
+
     // 판매자 본인의 드롭 수정 (시작 전인 드롭만 가능)
     @Transactional
     public DropProductInfoResponse updateDropProduct(Long dropId, Long sellerId, DropProductInfoRequest request) {

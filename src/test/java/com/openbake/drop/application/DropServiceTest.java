@@ -16,6 +16,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -26,6 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 
 import static org.mockito.BDDMockito.given;
@@ -287,5 +289,68 @@ class DropServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
+    }
+
+    @Test
+    @DisplayName("예정된 드롭 목록을 dropStart 오름차순으로 조회한다")
+    void getUpcomingDrops_success() {
+        // given
+        DropProduct dropProduct = DropProduct.builder()
+                .name("버터떡")
+                .description("버터를 많이 써서 향이 좋아요.")
+                .imageUrl("https://cdn.openbake.com/drops/12.jpg")
+                .price(3000)
+                .build();
+
+        Drop drop = Drop.builder()
+                .dropStatus(UPCOMING)
+                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-08-02")))
+                .dropProduct(dropProduct)
+                .limitQuantity(5)
+                .dropStart(LocalDateTime.parse("2028-08-01T14:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-08-01T18:00:00"))
+                .sellerId(1L)
+                .build();
+
+        ReflectionTestUtils.setField(drop, "id", 12L);
+
+        DropInventory inventory = DropInventory.builder()
+                .dropId(12L)
+                .totalQuantity(200)
+                .remainQuantity(200)
+                .build();
+
+        given(dropRepository.findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
+                any(), any(), any()
+        )).willReturn(List.of(drop));
+
+        given(dropInventoryRepository.findByDropId(12L))
+                .willReturn(inventory);
+
+        // when
+        var response = dropService.getUpcomingDrops(7);
+
+        // then
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).dropId()).isEqualTo(12L);
+        assertThat(response.get(0).name()).isEqualTo("버터떡");
+        assertThat(response.get(0).dropStatus()).isEqualTo(UPCOMING);
+        assertThat(response.get(0).remainQuantity()).isEqualTo(200);
+
+        verify(dropRepository).findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
+                eq(List.of(UPCOMING, DropStatus.ACTIVE)),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    @DisplayName("days는 0보다 커야 한다")
+    void getUpcomingDrops_invalidDays() {
+        assertThatThrownBy(() -> dropService.getUpcomingDrops(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("days는 0보다 커야 합니다.");
+
+        verifyNoInteractions(dropRepository);
     }
 }

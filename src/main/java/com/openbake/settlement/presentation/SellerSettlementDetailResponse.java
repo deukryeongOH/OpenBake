@@ -21,6 +21,8 @@ public record SellerSettlementDetailResponse(
         String status,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt,
+        String failureReason,
+        OffsetDateTime failedAt,
         List<Line> lines
 ) {
 
@@ -46,6 +48,8 @@ public record SellerSettlementDetailResponse(
                 result.status(),
                 result.createdAt(),
                 result.completedAt(),
+                result.failureReason(),
+                result.failedAt(),
                 lines
         );
     }

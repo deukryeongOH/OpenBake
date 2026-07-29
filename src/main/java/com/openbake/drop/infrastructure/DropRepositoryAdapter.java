@@ -2,6 +2,7 @@ package com.openbake.drop.infrastructure;
 
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.DropStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -52,6 +53,20 @@ public class DropRepositoryAdapter implements DropRepository {
     @Override
     public List<Drop> findAllBySellerId(Long sellerId) {
         return dropJpaRepository.findAllBySellerId(sellerId);
+    }
+
+    @Override
+    public List<Drop> findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
+            List<DropStatus> dropStatuses,
+            LocalDateTime from,
+            LocalDateTime to
+    ) {
+        return dropJpaRepository
+                .findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
+                        dropStatuses,
+                        from,
+                        to
+                );
     }
 
     @Override

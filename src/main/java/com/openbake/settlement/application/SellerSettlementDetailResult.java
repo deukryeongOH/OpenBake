@@ -19,6 +19,8 @@ public record SellerSettlementDetailResult(
         String status,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt,
+        String failureReason,
+        OffsetDateTime failedAt,
         List<Line> lines
 ) {
 

@@ -71,5 +71,7 @@ public class OrderDetailResponse {
 
         @Schema(description = "베이커리 상호명. 조회 시점 값이며 판매자를 찾지 못하면 null.", example = "오픈베이크 연남")
         private String sellerName;
+        private String address;
+        private String phoneNumber;
     }
 }

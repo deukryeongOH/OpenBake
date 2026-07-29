@@ -54,10 +54,10 @@ public class DropEnterService {
             throw new BusinessException(ErrorCode.DROP_NOT_ACTIVE);
         }
 
-        // 이미 한 번 대기열에 참여해서 주문 후 결제까지 완료한 유저를 어떻게 필터링 해야하지?
-        // blockStatus를 만들어 비교 검증
-        List<EntryStatus> blockStatuses = List.of(EntryStatus.ENTERED,
-                EntryStatus.RESERVED, EntryStatus.COMPLETED);
+        // 이미 재고를 선점했거나(RESERVED) 구매까지 완료한(COMPLETED) 유저만 재입장 차단.
+        // ENTERED는 재고를 붙잡지 않는 상태라(대기열 통과 후 상세만 보고 나간 경우 포함),
+        // 재진입을 막을 이유가 없어 blockStatus에서 제외한다.
+        List<EntryStatus> blockStatuses = List.of(EntryStatus.RESERVED, EntryStatus.COMPLETED);
 
         if (dropEntryRepository.existsByDropIdAndMemberIdAndEntryStatusIn(dropId, memberId, blockStatuses)) {
             throw new BusinessException(ErrorCode.ALREADY_ENTERED, "이미 참여 중이거나 구매가 완료된 드롭입니다.");

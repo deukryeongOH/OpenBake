@@ -10,10 +10,12 @@ import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
+import com.openbake.order.presentation.dto.OrderDetailResponse;
 import com.openbake.order.presentation.dto.SellerOrderPageResponse;
 import com.openbake.payment.application.DepositService;
 import com.openbake.payment.application.PaymentService;
 import com.openbake.seller.application.CurrentSellerProvider;
+import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -154,6 +156,66 @@ class OrderServiceTest {
         ).isInstanceOf(BusinessException.class);
 
         verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    @DisplayName("주문 상세 조회 시 판매자 주소/연락처를 포함한다")
+    void getOrderDetail_includesSellerContact() {
+        // given
+        Order order = createOrder(101L, 5L, 10L, 7L);
+
+        Seller seller = new Seller(
+                20L,
+                "이세종 베이커리",
+                "123-45-67890",
+                "서울시 강남구 테헤란로 1",
+                "이세종",
+                true,
+                "088",
+                "1101234567",
+                "이세종",
+                true
+        );
+
+        when(orderRepository.findById(101L))
+                .thenReturn(Optional.of(order));
+        when(sellerRepository.findById(10L))
+                .thenReturn(Optional.of(seller));
+        when(memberRepository.findById(20L))
+                .thenReturn(Optional.of(Member.create("이세종", "010-1234-5678")));
+
+        // when
+        OrderDetailResponse response =
+                orderService.getOrderDetail(5L, 101L);
+
+        // then
+        assertThat(response.getSeller().getSellerName())
+                .isEqualTo("이세종 베이커리");
+        assertThat(response.getSeller().getAddress())
+                .isEqualTo("서울시 강남구 테헤란로 1");
+        assertThat(response.getSeller().getPhoneNumber())
+                .isEqualTo("010-1234-5678");
+    }
+
+    @Test
+    @DisplayName("판매자 정보를 찾을 수 없으면 연락처는 null이다")
+    void getOrderDetail_sellerMissing() {
+        // given
+        Order order = createOrder(102L, 5L, 10L, 7L);
+
+        when(orderRepository.findById(102L))
+                .thenReturn(Optional.of(order));
+        when(sellerRepository.findById(10L))
+                .thenReturn(Optional.empty());
+
+        // when
+        OrderDetailResponse response =
+                orderService.getOrderDetail(5L, 102L);
+
+        // then
+        assertThat(response.getSeller().getSellerName()).isNull();
+        assertThat(response.getSeller().getAddress()).isNull();
+        assertThat(response.getSeller().getPhoneNumber()).isNull();
     }
 
     private Order createOrder(

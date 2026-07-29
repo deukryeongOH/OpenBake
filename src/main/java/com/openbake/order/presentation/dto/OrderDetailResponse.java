@@ -45,5 +45,7 @@ public class OrderDetailResponse {
     public static class SellerInfo {
         private Long sellerId;
         private String sellerName;
+        private String address;
+        private String phoneNumber;
     }
 }

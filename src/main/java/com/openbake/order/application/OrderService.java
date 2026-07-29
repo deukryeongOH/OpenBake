@@ -215,10 +215,7 @@ public class OrderService {
                 .quantity(item.getQuantity())
                 .build();
 
-        OrderDetailResponse.SellerInfo sellerInfo = OrderDetailResponse.SellerInfo.builder()
-                .sellerId(order.getSellerId())
-                .sellerName(resolveSellerName(order.getSellerId()))
-                .build();
+        OrderDetailResponse.SellerInfo sellerInfo = resolveSellerInfo(order.getSellerId());
 
         return OrderDetailResponse.builder()
                 .orderId(order.getOrderId())
@@ -391,6 +388,28 @@ public class OrderService {
     private String resolveSellerName(Long sellerId) {
         return sellerRepository.findById(sellerId)
                 .map(Seller::getBakeryName)
+                .orElse(null);
+    }
+
+    //주문 상세용 판매자 정보 조립. 지도 보기/전화하기 버튼을 위해 사업장 주소·연락처를 포함한다.
+    //연락처는 seller 가 직접 갖지 않고 연결된 member 의 phoneNumber 를 사용한다.
+    private OrderDetailResponse.SellerInfo resolveSellerInfo(Long sellerId) {
+        return sellerRepository.findById(sellerId)
+                .map(seller -> OrderDetailResponse.SellerInfo.builder()
+                        .sellerId(sellerId)
+                        .sellerName(seller.getBakeryName())
+                        .address(seller.getBusinessAddress())
+                        .phoneNumber(resolveMemberPhoneNumber(seller.getMemberId()))
+                        .build())
+                .orElse(OrderDetailResponse.SellerInfo.builder()
+                        .sellerId(sellerId)
+                        .build());
+    }
+
+    //판매자 연락처 조회. 회원이 없으면 null.
+    private String resolveMemberPhoneNumber(Long memberId) {
+        return memberRepository.findById(memberId)
+                .map(Member::getPhoneNumber)
                 .orElse(null);
     }
 

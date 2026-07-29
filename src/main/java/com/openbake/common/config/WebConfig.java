@@ -20,5 +20,12 @@ public class WebConfig implements WebMvcConfigurer {
                         "http://localhost:5173")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*");
+        registry.addMapping("/internal/**")
+                .allowedOrigins(
+                        "https://bakery-site6-fe.vercel.app",
+                        "http://localhost:3000",
+                        "http://localhost:5173")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedHeaders("*");
     }
 }

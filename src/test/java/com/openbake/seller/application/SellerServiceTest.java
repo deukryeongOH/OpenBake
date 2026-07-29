@@ -30,6 +30,7 @@ import com.openbake.seller.presentation.dto.ApplicationCreateRequest;
 import com.openbake.seller.presentation.dto.ApplicationCreateResponse;
 import com.openbake.seller.presentation.dto.BusinessVerificationRequest;
 import com.openbake.seller.presentation.dto.BusinessVerificationResponse;
+import com.openbake.seller.presentation.dto.MySellerResponse;
 import com.openbake.seller.presentation.dto.SellerResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -334,6 +335,32 @@ class SellerServiceTest {
 
         assertThatThrownBy(() -> sellerService.updateApplicationStatus(1L, request))
                 .isInstanceOf(InvalidApplicationStatusException.class);
+    }
+
+    @Test
+    @DisplayName("내 판매자 신청 조회 성공 시 반려 사유를 포함해 반환한다")
+    void getMySeller_success() {
+        Seller seller = new Seller(1L, "세종베이커리", "123-45-67890", "서울시", "이세종",
+                true, "088", "1101234567", "이세종", true);
+        seller.approve();
+        given(currentMemberProvider.getId()).willReturn(1L);
+        given(sellerRepository.findByMemberId(1L)).willReturn(Optional.of(seller));
+
+        MySellerResponse response = sellerService.getMySeller();
+
+        assertThat(response.memberId()).isEqualTo(1L);
+        assertThat(response.applicationStatus()).isEqualTo(ApplicationStatus.APPROVED);
+        assertThat(response.settlementAccountNumberMasked()).isEqualTo("110-***-4567");
+    }
+
+    @Test
+    @DisplayName("판매자 신청 이력이 없으면 내 판매자 신청 조회 시 예외가 발생한다")
+    void getMySeller_notFound() {
+        given(currentMemberProvider.getId()).willReturn(1L);
+        given(sellerRepository.findByMemberId(1L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sellerService.getMySeller())
+                .isInstanceOf(EntityNotFoundException.class);
     }
 
     @Test

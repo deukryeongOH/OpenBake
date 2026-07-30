@@ -76,9 +76,9 @@ public class DropLockService {
         if (dropEntry.getEntryStatus() != EntryStatus.ENTERED) {
             throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
         }
-        if (!queueManager.isActive(dropId, memberId)) {
-            throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
-        }
+//        if (!queueManager.isActive(dropId, memberId)) {
+//            throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
+//        } TTL 만료 유저를 막으려고 추가한 것 같은데 이미 checkActiveMembers의 failExpiredEntries가 이미 entryStatus를 Failed로 바꿔서 필요 없음.
     }
 
 

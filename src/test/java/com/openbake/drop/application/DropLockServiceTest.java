@@ -17,7 +17,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -106,23 +105,9 @@ class DropLockServiceTest {
         // given
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
-        given(queueManager.isActive(dropId, memberId)).willReturn(true);
 
         // when & then (예외 없이 통과)
         dropLockService.checkEntryStatus(dropId, memberId);
-    }
-
-    @Test
-    @DisplayName("DB 상태는 ENTERED여도 10분 입장 유효시간이 만료되었으면 재고 선점 전 단계에서 막힌다")
-    void checkEntryStatus_Fail_WhenActiveWindowExpired() {
-        // given
-        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
-                .willReturn(Optional.of(enteredEntry));
-        given(queueManager.isActive(dropId, memberId)).willReturn(false);
-
-        // when & then
-        assertThatThrownBy(() -> dropLockService.checkEntryStatus(dropId, memberId))
-                .isInstanceOf(BusinessException.class);
     }
 
     @Test

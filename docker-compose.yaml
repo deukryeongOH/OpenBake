@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:17
     container_name: openbake-postgres
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -21,6 +22,7 @@ services:
   redis:
     image: redis:7
     container_name: openbake-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     healthcheck:
@@ -36,6 +38,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: openbake-backend
+    restart: unless-stopped
     ports:
       - "8080:8080"
     env_file:
@@ -61,10 +64,14 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: openbake-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-webroot:/var/www/certbot
+      - certbot-etc:/etc/letsencrypt:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -77,9 +84,23 @@ services:
     networks:
       - openbake-net
 
+  certbot:
+    image: certbot/certbot
+    container_name: openbake-certbot
+    restart: unless-stopped
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-etc:/etc/letsencrypt
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done"
+    networks:
+      - openbake-net
+
 networks:
   openbake-net:
     driver: bridge
 
 volumes:
   openbake-pg-data:
+  certbot-webroot:
+  certbot-etc:

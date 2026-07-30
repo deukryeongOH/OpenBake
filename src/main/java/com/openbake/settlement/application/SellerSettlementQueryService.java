@@ -4,12 +4,15 @@ import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.settlement.domain.Settlement;
 import com.openbake.settlement.domain.SettlementLine;
 import com.openbake.settlement.domain.SettlementLineRepository;
+import com.openbake.settlement.domain.SettlementPayout;
+import com.openbake.settlement.domain.SettlementPayoutRepository;
 import com.openbake.settlement.domain.SettlementRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +21,8 @@ public class SellerSettlementQueryService {
 
     private final SettlementRepository settlementRepository;
     private final SettlementLineRepository settlementLineRepository;
+    //정산 실패 사유 노출용. 가장 최근 payout 1건만 본다.
+    private final SettlementPayoutRepository settlementPayoutRepository;
 
     public List<SellerSettlementSummary> getSettlements(
             Long sellerId
@@ -61,6 +66,12 @@ public class SellerSettlementQueryService {
                         .map(this::toDetailLine)
                         .toList();
 
+        Optional<SettlementPayout> latestPayout =
+                settlementPayoutRepository
+                        .findAllBySettlementId(settlementId)
+                        .stream()
+                        .findFirst();
+
         return new SellerSettlementDetailResult(
                 settlement.getId(),
                 settlement.getSellerId(),
@@ -75,6 +86,8 @@ public class SellerSettlementQueryService {
                 settlement.getStatus().name(),
                 settlement.getCreatedAt(),
                 settlement.getCompletedAt(),
+                latestPayout.map(SettlementPayout::getFailureReason).orElse(null),
+                latestPayout.map(SettlementPayout::getFailedAt).orElse(null),
                 lines
         );
     }

@@ -6,8 +6,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * CORS 설정.
- * 프론트엔드(또는 테스트 페이지)에서 API를 호출할 수 있도록 허용한다.
- * 운영 배포 시 allowedOrigins를 실제 도메인으로 제한해야 한다.
+ * 배포된 FE(Vercel)와 로컬 개발 서버에서의 API 호출만 허용한다.
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -15,8 +14,18 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("*")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedOrigins(
+                        "https://bakery-site6-fe.vercel.app",
+                        "http://localhost:3000",
+                        "http://localhost:5173")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedHeaders("*");
+        registry.addMapping("/internal/**")
+                .allowedOrigins(
+                        "https://bakery-site6-fe.vercel.app",
+                        "http://localhost:3000",
+                        "http://localhost:5173")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*");
     }
 }

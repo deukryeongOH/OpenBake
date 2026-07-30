@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -138,6 +139,25 @@ public class SellerService {
         return new ApplicationStatusUpdateResponse(saved.getId(), saved.getApplicationStatus(), saved.getRejectReason(), saved.getUpdatedAt());
     }
 
+    public MySellerResponse getMySeller() {
+        Long memberId = currentMemberProvider.getId();
+        Seller seller = sellerRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));
+
+        return new MySellerResponse(
+                seller.getId(),
+                seller.getMemberId(),
+                seller.getBakeryName(),
+                seller.getBusinessNumber(),
+                seller.getApplicationStatus(),
+                seller.getRejectReason(),
+                seller.getSettlementBankCode(),
+                maskAccountNumber(seller.getSettlementAccountNumber()),
+                seller.isAccountVerified(),
+                seller.getAccountVerifiedAt()
+        );
+    }
+
     public SellerResponse getSeller(Long id) {
         Seller seller = sellerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));
@@ -153,6 +173,27 @@ public class SellerService {
                 seller.isAccountVerified(),
                 seller.getAccountVerifiedAt()
         );
+    }
+
+    public List<MySellerResponse> getPendingSellers(ApplicationStatus applicationStatus) {
+        if (!currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)) {
+            throw new AdminAccessDeniedException();
+        }
+
+        return sellerRepository.findByApplicationStatus(applicationStatus).stream()
+                .map(seller -> new MySellerResponse(
+                        seller.getId(),
+                        seller.getMemberId(),
+                        seller.getBakeryName(),
+                        seller.getBusinessNumber(),
+                        seller.getApplicationStatus(),
+                        seller.getRejectReason(),
+                        seller.getSettlementBankCode(),
+                        maskAccountNumber(seller.getSettlementAccountNumber()),
+                        seller.isAccountVerified(),
+                        seller.getAccountVerifiedAt()
+                ))
+                .toList();
     }
 
     private String maskAccountNumber(String accountNumber) {

@@ -2,7 +2,10 @@ package com.openbake.settlement.infrastructure;
 
 import com.openbake.settlement.domain.Settlement;
 import com.openbake.settlement.domain.SettlementRepository;
+import com.openbake.settlement.domain.SettlementStatus;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -72,6 +75,27 @@ public class SettlementRepositoryAdapter
         return settlementJpaRepository.findByIdAndSellerId(
                 settlementId,
                 sellerId
+        );
+    }
+
+    @Override
+    public List<Settlement> search(
+            Long sellerId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            SettlementStatus status,
+            int page,
+            int size
+    ) {
+        //hasNext 판정을 위해 요청 크기보다 한 건 더 조회한다.
+        Pageable pageable = PageRequest.of(page, size + 1);
+
+        return settlementJpaRepository.search(
+                sellerId,
+                periodStart,
+                periodEnd,
+                status,
+                pageable
         );
     }
 }

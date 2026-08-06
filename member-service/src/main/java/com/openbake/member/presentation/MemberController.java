@@ -33,7 +33,7 @@ public class MemberController {
     @GetMapping("/{id}")
     public ApiResponse<MemberResponse> getMember(
             @Parameter(description = "조회할 회원 ID", example = "1") @PathVariable Long id) {
-        return ApiResponse.ok(memberService.getMemberById(id));
+        return ApiResponse.ok(MemberResponse.from(memberService.getMemberById(id)));
     }
 
     @Operation(
@@ -49,7 +49,7 @@ public class MemberController {
     public ApiResponse<MemberUpdateResponse> updateMember(
             @Parameter(description = "대상 회원 ID (본인 ID와 일치해야 함)", example = "1") @PathVariable Long id,
             @Valid @RequestBody MemberUpdateRequest request) {
-        return ApiResponse.ok(memberService.updateMember(id, request));
+        return ApiResponse.ok(MemberUpdateResponse.from(memberService.updateMember(id, request.toCommand())));
     }
 
     @Operation(
@@ -66,7 +66,7 @@ public class MemberController {
     public ApiResponse<Void> changePassword(
             @Parameter(description = "대상 회원 ID (본인 ID와 일치해야 함)", example = "1") @PathVariable Long id,
             @Valid @RequestBody PasswordChangeRequest request) {
-        memberService.changePassword(id, request);
+        memberService.changePassword(id, request.toCommand());
         return ApiResponse.ok();
     }
 

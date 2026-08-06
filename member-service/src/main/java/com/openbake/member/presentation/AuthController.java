@@ -36,7 +36,7 @@ public class AuthController {
     @SecurityRequirements
     @PostMapping("/signup")
     public ApiResponse<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
-        return ApiResponse.ok(authService.signup(request));
+        return ApiResponse.ok(SignupResponse.from(authService.signup(request.toCommand())));
     }
 
     @Operation(
@@ -54,7 +54,7 @@ public class AuthController {
             @Parameter(description = "OAuth 공급자", example = "google") @PathVariable String provider,
             @Valid @RequestBody OAuthLoginRequest request) {
         AuthProvider authProvider = AuthProvider.valueOf(provider.toUpperCase());
-        return ApiResponse.ok(authService.loginOrSignupWithOAuth(authProvider, request));
+        return ApiResponse.ok(OAuthLoginResponse.from(authService.loginOrSignupWithOAuth(request.toCommand(authProvider))));
     }
 
     @Operation(
@@ -67,7 +67,7 @@ public class AuthController {
     @SecurityRequirements
     @PostMapping("/login")
     public ApiResponse<LocalLoginResponse> login(@Valid @RequestBody LocalLoginRequest request) {
-        return ApiResponse.ok(authService.localLogin(request));
+        return ApiResponse.ok(LocalLoginResponse.from(authService.localLogin(request.toCommand())));
     }
 
     @Operation(
@@ -80,7 +80,7 @@ public class AuthController {
     @SecurityRequirements
     @PostMapping("/reissue")
     public ApiResponse<ReissueResponse> reissue(@Valid @RequestBody ReissueRequest request) {
-        return ApiResponse.ok(authService.reissue(request));
+        return ApiResponse.ok(ReissueResponse.from(authService.reissue(request.toCommand())));
     }
 
     @Operation(
@@ -93,7 +93,7 @@ public class AuthController {
     @SecurityRequirements
     @PostMapping("/logout")
     public ApiResponse<Void> logout(@Valid @RequestBody LogoutRequest request) {
-        authService.logout(request);
+        authService.logout(request.toCommand());
         return ApiResponse.ok();
     }
 }

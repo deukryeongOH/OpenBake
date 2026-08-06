@@ -2,6 +2,8 @@ package com.openbake.member.infrastructure.oauth;
 
 import com.openbake.common.exception.InvalidIdTokenException;
 import com.openbake.member.domain.AuthProvider;
+import com.openbake.member.domain.IdTokenVerifier;
+import com.openbake.member.domain.OidcIdentity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -12,7 +14,7 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
-public class OidcIdTokenVerifier {
+public class OidcIdTokenVerifier implements IdTokenVerifier {
 
     private final Map<AuthProvider, JwtDecoder> providerJwtDecoders;
 

@@ -3,8 +3,10 @@ package com.openbake.drop.presentation;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.drop.application.DropEnterService;
-import com.openbake.drop.application.dto.ConfirmEntryResponse;
-import com.openbake.drop.application.dto.QueueRankResponse;
+import com.openbake.drop.application.dto.ConfirmEntryResult;
+import com.openbake.drop.application.dto.QueueRankResult;
+import com.openbake.drop.presentation.dto.ConfirmEntryResponse;
+import com.openbake.drop.presentation.dto.QueueRankResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -34,8 +36,8 @@ public class DropEnterController {
     public ApiResponse<ConfirmEntryResponse> enterDrop(
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
         Long memberId = provider.getId();
-        ConfirmEntryResponse response = dropEnterService.confirmEntry(dropId, memberId);
-        return ApiResponse.ok(response);
+        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId, memberId);
+        return ApiResponse.ok(ConfirmEntryResponse.of(result));
     }
 
 
@@ -52,8 +54,8 @@ public class DropEnterController {
     public ApiResponse<QueueRankResponse> enterQueue(
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
         Long memberId = provider.getId();
-        QueueRankResponse response = dropEnterService.enterQueue(dropId, memberId);
-        return ApiResponse.ok(response);
+        QueueRankResult result = dropEnterService.enterQueue(dropId, memberId);
+        return ApiResponse.ok(QueueRankResponse.of(result));
     }
 
     @Operation(
@@ -64,8 +66,8 @@ public class DropEnterController {
     public ApiResponse<QueueRankResponse> getQueueRank(
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
         Long memberId = provider.getId();
-        QueueRankResponse response = dropEnterService.getRank(dropId, memberId);
-        return ApiResponse.ok(response);
+        QueueRankResult result = dropEnterService.getRank(dropId, memberId);
+        return ApiResponse.ok(QueueRankResponse.of(result));
     }
 
     @Operation(

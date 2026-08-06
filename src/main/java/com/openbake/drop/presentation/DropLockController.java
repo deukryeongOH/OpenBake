@@ -4,7 +4,8 @@ package com.openbake.drop.presentation;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.drop.application.DropLockFacade;
-import com.openbake.drop.application.dto.DropReserveRequest;
+import com.openbake.drop.application.dto.DropReserveCommand;
+import com.openbake.drop.presentation.dto.DropReserveRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -36,7 +37,8 @@ public class DropLockController {
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId,
             @Valid @RequestBody DropReserveRequest request){
         Long memberId = provider.getId();
-        dropLockFacade.reserveStock(dropId, memberId, request);
+        DropReserveCommand command = DropReserveCommand.create(request.quantity());
+        dropLockFacade.reserveStock(dropId, memberId, command);
 
         return ApiResponse.ok("재고 선점 및 장바구니 담기 완료");
     }

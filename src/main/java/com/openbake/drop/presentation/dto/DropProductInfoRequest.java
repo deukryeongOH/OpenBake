@@ -1,4 +1,4 @@
-package com.openbake.drop.application.dto;
+package com.openbake.drop.presentation.dto;
 
 
 import jakarta.validation.constraints.NotBlank;

@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:17
     container_name: openbake-postgres
-    restart: always
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -22,7 +22,7 @@ services:
   redis:
     image: redis:7
     container_name: openbake-redis
-    restart: always
+    restart: unless-stopped
     ports:
       - "6379:6379"
     healthcheck:
@@ -38,7 +38,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: openbake-backend
-    restart: always
+    restart: unless-stopped
     ports:
       - "8080:8080"
     env_file:
@@ -64,7 +64,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: openbake-nginx
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -87,6 +87,7 @@ services:
   certbot:
     image: certbot/certbot
     container_name: openbake-certbot
+    restart: unless-stopped
     volumes:
       - certbot-webroot:/var/www/certbot
       - certbot-etc:/etc/letsencrypt

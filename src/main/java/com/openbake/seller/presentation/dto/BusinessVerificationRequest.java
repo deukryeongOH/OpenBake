@@ -1,5 +1,6 @@
 package com.openbake.seller.presentation.dto;
 
+import com.openbake.seller.application.BusinessVerificationCommand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -11,4 +12,8 @@ public record BusinessVerificationRequest(
         @NotBlank String businessAddress,
         @Schema(description = "사업자등록증 상 대표자명", example = "이세종")
         @NotBlank String businessRepresentativeName
-) {}
+) {
+        public BusinessVerificationCommand toCommand() {
+                return new BusinessVerificationCommand(businessNumber, businessAddress, businessRepresentativeName);
+        }
+}

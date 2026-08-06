@@ -1,5 +1,8 @@
 package com.openbake.cart.presentation;
 
+import com.openbake.cart.application.CartCreateResult;
+import com.openbake.cart.application.CartDetailResult;
+import com.openbake.cart.application.CartPickupDateResult;
 import com.openbake.cart.application.CartService;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
@@ -43,7 +46,9 @@ public class CartController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<CartCreateResponse> create(@Valid @RequestBody CartCreateRequest request) {
         Long memberId = currentMemberProvider.getId();
-        return ApiResponse.ok(cartService.create(memberId, request));
+        CartCreateResult result = cartService.create(memberId, request.getDropId(), request.getQuantity());
+        CartCreateResponse response = CartCreateResponse.from(result);
+        return ApiResponse.ok(response);
     }
 
     //장바구니 조회. 대상은 로그인 회원으로 특정한다. 상태 200.
@@ -59,7 +64,9 @@ public class CartController {
     @GetMapping
     public ApiResponse<CartDetailResponse> getCart() {
         Long memberId = currentMemberProvider.getId();
-        return ApiResponse.ok(cartService.getCart(memberId));
+        CartDetailResult result = cartService.getCart(memberId);
+        CartDetailResponse response = CartDetailResponse.from(result);
+        return ApiResponse.ok(response);
     }
 
     //픽업 날짜 선택. 상태 200.
@@ -76,7 +83,9 @@ public class CartController {
     @PatchMapping("/pickup-date")
     public ApiResponse<CartPickupDateResponse> updatePickupDate(@Valid @RequestBody CartPickupDateRequest request) {
         Long memberId = currentMemberProvider.getId();
-        return ApiResponse.ok(cartService.updatePickupDate(memberId, request));
+        CartPickupDateResult result = cartService.updatePickupDate(memberId, request.getPickupDate());
+        CartPickupDateResponse response = CartPickupDateResponse.from(result);
+        return ApiResponse.ok(response);
     }
 
     //장바구니 삭제(재고 복구). 본문 없이 204 를 반환한다.

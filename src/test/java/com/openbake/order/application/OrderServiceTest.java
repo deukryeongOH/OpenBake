@@ -10,8 +10,6 @@ import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
-import com.openbake.order.presentation.dto.OrderDetailResponse;
-import com.openbake.order.presentation.dto.SellerOrderPageResponse;
 import com.openbake.payment.application.DepositService;
 import com.openbake.payment.application.PaymentService;
 import com.openbake.seller.application.CurrentSellerProvider;
@@ -101,17 +99,17 @@ class OrderServiceTest {
                 .thenReturn(Optional.of(Member.create("김구매", "010-0000-0000")));
 
         // when
-        SellerOrderPageResponse response =
+        SellerOrderPageResult result =
                 orderService.getSellerOrders(null, 0, 10);
 
         // then
-        assertThat(response.getContent()).hasSize(1);
+        assertThat(result.content()).hasSize(1);
 
-        var summary = response.getContent().get(0);
-        assertThat(summary.getOrderId()).isEqualTo(101L);
-        assertThat(summary.getDropId()).isEqualTo(7L);
-        assertThat(summary.getBuyerName()).isEqualTo("김구매");
-        assertThat(summary.getOrderState()).isEqualTo(OrderState.PAID);
+        var summary = result.content().get(0);
+        assertThat(summary.orderId()).isEqualTo(101L);
+        assertThat(summary.dropId()).isEqualTo(7L);
+        assertThat(summary.buyerName()).isEqualTo("김구매");
+        assertThat(summary.orderState()).isEqualTo(OrderState.PAID);
     }
 
     @Test
@@ -134,12 +132,12 @@ class OrderServiceTest {
                 .thenReturn(Optional.of(Member.create("김구매", "010-0000-0000")));
 
         // when
-        SellerOrderPageResponse response =
+        SellerOrderPageResult result =
                 orderService.getSellerOrders("CONFIRMED", 0, 10);
 
         // then
-        assertThat(response.getContent()).hasSize(1);
-        assertThat(response.getContent().get(0).getOrderState())
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).orderState())
                 .isEqualTo(OrderState.CONFIRMED);
     }
 
@@ -185,15 +183,15 @@ class OrderServiceTest {
                 .thenReturn(Optional.of(Member.create("이세종", "010-1234-5678")));
 
         // when
-        OrderDetailResponse response =
+        OrderDetailResult result =
                 orderService.getOrderDetail(5L, 101L);
 
         // then
-        assertThat(response.getSeller().getSellerName())
+        assertThat(result.seller().sellerName())
                 .isEqualTo("이세종 베이커리");
-        assertThat(response.getSeller().getAddress())
+        assertThat(result.seller().address())
                 .isEqualTo("서울시 강남구 테헤란로 1");
-        assertThat(response.getSeller().getPhoneNumber())
+        assertThat(result.seller().phoneNumber())
                 .isEqualTo("010-1234-5678");
     }
 
@@ -209,13 +207,13 @@ class OrderServiceTest {
                 .thenReturn(Optional.empty());
 
         // when
-        OrderDetailResponse response =
+        OrderDetailResult result =
                 orderService.getOrderDetail(5L, 102L);
 
         // then
-        assertThat(response.getSeller().getSellerName()).isNull();
-        assertThat(response.getSeller().getAddress()).isNull();
-        assertThat(response.getSeller().getPhoneNumber()).isNull();
+        assertThat(result.seller().sellerName()).isNull();
+        assertThat(result.seller().address()).isNull();
+        assertThat(result.seller().phoneNumber()).isNull();
     }
 
     private Order createOrder(

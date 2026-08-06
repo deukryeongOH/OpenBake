@@ -72,8 +72,13 @@ public class ChargeRequest {
     @Column(nullable = false)
     private LocalDateTime expiresAt;  // 요청 후 30분 뒤 만료
 
-    // 충전 요청 생성 — READY 상태, 30분 뒤 만료
+    private static final BigDecimal MIN_CHARGE_AMOUNT = new BigDecimal("1000");
+    private static final BigDecimal MAX_CHARGE_AMOUNT = new BigDecimal("500000");
+    private static final BigDecimal CHARGE_AMOUNT_UNIT = new BigDecimal("1000");
+
+    // 충전 요청 생성 — 금액 검증 후 READY 상태, 30분 뒤 만료
     public static ChargeRequest create(Long memberId, BigDecimal amount, String pgOrderId) {
+        validateChargeAmount(amount);
         ChargeRequest request = new ChargeRequest();
         request.memberId = memberId;
         request.amount = amount;
@@ -152,6 +157,15 @@ public class ChargeRequest {
     private void validateNotExpired() {
         if (isExpired()) {
             throw new BusinessException(ErrorCode.CHARGE_EXPIRED);
+        }
+    }
+
+    private static void validateChargeAmount(BigDecimal amount) {
+        if (amount == null
+                || amount.compareTo(MIN_CHARGE_AMOUNT) < 0
+                || amount.compareTo(MAX_CHARGE_AMOUNT) > 0
+                || amount.remainder(CHARGE_AMOUNT_UNIT).compareTo(BigDecimal.ZERO) != 0) {
+            throw new BusinessException(ErrorCode.INVALID_CHARGE_AMOUNT);
         }
     }
 }

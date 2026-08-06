@@ -3,7 +3,7 @@ package com.openbake.drop.application;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.drop.application.queue.TodayDropCache;
 import com.openbake.drop.domain.*;
-import com.openbake.drop.presentation.dto.DropProductInfoRequest;
+import com.openbake.drop.application.dto.DropProductInfoRequest;
 import com.openbake.drop.application.dto.DropProductInfoResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

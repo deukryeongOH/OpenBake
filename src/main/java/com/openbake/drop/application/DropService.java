@@ -2,10 +2,10 @@ package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.application.dto.DropProductInfo;
+import com.openbake.drop.application.dto.DropInfoResponse;
 import com.openbake.drop.application.queue.TodayDropCache;
 import com.openbake.drop.domain.*;
-import com.openbake.drop.presentation.dto.DropProductInfoRequest;
+import com.openbake.drop.application.dto.DropProductInfoRequest;
 import com.openbake.drop.application.dto.DropProductInfoResponse;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -140,10 +140,10 @@ public class DropService {
     // 새 HashSet으로 복사해둬야 한다. 그냥 참조만 넘기면 세션이 끝난 뒤(JSON 직렬화 시점)
     // 초기화를 시도하다 LazyInitializationException이 난다.
     @Transactional(readOnly = true)
-    public DropProductInfo getDropProductInfo(Long dropId) {
+    public DropInfoResponse getDropProductInfo(Long dropId) {
         Drop findDrop = findDrop(dropId);
         DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
-        return DropProductInfo.of(findDrop.getDropProduct().getName(), findDrop.getDropProduct().getDescription(),
+        return DropInfoResponse.of(findDrop.getDropProduct().getName(), findDrop.getDropProduct().getDescription(),
                 findDrop.getDropProduct().getImageUrl(), findDrop.getDropStart(), findDrop.getDropEnd(),
                 findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), new HashSet<>(findDrop.getPickUpAvailableDate()));
     }

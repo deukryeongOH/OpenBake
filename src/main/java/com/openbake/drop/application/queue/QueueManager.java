@@ -12,4 +12,6 @@ public interface QueueManager {
     boolean isActive(Long dropId, Long memberId);
     void finishDrop(Long dropId);
     Set<Long> checkActiveMembers(Long dropId);
+    void markSoldOut(Long dropId);
+    void unmarkSoldOut(Long dropId);
 }

@@ -4,7 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.ConfirmEntryResponse;
 import com.openbake.drop.application.dto.QueueRankResponse;
-import com.openbake.drop.application.queue.InMemoryQueueManager;
+import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,7 +23,7 @@ import java.util.Set;
 public class DropEnterService {
 
     private final DropEntryRepository dropEntryRepository;
-    private final InMemoryQueueManager queueManager;
+    private final QueueManager queueManager;
     private final DropInventoryRepository dropInventoryRepository;
     private final DropRepository dropRepository;
 

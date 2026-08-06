@@ -5,8 +5,8 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.drop.application.DropService;
-import com.openbake.drop.application.dto.DropProductInfo;
-import com.openbake.drop.presentation.dto.DropProductInfoRequest;
+import com.openbake.drop.application.dto.DropInfoResponse;
+import com.openbake.drop.application.dto.DropProductInfoRequest;
 import com.openbake.drop.application.dto.DropProductInfoResponse;
 import com.openbake.seller.application.CurrentSellerProvider;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,9 +57,9 @@ public class DropController {
     })
     @SecurityRequirements
     @GetMapping("/{dropId}/info")
-    public ApiResponse<DropProductInfo> getDropProductInfo(
+    public ApiResponse<DropInfoResponse> getDropProductInfo(
             @Parameter(description = "조회할 드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
-        DropProductInfo info = dropService.getDropProductInfo(dropId);
+        DropInfoResponse info = dropService.getDropProductInfo(dropId);
         return ApiResponse.ok(info);
     }
 

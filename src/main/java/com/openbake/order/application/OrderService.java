@@ -9,15 +9,6 @@ import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
-import com.openbake.order.presentation.dto.OrderCancelResponse;
-import com.openbake.order.presentation.dto.OrderConfirmResponse;
-import com.openbake.order.presentation.dto.OrderCreateRequest;
-import com.openbake.order.presentation.dto.OrderCreateResponse;
-import com.openbake.order.presentation.dto.OrderDetailResponse;
-import com.openbake.order.presentation.dto.OrderPageResponse;
-import com.openbake.order.presentation.dto.OrderSummaryResponse;
-import com.openbake.order.presentation.dto.SellerOrderPageResponse;
-import com.openbake.order.presentation.dto.SellerOrderSummaryResponse;
 import com.openbake.drop.application.DropLockService;
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
@@ -79,11 +70,11 @@ public class OrderService {
      * 주문 저장 → 결제 → 장바구니 삭제가 모두 한 트랜잭션이라, 결제가 실패하면 전부 롤백된다.
      */
     @Transactional
-    public OrderCreateResponse create(Long memberId, OrderCreateRequest request) {
+    public OrderCreateResult create(Long memberId, Boolean termsAgreed) {
         LocalDateTime now = LocalDateTime.now();
 
         // 1. 약관 동의 확인
-        if (request.getTermsAgreed() == null || !request.getTermsAgreed()) {
+        if (termsAgreed == null || !termsAgreed) {
             throw new BusinessException(ErrorCode.TERMS_NOT_AGREED);
         }
 
@@ -137,20 +128,20 @@ public class OrderService {
         // 9. 결제 후 잔액 조회
         BigDecimal balanceAfter = depositService.getBalance(memberId).balance();
 
-        return OrderCreateResponse.builder()
-                .orderId(saved.getOrderId())
-                .orderState(saved.getOrderState())
-                .totalAmount(totalAmount)
-                .balanceAfter(balanceAfter)
-                .paidAt(saved.getPaidAt())
-                .build();
+        return new OrderCreateResult(
+                saved.getOrderId(),
+                saved.getOrderState(),
+                totalAmount,
+                balanceAfter,
+                saved.getPaidAt()
+        );
     }
 
     /**
      * 주문 목록 조회(본인, 최신순). orderState 가 있으면 해당 상태만 필터한다.
      */
     @Transactional(readOnly = true)
-    public OrderPageResponse getOrders(Long memberId, String orderState, int page, int size) {
+    public OrderPageResult getOrders(Long memberId, String orderState, int page, int size) {
         int cappedSize = Math.min(size, MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(page, cappedSize);
 
@@ -162,13 +153,13 @@ public class OrderService {
             orders = orderRepository.findByMemberIdAndOrderStateOrderByOrderIdDesc(memberId, state, pageable);
         }
 
-        return OrderPageResponse.builder()
-                .content(orders.map(this::toSummary).getContent())
-                .page(orders.getNumber())
-                .size(orders.getSize())
-                .totalElements(orders.getTotalElements())
-                .totalPages(orders.getTotalPages())
-                .build();
+        return new OrderPageResult(
+                orders.map(this::toSummary).getContent(),
+                orders.getNumber(),
+                orders.getSize(),
+                orders.getTotalElements(),
+                orders.getTotalPages()
+        );
     }
 
     /**
@@ -176,7 +167,7 @@ public class OrderService {
      * 판매자 판정은 confirm() 과 동일하게 로그인 계정의 sellerId 존재 여부로 한다(미등록 계정은 403).
      */
     @Transactional(readOnly = true)
-    public SellerOrderPageResponse getSellerOrders(String orderState, int page, int size) {
+    public SellerOrderPageResult getSellerOrders(String orderState, int page, int size) {
         Long sellerId = currentSellerProvider.getSellerId()
                 .orElseThrow(() -> new BusinessException(ErrorCode.ACCESS_DENIED));
 
@@ -191,49 +182,49 @@ public class OrderService {
             orders = orderRepository.findBySellerIdAndOrderStateOrderByOrderIdDesc(sellerId, state, pageable);
         }
 
-        return SellerOrderPageResponse.builder()
-                .content(orders.map(this::toSellerSummary).getContent())
-                .page(orders.getNumber())
-                .size(orders.getSize())
-                .totalElements(orders.getTotalElements())
-                .totalPages(orders.getTotalPages())
-                .build();
+        return new SellerOrderPageResult(
+                orders.map(this::toSellerSummary).getContent(),
+                orders.getNumber(),
+                orders.getSize(),
+                orders.getTotalElements(),
+                orders.getTotalPages()
+        );
     }
 
     /**
      * 주문 상세 조회. 본인 주문만 볼 수 있다.
      */
     @Transactional(readOnly = true)
-    public OrderDetailResponse getOrderDetail(Long memberId, Long orderId) {
+    public OrderDetailResult getOrderDetail(Long memberId, Long orderId) {
         Order order = getOwnedOrder(memberId, orderId);
         OrderItem item = order.getOrderItem();
 
-        OrderDetailResponse.OrderItemInfo itemInfo = OrderDetailResponse.OrderItemInfo.builder()
-                .dropId(item.getDropId())
-                .dropName(item.getDropNameSnapshot())
-                .price(item.getPriceSnapshot())
-                .quantity(item.getQuantity())
-                .build();
+        OrderDetailResult.OrderItemInfo itemInfo = new OrderDetailResult.OrderItemInfo(
+                item.getDropId(),
+                item.getDropNameSnapshot(),
+                item.getPriceSnapshot(),
+                item.getQuantity()
+        );
 
-        OrderDetailResponse.SellerInfo sellerInfo = resolveSellerInfo(order.getSellerId());
+        OrderDetailResult.SellerInfo sellerInfo = resolveSellerInfo(order.getSellerId());
 
-        return OrderDetailResponse.builder()
-                .orderId(order.getOrderId())
-                .orderItem(itemInfo)
-                .seller(sellerInfo)
-                .pickupDate(order.getPickupDate())
-                .orderState(order.getOrderState())
-                .paidAt(order.getPaidAt())
-                .confirmedAt(order.getConfirmAt())
-                .canceledAt(order.getCancelAt())
-                .build();
+        return new OrderDetailResult(
+                order.getOrderId(),
+                itemInfo,
+                sellerInfo,
+                order.getPickupDate(),
+                order.getOrderState(),
+                order.getPaidAt(),
+                order.getConfirmAt(),
+                order.getCancelAt()
+        );
     }
 
     /**
      * 주문 취소. 본인 주문만. 전액 환불 + 재고 복구를 같은 트랜잭션에서 처리한다.
      */
     @Transactional
-    public OrderCancelResponse cancel(Long memberId, Long orderId) {
+    public OrderCancelResult cancel(Long memberId, Long orderId) {
         Order order = getOwnedOrder(memberId, orderId);
 
         // 상태 전이 — PAID 가 아니면 ORDER_NOT_CANCELABLE
@@ -249,13 +240,13 @@ public class OrderService {
 
         BigDecimal balanceAfter = depositService.getBalance(memberId).balance();
 
-        return OrderCancelResponse.builder()
-                .orderId(order.getOrderId())
-                .orderState(order.getOrderState())
-                .refundAmount(order.getTotalAmount())
-                .balanceAfter(balanceAfter)
-                .canceledAt(order.getCancelAt())
-                .build();
+        return new OrderCancelResult(
+                order.getOrderId(),
+                order.getOrderState(),
+                order.getTotalAmount(),
+                balanceAfter,
+                order.getCancelAt()
+        );
     }
 
     /**
@@ -263,7 +254,7 @@ public class OrderService {
      * 주문 상태와 결제 상태를 같은 트랜잭션에서 함께 바꾼다.
      */
     @Transactional
-    public OrderConfirmResponse confirm(Long orderId) {
+    public OrderConfirmResult confirm(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
@@ -277,11 +268,7 @@ public class OrderService {
 
         confirmOrder(order);
 
-        return OrderConfirmResponse.builder()
-                .orderId(order.getOrderId())
-                .orderState(order.getOrderState())
-                .confirmedAt(order.getConfirmAt())
-                .build();
+        return OrderConfirmResult.from(order);
     }
 
     /**
@@ -370,18 +357,18 @@ public class OrderService {
     }
 
     //목록 항목 조립. dropName 은 스냅샷, sellerName 은 seller 조회.
-    private OrderSummaryResponse toSummary(Order order) {
+    private OrderSummaryResult toSummary(Order order) {
         OrderItem item = order.getOrderItem();
-        return OrderSummaryResponse.builder()
-                .orderId(order.getOrderId())
-                .dropName(item.getDropNameSnapshot())
-                .sellerName(resolveSellerName(order.getSellerId()))
-                .quantity(item.getQuantity())
-                .totalAmount(order.getTotalAmount())
-                .orderState(order.getOrderState())
-                .pickupDate(order.getPickupDate())
-                .paidAt(order.getPaidAt())
-                .build();
+        return new OrderSummaryResult(
+                order.getOrderId(),
+                item.getDropNameSnapshot(),
+                resolveSellerName(order.getSellerId()),
+                item.getQuantity(),
+                order.getTotalAmount(),
+                order.getOrderState(),
+                order.getPickupDate(),
+                order.getPaidAt()
+        );
     }
 
     //판매자 상호명 조회. 판매자가 없으면 null.
@@ -393,17 +380,14 @@ public class OrderService {
 
     //주문 상세용 판매자 정보 조립. 지도 보기/전화하기 버튼을 위해 사업장 주소·연락처를 포함한다.
     //연락처는 seller 가 직접 갖지 않고 연결된 member 의 phoneNumber 를 사용한다.
-    private OrderDetailResponse.SellerInfo resolveSellerInfo(Long sellerId) {
+    private OrderDetailResult.SellerInfo resolveSellerInfo(Long sellerId) {
         return sellerRepository.findById(sellerId)
-                .map(seller -> OrderDetailResponse.SellerInfo.builder()
-                        .sellerId(sellerId)
-                        .sellerName(seller.getBakeryName())
-                        .address(seller.getBusinessAddress())
-                        .phoneNumber(resolveMemberPhoneNumber(seller.getMemberId()))
-                        .build())
-                .orElse(OrderDetailResponse.SellerInfo.builder()
-                        .sellerId(sellerId)
-                        .build());
+                .map(seller -> new OrderDetailResult.SellerInfo(
+                        sellerId,
+                        seller.getBakeryName(),
+                        seller.getBusinessAddress(),
+                        resolveMemberPhoneNumber(seller.getMemberId())))
+                .orElse(new OrderDetailResult.SellerInfo(sellerId, null, null, null));
     }
 
     //판매자 연락처 조회. 회원이 없으면 null.
@@ -414,21 +398,21 @@ public class OrderService {
     }
 
     //판매자 판매내역 목록 항목 조립. dropId/dropName 은 스냅샷, buyerName 은 member 조회.
-    private SellerOrderSummaryResponse toSellerSummary(Order order) {
+    private SellerOrderSummaryResult toSellerSummary(Order order) {
         OrderItem item = order.getOrderItem();
-        return SellerOrderSummaryResponse.builder()
-                .orderId(order.getOrderId())
-                .dropId(item.getDropId())
-                .dropName(item.getDropNameSnapshot())
-                .buyerName(resolveMemberName(order.getMemberId()))
-                .quantity(item.getQuantity())
-                .totalAmount(order.getTotalAmount())
-                .orderState(order.getOrderState())
-                .pickupDate(order.getPickupDate())
-                .paidAt(order.getPaidAt())
-                .confirmedAt(order.getConfirmAt())
-                .canceledAt(order.getCancelAt())
-                .build();
+        return new SellerOrderSummaryResult(
+                order.getOrderId(),
+                item.getDropId(),
+                item.getDropNameSnapshot(),
+                resolveMemberName(order.getMemberId()),
+                item.getQuantity(),
+                order.getTotalAmount(),
+                order.getOrderState(),
+                order.getPickupDate(),
+                order.getPaidAt(),
+                order.getConfirmAt(),
+                order.getCancelAt()
+        );
     }
 
     //구매자 표시 이름 조회. 회원이 없으면 null.

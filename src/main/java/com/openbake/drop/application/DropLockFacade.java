@@ -2,6 +2,7 @@ package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.application.dto.DropReserveCommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,9 +19,9 @@ public class DropLockFacade {
     private final DropLockService dropLockService;
     private final ConcurrentHashMap<Long, ReentrantLock> lockConcurrentHashMap = new ConcurrentHashMap<>();
 
-    public void reserveStock(Long dropId, Long memberId, int quantity) {
+    public void reserveStock(Long dropId, Long memberId, DropReserveCommand command) {
         // 1인당 제한 수량과 선택 수량 검증
-        dropLockService.checkLimitQuantityPerPerson(dropId, quantity);
+        dropLockService.checkLimitQuantityPerPerson(dropId, command.quantity());
         // 대기열에 통과된 직후인지 상태 검증
         dropLockService.checkEntryStatus(dropId, memberId);
 
@@ -38,7 +39,7 @@ public class DropLockFacade {
             }
 
             // 락을 획득했으니 재고 차감
-            dropLockService.decreaseQuantity(dropId, memberId, quantity);
+            dropLockService.decreaseQuantity(dropId, memberId, command.quantity());
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

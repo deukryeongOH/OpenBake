@@ -1,5 +1,6 @@
-package com.openbake.drop.application.dto;
+package com.openbake.drop.presentation.dto;
 
+import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropInventory;
 import com.openbake.drop.domain.DropStatus;
@@ -20,20 +21,20 @@ public record DropProductInfoResponse(
     // pickUpAvailableDate가 LAZY 컬렉션이라, 호출부의 트랜잭션(세션)이 열려 있는 동안
     // 새 HashSet으로 복사해둬야 한다. 참조만 넘기면 세션이 끝난 뒤(JSON 직렬화 시점)
     // 초기화를 시도하다 LazyInitializationException이 난다.
-    public static DropProductInfoResponse of(Drop drop, DropInventory inventory) {
+    public static DropProductInfoResponse of(DropProductInfoResult result) {
         return new DropProductInfoResponse(
-                drop.getDropProduct().getName(),
-                drop.getDropProduct().getDescription(),
-                drop.getDropProduct().getImageUrl(),
-                new HashSet<>(drop.getPickUpAvailableDate()),
-                drop.getDropStart(),
-                drop.getDropEnd(),
-                drop.getLimitQuantity(),
-                drop.getDropProduct().getPrice(),
-                inventory.getTotalQuantity(),
-                inventory.getRemainQuantity(),
-                drop.getDropStatus(), // UPCOMING 하드코딩 대신 객체 상태 사용
-                drop.getId()
+                result.name(),
+                result.description(),
+                result.imageUrl(),
+                result.pickUpAvailableDates(),
+                result.dropStart(),
+                result.dropEnd(),
+                result.limitQuantity(),
+                result.price(),
+                result.totalQuantity(),
+                result.remainQuantity(),
+                result.dropStatus(),
+                result.dropId()
         );
     }
 }

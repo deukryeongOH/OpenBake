@@ -2,9 +2,9 @@ package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.application.dto.ConfirmEntryResponse;
-import com.openbake.drop.application.dto.QueueRankResponse;
-import com.openbake.drop.application.queue.InMemoryQueueManager;
+import com.openbake.drop.application.dto.ConfirmEntryResult;
+import com.openbake.drop.application.dto.QueueRankResult;
+import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,7 +23,7 @@ import java.util.Set;
 public class DropEnterService {
 
     private final DropEntryRepository dropEntryRepository;
-    private final InMemoryQueueManager queueManager;
+    private final QueueManager queueManager;
     private final DropInventoryRepository dropInventoryRepository;
     private final DropRepository dropRepository;
 
@@ -44,7 +44,7 @@ public class DropEnterService {
     }
 
     @Transactional(readOnly = true)
-    public QueueRankResponse enterQueue(Long dropId, Long memberId) {
+    public QueueRankResult enterQueue(Long dropId, Long memberId) {
         LocalDateTime now = LocalDateTime.now();
 
         Drop findDrop = dropRepository.findById(dropId)
@@ -66,12 +66,12 @@ public class DropEnterService {
 
         Long rank = queueManager.enqueue(dropId, memberId);
 
-        return QueueRankResponse.of(rank);
+        return QueueRankResult.of(rank);
     }
 
 
     @Transactional
-    public ConfirmEntryResponse confirmEntry(Long dropId, Long memberId) {
+    public ConfirmEntryResult confirmEntry(Long dropId, Long memberId) {
         if(!queueManager.isActive(dropId, memberId)){
             throw new BusinessException(ErrorCode.UNAUTHORIZED_QUEUE_ACCESS);
         }
@@ -94,13 +94,13 @@ public class DropEnterService {
         // 5. 입장 처리 완료 후 대기열 권한 제거
         queueManager.removeActiveUser(dropId, memberId);
 
-        return ConfirmEntryResponse.of(findDrop.getDropProduct(), findDrop.getLimitQuantity(), dropInventory.getRemainQuantity(), findDrop.getPickUpAvailableDate());
+        return ConfirmEntryResult.of(findDrop.getDropProduct(), findDrop.getLimitQuantity(), dropInventory.getRemainQuantity(), findDrop.getPickUpAvailableDate());
     }
 
 
-    public QueueRankResponse getRank(Long dropId, Long memberId){ // DB 조회가 일어나지 않기에 @Transaction X
+    public QueueRankResult getRank(Long dropId, Long memberId){ // DB 조회가 일어나지 않기에 @Transaction X
         Long rank = queueManager.getRank(dropId, memberId);
-        return QueueRankResponse.of(rank);
+        return QueueRankResult.of(rank);
     }
 
     @Transactional

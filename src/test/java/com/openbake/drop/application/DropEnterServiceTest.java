@@ -1,8 +1,8 @@
 package com.openbake.drop.application;
 
-import com.openbake.drop.application.dto.ConfirmEntryResponse;
-import com.openbake.drop.application.dto.QueueRankResponse;
-import com.openbake.drop.application.queue.InMemoryQueueManager;
+import com.openbake.drop.application.dto.ConfirmEntryResult;
+import com.openbake.drop.application.dto.QueueRankResult;
+import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,7 +13,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +31,7 @@ class DropEnterServiceTest {
     private DropEntryRepository dropEntryRepository;
 
     @Mock
-    private InMemoryQueueManager queueManager;
+    private QueueManager queueManager;
 
     @Mock
     private DropRepository dropRepository;
@@ -105,11 +104,11 @@ class DropEnterServiceTest {
         given(queueManager.enqueue(dropId, memberId)).willReturn(3L);
 
         // when
-        QueueRankResponse response = dropEnterService.enterQueue(dropId, memberId);
+        QueueRankResult result = dropEnterService.enterQueue(dropId, memberId);
 
         // then
-        assertThat(response.rank()).isEqualTo(3L);
-        assertThat(response.status()).isEqualTo("WAITING");
+        assertThat(result.rank()).isEqualTo(3L);
+        assertThat(result.status()).isEqualTo("WAITING");
         verify(queueManager).enqueue(dropId, memberId);
     }
 
@@ -120,11 +119,11 @@ class DropEnterServiceTest {
         given(queueManager.getRank(dropId, memberId)).willReturn(0L);
 
         // when
-        QueueRankResponse response = dropEnterService.getRank(dropId, memberId);
+        QueueRankResult result = dropEnterService.getRank(dropId, memberId);
 
         // then
-        assertThat(response.rank()).isEqualTo(0L);
-        assertThat(response.status()).isEqualTo("ACTIVE");
+        assertThat(result.rank()).isEqualTo(0L);
+        assertThat(result.status()).isEqualTo("ACTIVE");
     }
 
     @Test
@@ -138,16 +137,16 @@ class DropEnterServiceTest {
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        ConfirmEntryResponse response = dropEnterService.confirmEntry(dropId, memberId);
+        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId, memberId);
 
         // then
-        assertThat(response.name()).isEqualTo(activeDrop.getDropProduct().getName());
-        assertThat(response.description()).isEqualTo(activeDrop.getDropProduct().getDescription());
-        assertThat(response.imageUrl()).isEqualTo(activeDrop.getDropProduct().getImageUrl());
-        assertThat(response.price()).isEqualTo(activeDrop.getDropProduct().getPrice());
-        assertThat(response.limitQuantity()).isEqualTo(activeDrop.getLimitQuantity());
-        assertThat(response.remainQuantity()).isEqualTo(dropInventory.getRemainQuantity());
-        assertThat(response.pickupDates()).isEqualTo(activeDrop.getPickUpAvailableDate());
+        assertThat(result.name()).isEqualTo(activeDrop.getDropProduct().getName());
+        assertThat(result.description()).isEqualTo(activeDrop.getDropProduct().getDescription());
+        assertThat(result.imageUrl()).isEqualTo(activeDrop.getDropProduct().getImageUrl());
+        assertThat(result.price()).isEqualTo(activeDrop.getDropProduct().getPrice());
+        assertThat(result.limitQuantity()).isEqualTo(activeDrop.getLimitQuantity());
+        assertThat(result.remainQuantity()).isEqualTo(dropInventory.getRemainQuantity());
+        assertThat(result.pickupDates()).isEqualTo(activeDrop.getPickUpAvailableDate());
 
         verify(dropEntryRepository).save(any(DropEntry.class));
         verify(queueManager).removeActiveUser(dropId, memberId);

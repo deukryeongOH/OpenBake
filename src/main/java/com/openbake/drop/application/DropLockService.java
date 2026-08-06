@@ -2,13 +2,10 @@ package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-//import com.openbake.drop.application.dto.DropQuantityReservedEvent;
-import com.openbake.drop.application.queue.DropQueue;
-import com.openbake.drop.application.queue.InMemoryQueueManager;
+import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-//import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +20,7 @@ public class DropLockService {
     private final DropService dropService;
     private final DropInventoryRepository dropInventoryRepository;
     private final DropEntryRepository dropEntryRepository;
-    private final InMemoryQueueManager queueManager;
+    private final QueueManager queueManager;
 //    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional

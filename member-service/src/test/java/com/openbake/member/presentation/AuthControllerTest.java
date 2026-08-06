@@ -6,18 +6,17 @@ import com.openbake.common.exception.InvalidIdTokenException;
 import com.openbake.common.exception.InvalidRefreshTokenException;
 import com.openbake.member.application.AuthService;
 import com.openbake.member.domain.AccessTokenRepository;
-import com.openbake.member.domain.AuthProvider;
 import com.openbake.member.domain.Role;
 import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.member.application.dto.auth.LocalLoginResult;
+import com.openbake.member.application.dto.auth.OAuthLoginResult;
+import com.openbake.member.application.dto.auth.ReissueResult;
+import com.openbake.member.application.dto.auth.SignupResult;
 import com.openbake.member.presentation.dto.auth.LocalLoginRequest;
-import com.openbake.member.presentation.dto.auth.LocalLoginResponse;
 import com.openbake.member.presentation.dto.auth.LogoutRequest;
 import com.openbake.member.presentation.dto.auth.OAuthLoginRequest;
-import com.openbake.member.presentation.dto.auth.OAuthLoginResponse;
 import com.openbake.member.presentation.dto.auth.ReissueRequest;
-import com.openbake.member.presentation.dto.auth.ReissueResponse;
 import com.openbake.member.presentation.dto.auth.SignupRequest;
-import com.openbake.member.presentation.dto.auth.SignupResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +28,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -59,7 +57,7 @@ class AuthControllerTest {
     @DisplayName("회원가입 성공 시 200과 회원 정보를 반환한다")
     void signup_success() throws Exception {
         SignupRequest request = new SignupRequest("test@example.com", "password123", "홍길동", "010-1234-5678");
-        given(authService.signup(any())).willReturn(new SignupResponse(1L, "test@example.com"));
+        given(authService.signup(any())).willReturn(new SignupResult(1L, "test@example.com"));
 
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -114,8 +112,8 @@ class AuthControllerTest {
     @DisplayName("Google 로그인 성공 시 200과 회원 정보, 토큰을 반환한다")
     void loginWithOAuth_google_success() throws Exception {
         OAuthLoginRequest request = new OAuthLoginRequest("valid-id-token");
-        given(authService.loginOrSignupWithOAuth(eq(AuthProvider.GOOGLE), any()))
-                .willReturn(new OAuthLoginResponse(1L, "access-token", "refresh-token", "test@example.com", "홍길동", true));
+        given(authService.loginOrSignupWithOAuth(any()))
+                .willReturn(new OAuthLoginResult(1L, "access-token", "refresh-token", "test@example.com", "홍길동", true));
 
         mockMvc.perform(post("/api/v1/auth/oauth/google")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -146,7 +144,7 @@ class AuthControllerTest {
     @DisplayName("같은 이메일의 LOCAL 계정이 있으면 409와 에러 응답을 반환한다")
     void loginWithOAuth_duplicateLocalEmail() throws Exception {
         OAuthLoginRequest request = new OAuthLoginRequest("valid-id-token");
-        given(authService.loginOrSignupWithOAuth(eq(AuthProvider.GOOGLE), any()))
+        given(authService.loginOrSignupWithOAuth(any()))
                 .willThrow(new DuplicateMemberException());
 
         mockMvc.perform(post("/api/v1/auth/oauth/google")
@@ -161,7 +159,7 @@ class AuthControllerTest {
     @DisplayName("ID 토큰 검증에 실패하면 401과 에러 응답을 반환한다")
     void loginWithOAuth_invalidToken() throws Exception {
         OAuthLoginRequest request = new OAuthLoginRequest("invalid-id-token");
-        given(authService.loginOrSignupWithOAuth(eq(AuthProvider.GOOGLE), any()))
+        given(authService.loginOrSignupWithOAuth(any()))
                 .willThrow(new InvalidIdTokenException());
 
         mockMvc.perform(post("/api/v1/auth/oauth/google")
@@ -190,7 +188,7 @@ class AuthControllerTest {
     void login_success() throws Exception {
         LocalLoginRequest request = new LocalLoginRequest("test@example.com", "password123");
         given(authService.localLogin(any()))
-                .willReturn(new LocalLoginResponse(1L, "access-token", "refresh-token", Role.CUSTOMER));
+                .willReturn(new LocalLoginResult(1L, "access-token", "refresh-token", Role.CUSTOMER));
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -248,7 +246,7 @@ class AuthControllerTest {
     void reissue_success() throws Exception {
         ReissueRequest request = new ReissueRequest("old-refresh-token");
         given(authService.reissue(any()))
-                .willReturn(new ReissueResponse("new-access-token", "new-refresh-token"));
+                .willReturn(new ReissueResult("new-access-token", "new-refresh-token"));
 
         mockMvc.perform(post("/api/v1/auth/reissue")
                         .contentType(MediaType.APPLICATION_JSON)

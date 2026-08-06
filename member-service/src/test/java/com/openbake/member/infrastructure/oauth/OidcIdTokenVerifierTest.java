@@ -2,6 +2,7 @@ package com.openbake.member.infrastructure.oauth;
 
 import com.openbake.common.exception.InvalidIdTokenException;
 import com.openbake.member.domain.AuthProvider;
+import com.openbake.member.domain.OidcIdentity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

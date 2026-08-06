@@ -3,6 +3,9 @@ package com.openbake.payment.presentation;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.payment.application.DepositService;
+import com.openbake.payment.application.dto.DepositResult;
+import com.openbake.payment.application.dto.GetTransactionsQuery;
+import com.openbake.payment.application.dto.TransactionResult;
 import com.openbake.payment.domain.TransactionType;
 import com.openbake.payment.presentation.dto.DepositResponse;
 import com.openbake.payment.presentation.dto.TransactionResponse;
@@ -37,8 +40,8 @@ public class DepositController {
     @GetMapping("/account")
     public ResponseEntity<ApiResponse<DepositResponse>> getBalance() {
         Long memberId = currentMemberProvider.getId();
-        DepositResponse response = depositService.getBalance(memberId);
-        return ResponseEntity.ok(ApiResponse.ok(response));
+        DepositResult result = depositService.getBalance(memberId);
+        return ResponseEntity.ok(ApiResponse.ok(DepositResponse.from(result)));
     }
 
     @Operation(
@@ -58,7 +61,9 @@ public class DepositController {
             @Parameter(description = "페이지 크기 (최대 50)", example = "20")
             @RequestParam(defaultValue = "20") int size) {
         Long memberId = currentMemberProvider.getId();
-        Page<TransactionResponse> response = depositService.getTransactions(memberId, transactionType, page, size);
+        Page<TransactionResult> resultPage = depositService.getTransactions(
+                new GetTransactionsQuery(memberId, transactionType, page, size));
+        Page<TransactionResponse> response = resultPage.map(TransactionResponse::from);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }

@@ -3,6 +3,8 @@ package com.openbake.payment.presentation;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.payment.application.DepositDevService;
+import com.openbake.payment.application.dto.DepositResult;
+import com.openbake.payment.application.dto.DevChargeCommand;
 import com.openbake.payment.presentation.dto.DepositResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -39,8 +41,9 @@ public class DepositDevController {
     public ResponseEntity<ApiResponse<DepositResponse>> devCharge(
             @RequestBody DevChargeRequest request) {
         Long memberId = currentMemberProvider.getId();
-        DepositResponse response = depositDevService.devCharge(memberId, request.amount());
-        return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.ok(response));
+        DepositResult result = depositDevService.devCharge(
+                new DevChargeCommand(memberId, request.amount()));
+        return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.ok(DepositResponse.from(result)));
     }
 
     public record DevChargeRequest(

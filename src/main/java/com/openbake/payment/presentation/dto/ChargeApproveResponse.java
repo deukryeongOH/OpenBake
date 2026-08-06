@@ -1,5 +1,6 @@
 package com.openbake.payment.presentation.dto;
 
+import com.openbake.payment.application.dto.ChargeApproveResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,4 +19,10 @@ public record ChargeApproveResponse(
         @Schema(description = "PG 승인 시각", example = "2026-07-17T14:02:31")
         LocalDateTime approvedAt
 ) {
+    public static ChargeApproveResponse from(ChargeApproveResult result) {
+        return new ChargeApproveResponse(
+                result.chargeRequestId(), result.status(), result.chargedAmount(),
+                result.balanceAfter(), result.method(), result.approvedAt()
+        );
+    }
 }

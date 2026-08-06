@@ -8,12 +8,14 @@ import com.openbake.payment.domain.DepositAccount;
 import com.openbake.payment.infrastructure.ChargeRequestJpaRepository;
 import com.openbake.payment.infrastructure.DepositAccountJpaRepository;
 import com.openbake.payment.infrastructure.WalletTransactionJpaRepository;
+import com.openbake.payment.application.dto.ChargeApproveCommand;
+import com.openbake.payment.application.dto.ChargeApproveResult;
+import com.openbake.payment.application.dto.ChargeCreateCommand;
+import com.openbake.payment.application.dto.ChargeCreateResult;
 import com.openbake.payment.application.port.PgApproveException;
 import com.openbake.payment.application.port.PgApproveResponse;
 import com.openbake.payment.application.port.PgClient;
 import com.openbake.payment.application.port.PgUnknownResultException;
-import com.openbake.payment.presentation.dto.ChargeApproveResponse;
-import com.openbake.payment.presentation.dto.ChargeCreateResponse;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -106,14 +108,14 @@ class ChargeFacadeTest {
         account.charge(new BigDecimal("5000"));
         depositAccountJpaRepository.save(account);
 
-        ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID_SUCCESS, new BigDecimal("10000"));
+        ChargeCreateResult created = chargeService.createChargeRequest(new ChargeCreateCommand(MEMBER_ID_SUCCESS, new BigDecimal("10000")));
 
         given(pgClient.approve(eq("payment_key_123"), eq(created.pgOrderId()), any()))
                 .willReturn(new PgApproveResponse("payment_key_123", created.pgOrderId(), "카드", "DONE"));
 
         // when
-        ChargeApproveResponse response = chargeFacade.approve(
-                MEMBER_ID_SUCCESS, "payment_key_123", created.pgOrderId(), new BigDecimal("10000"));
+        ChargeApproveResult response = chargeFacade.approve(
+                new ChargeApproveCommand(MEMBER_ID_SUCCESS, "payment_key_123", created.pgOrderId(), new BigDecimal("10000")));
 
         // then — 잔액: 5000 + 10000 = 15000
         assertThat(response.chargedAmount()).isEqualByComparingTo("10000");
@@ -128,14 +130,14 @@ class ChargeFacadeTest {
     void approveFailure() {
         // given
         depositAccountJpaRepository.save(DepositAccount.createMemberAccount(MEMBER_ID_FAIL));
-        ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID_FAIL, new BigDecimal("10000"));
+        ChargeCreateResult created = chargeService.createChargeRequest(new ChargeCreateCommand(MEMBER_ID_FAIL, new BigDecimal("10000")));
 
         given(pgClient.approve(eq("fail_key"), eq(created.pgOrderId()), any()))
                 .willThrow(new PgApproveException("CARD_LIMIT_EXCEEDED", "카드 한도 초과"));
 
         // when & then
         assertThatThrownBy(() ->
-                chargeFacade.approve(MEMBER_ID_FAIL, "fail_key", created.pgOrderId(), new BigDecimal("10000"))
+                chargeFacade.approve(new ChargeApproveCommand(MEMBER_ID_FAIL, "fail_key", created.pgOrderId(), new BigDecimal("10000")))
         ).isInstanceOf(PgApproveException.class);
 
         ChargeRequest request = chargeRequestJpaRepository.findById(created.chargeRequestId()).get();
@@ -151,14 +153,14 @@ class ChargeFacadeTest {
         account.charge(new BigDecimal("5000"));
         depositAccountJpaRepository.save(account);
 
-        ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID_UNKNOWN, new BigDecimal("10000"));
+        ChargeCreateResult created = chargeService.createChargeRequest(new ChargeCreateCommand(MEMBER_ID_UNKNOWN, new BigDecimal("10000")));
 
         given(pgClient.approve(eq("payment_key_timeout"), eq(created.pgOrderId()), any()))
                 .willThrow(new PgUnknownResultException("네트워크 오류: Read timed out"));
 
         // when & then
         assertThatThrownBy(() ->
-                chargeFacade.approve(MEMBER_ID_UNKNOWN, "payment_key_timeout", created.pgOrderId(), new BigDecimal("10000"))
+                chargeFacade.approve(new ChargeApproveCommand(MEMBER_ID_UNKNOWN, "payment_key_timeout", created.pgOrderId(), new BigDecimal("10000")))
         ).isInstanceOf(PgUnknownResultException.class);
 
         ChargeRequest request = chargeRequestJpaRepository.findById(created.chargeRequestId()).get();
@@ -173,8 +175,8 @@ class ChargeFacadeTest {
     void concurrentApprove_onlyOnePgCall() throws Exception {
         // given — 회원 계좌 (잔액 0원) + 충전 요청
         depositAccountJpaRepository.save(DepositAccount.createMemberAccount(MEMBER_ID_CONCURRENT));
-        ChargeCreateResponse created = chargeService.createChargeRequest(
-                MEMBER_ID_CONCURRENT, new BigDecimal("10000"));
+        ChargeCreateResult created = chargeService.createChargeRequest(
+                new ChargeCreateCommand(MEMBER_ID_CONCURRENT, new BigDecimal("10000")));
 
         String pgOrderId = created.pgOrderId();
         String paymentKey = "concurrent_pk";
@@ -195,7 +197,7 @@ class ChargeFacadeTest {
             readyLatch.countDown();
             try {
                 startLatch.await();
-                chargeFacade.approve(MEMBER_ID_CONCURRENT, paymentKey, pgOrderId, new BigDecimal("10000"));
+                chargeFacade.approve(new ChargeApproveCommand(MEMBER_ID_CONCURRENT, paymentKey, pgOrderId, new BigDecimal("10000")));
                 successCount.incrementAndGet();
             } catch (Exception e) {
                 caughtException.compareAndSet(null, e);
@@ -206,7 +208,7 @@ class ChargeFacadeTest {
             readyLatch.countDown();
             try {
                 startLatch.await();
-                chargeFacade.approve(MEMBER_ID_CONCURRENT, paymentKey, pgOrderId, new BigDecimal("10000"));
+                chargeFacade.approve(new ChargeApproveCommand(MEMBER_ID_CONCURRENT, paymentKey, pgOrderId, new BigDecimal("10000")));
                 successCount.incrementAndGet();
             } catch (Exception e) {
                 caughtException.compareAndSet(null, e);

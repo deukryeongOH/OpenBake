@@ -1,5 +1,6 @@
-package com.openbake.payment.application;
+package com.openbake.payment.infrastructure;
 
+import com.openbake.payment.application.ChargeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -4,6 +4,12 @@ import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.payment.application.ChargeFacade;
 import com.openbake.payment.application.ChargeService;
+import com.openbake.payment.application.dto.ChargeApproveCommand;
+import com.openbake.payment.application.dto.ChargeApproveResult;
+import com.openbake.payment.application.dto.ChargeCreateCommand;
+import com.openbake.payment.application.dto.ChargeCreateResult;
+import com.openbake.payment.application.dto.ChargeStatusResult;
+import com.openbake.payment.application.dto.GetChargeStatusQuery;
 import com.openbake.payment.presentation.dto.ChargeApproveRequest;
 import com.openbake.payment.presentation.dto.ChargeApproveResponse;
 import com.openbake.payment.presentation.dto.ChargeCreateRequest;
@@ -45,9 +51,9 @@ public class ChargeController {
     public ResponseEntity<ApiResponse<ChargeCreateResponse>> createCharge(
             @RequestBody ChargeCreateRequest request) {
         Long memberId = currentMemberProvider.getId();
-        ChargeCreateResponse response = chargeService.createChargeRequest(
-                memberId, request.amount());
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
+        ChargeCreateResult result = chargeService.createChargeRequest(
+                new ChargeCreateCommand(memberId, request.amount()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(ChargeCreateResponse.from(result)));
     }
 
     @Operation(
@@ -64,8 +70,9 @@ public class ChargeController {
             @Parameter(description = "충전 요청 ID", example = "1")
             @PathVariable Long chargeRequestId) {
         Long memberId = currentMemberProvider.getId();
-        ChargeStatusResponse response = chargeService.getChargeStatus(chargeRequestId, memberId);
-        return ResponseEntity.ok(ApiResponse.ok(response));
+        ChargeStatusResult result = chargeService.getChargeStatus(
+                new GetChargeStatusQuery(chargeRequestId, memberId));
+        return ResponseEntity.ok(ApiResponse.ok(ChargeStatusResponse.from(result)));
     }
 
     @Operation(
@@ -85,9 +92,9 @@ public class ChargeController {
     public ResponseEntity<ApiResponse<ChargeApproveResponse>> approveCharge(
             @RequestBody ChargeApproveRequest request) {
         Long memberId = currentMemberProvider.getId();
-        ChargeApproveResponse response = chargeFacade.approve(
-                memberId, request.paymentKey(),
-                request.orderId(), request.amount());
-        return ResponseEntity.ok(ApiResponse.ok(response));
+        ChargeApproveResult result = chargeFacade.approve(
+                new ChargeApproveCommand(memberId, request.paymentKey(),
+                        request.orderId(), request.amount()));
+        return ResponseEntity.ok(ApiResponse.ok(ChargeApproveResponse.from(result)));
     }
 }

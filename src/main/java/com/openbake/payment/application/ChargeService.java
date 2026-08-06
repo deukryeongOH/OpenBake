@@ -11,8 +11,10 @@ import com.openbake.payment.domain.WalletTransaction;
 import com.openbake.payment.domain.ChargeRequestRepository;
 import com.openbake.payment.domain.DepositAccountRepository;
 import com.openbake.payment.domain.WalletTransactionRepository;
-import com.openbake.payment.presentation.dto.ChargeCreateResponse;
-import com.openbake.payment.presentation.dto.ChargeStatusResponse;
+import com.openbake.payment.application.dto.ChargeCreateCommand;
+import com.openbake.payment.application.dto.ChargeCreateResult;
+import com.openbake.payment.application.dto.ChargeStatusResult;
+import com.openbake.payment.application.dto.GetChargeStatusQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +45,10 @@ public class ChargeService {
     private static final BigDecimal CHARGE_AMOUNT_UNIT = new BigDecimal("1000");
 
     @Transactional
-    public ChargeCreateResponse createChargeRequest(Long memberId, BigDecimal amount) {
+    public ChargeCreateResult createChargeRequest(ChargeCreateCommand command) {
+        Long memberId = command.memberId();
+        BigDecimal amount = command.amount();
+
         // 금액 검증: 최소 1,000원, 최대 500,000원, 1,000원 단위
         validateChargeAmount(amount);
 
@@ -65,7 +70,7 @@ public class ChargeService {
 
         String orderName = String.format("예치금 %,d원 충전", amount.intValue());
 
-        return new ChargeCreateResponse(
+        return new ChargeCreateResult(
                 request.getId(), pgOrderId, amount,
                 orderName, request.getExpiresAt()
         );
@@ -163,13 +168,13 @@ public class ChargeService {
      * 프론트가 PG_TIMEOUT(504) 이후 폴링하거나, 충전 내역에서 상태를 확인할 때 사용.
      */
     @Transactional(readOnly = true)
-    public ChargeStatusResponse getChargeStatus(Long chargeRequestId, Long memberId) {
-        ChargeRequest request = chargeRequestRepository.findById(chargeRequestId)
+    public ChargeStatusResult getChargeStatus(GetChargeStatusQuery query) {
+        ChargeRequest request = chargeRequestRepository.findById(query.chargeRequestId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CHARGE_REQUEST_NOT_FOUND));
 
-        request.validateOwner(memberId);
+        request.validateOwner(query.memberId());
 
-        return new ChargeStatusResponse(
+        return new ChargeStatusResult(
                 request.getId(),
                 request.getAmount(),
                 request.getStatus().name(),

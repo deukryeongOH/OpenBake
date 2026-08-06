@@ -9,7 +9,8 @@ import com.openbake.payment.infrastructure.DepositAccountJpaRepository;
 import com.openbake.payment.infrastructure.WalletTransactionJpaRepository;
 import com.openbake.payment.application.port.PgClient;
 import com.openbake.payment.application.port.PgPaymentStatus;
-import com.openbake.payment.presentation.dto.ChargeCreateResponse;
+import com.openbake.payment.application.dto.ChargeCreateCommand;
+import com.openbake.payment.application.dto.ChargeCreateResult;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -85,7 +86,7 @@ class WebhookControllerTest {
      */
     private ChargeRequest createInProgressRequest(String paymentKey) {
         depositAccountJpaRepository.save(DepositAccount.createMemberAccount(MEMBER_ID));
-        ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID, new BigDecimal("10000"));
+        ChargeCreateResult created = chargeService.createChargeRequest(new ChargeCreateCommand(MEMBER_ID, new BigDecimal("10000")));
         return chargeService.markInProgress(created.pgOrderId(), paymentKey, MEMBER_ID, new BigDecimal("10000"));
     }
 

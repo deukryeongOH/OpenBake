@@ -1,4 +1,4 @@
-package com.openbake.payment.application;
+package com.openbake.payment.infrastructure;
 
 import com.openbake.payment.domain.AccountType;
 import com.openbake.payment.domain.DepositAccount;

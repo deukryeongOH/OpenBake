@@ -1,11 +1,12 @@
 package com.openbake.seller.infrastructure;
 
+import com.openbake.seller.domain.BankRegistry;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
 @Component
-public class MockBankRegistry {
+public class MockBankRegistry implements BankRegistry {
 
     /**
      * 은행 코드
@@ -22,6 +23,7 @@ public class MockBankRegistry {
             "081", "088", "089", "090", "092"
     );
 
+    @Override
     public boolean isValidBankCode(String bankCode) {
         return VALID_BANK_CODES.contains(bankCode);
     }

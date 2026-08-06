@@ -4,9 +4,6 @@ import com.openbake.common.exception.*;
 import com.openbake.common.security.Authorities;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.seller.domain.*;
-import com.openbake.seller.infrastructure.MockBankRegistry;
-import com.openbake.seller.infrastructure.MockBusinessRegistry;
-import com.openbake.seller.presentation.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,18 +19,18 @@ import java.util.concurrent.ThreadLocalRandom;
 public class SellerService {
 
     private final SellerRepository sellerRepository;
-    private final MockBusinessRegistry mockBusinessRegistry;
-    private final MockBankRegistry mockBankRegistry;
+    private final BusinessRegistry mockBusinessRegistry;
+    private final BankRegistry mockBankRegistry;
     private final CurrentMemberProvider currentMemberProvider;
     private final AccountVerificationRepository accountVerificationRepository;
 
-    public BusinessVerificationResponse verifyBusiness(BusinessVerificationRequest request) {
-         verifyBusinessOrThrow(request.businessNumber(), request.businessRepresentativeName());
-        return new BusinessVerificationResponse(true, request.businessNumber(), LocalDateTime.now());
+    public BusinessVerificationResult verifyBusiness(BusinessVerificationCommand command) {
+         verifyBusinessOrThrow(command.businessNumber(), command.businessRepresentativeName());
+        return new BusinessVerificationResult(true, command.businessNumber(), LocalDateTime.now());
     }
 
-    public AccountVerificationStartResponse requestAccountVerification(AccountVerificationStartRequest request) {
-        if (!mockBankRegistry.isValidBankCode(request.bankCode())) {
+    public AccountVerificationStartResult requestAccountVerification(AccountVerificationStartCommand command) {
+        if (!mockBankRegistry.isValidBankCode(command.bankCode())) {
             throw new InvalidSettlementAccountException();
         }
 
@@ -44,24 +41,24 @@ public class SellerService {
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(3);
 
         AccountVerificationSession session = new AccountVerificationSession(
-                memberId, request.bankCode(), request.accountNumber(), request.accountHolder(), code, expiresAt);
+                memberId, command.bankCode(), command.accountNumber(), command.accountHolder(), code, expiresAt);
         accountVerificationRepository.saveSession(verificationRequestId, session);
 
         // [목업 안내] 실제 1원 송금 대신 서버 로그로만 코드를 남김. DEV 환경에선 getMockVerificationCode API로 조회.
         log.info("[MOCK] 계좌 인증 코드 발급 - verificationRequestId={}, code={}", verificationRequestId, code);
 
-        return new AccountVerificationStartResponse(verificationRequestId, expiresAt);
+        return new AccountVerificationStartResult(verificationRequestId, expiresAt);
     }
 
-    public AccountVerificationCodeResponse getMockVerificationCode(String verificationRequestId) {
+    public AccountVerificationCodeResult getMockVerificationCode(String verificationRequestId) {
         AccountVerificationSession session = accountVerificationRepository.findSession(verificationRequestId)
                 .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));
 
-        return new AccountVerificationCodeResponse(verificationRequestId, session.code(), session.expiresAt());
+        return new AccountVerificationCodeResult(verificationRequestId, session.code(), session.expiresAt());
     }
 
-    public AccountVerificationConfirmResponse verifyAccount(
-            String verificationRequestId, AccountVerificationConfirmRequest request) {
+    public AccountVerificationConfirmResult verifyAccount(
+            String verificationRequestId, AccountVerificationConfirmCommand command) {
         Long memberId = currentMemberProvider.getId();
 
         AccountVerificationSession session = accountVerificationRepository.findSession(verificationRequestId)
@@ -76,7 +73,7 @@ public class SellerService {
             throw new AccountVerificationExpiredException();
         }
 
-        if (!session.code().equals(request.verificationCode())) {
+        if (!session.code().equals(command.verificationCode())) {
             throw new AccountVerificationFailedException();
         }
 
@@ -86,29 +83,29 @@ public class SellerService {
         accountVerificationRepository.saveVerifiedAccount(memberId, verifiedAccount);
         accountVerificationRepository.deleteSession(verificationRequestId);
 
-        return new AccountVerificationConfirmResponse(true, verifiedAt);
+        return new AccountVerificationConfirmResult(true, verifiedAt);
     }
 
-    public ApplicationCreateResponse applySeller(ApplicationCreateRequest request) {
+    public ApplicationCreateResult applySeller(ApplicationCreateCommand command) {
         Long memberId = currentMemberProvider.getId();
 
         if (sellerRepository.findByMemberId(memberId).isPresent()) {
             throw new DuplicateSellerApplicationException();
         }
 
-        verifyBusinessOrThrow(request.businessNumber(), request.businessRepresentativeName());
+        verifyBusinessOrThrow(command.businessNumber(), command.businessRepresentativeName());
 
         VerifiedAccount verifiedAccount = accountVerificationRepository.findVerifiedAccountByMemberId(memberId)
                 .orElseThrow(AccountNotVerifiedException::new);
 
         Seller seller = new Seller(
-                memberId, request.bakeryName(), request.businessNumber(), request.businessAddress(),
-                request.businessRepresentativeName(), true, verifiedAccount.bankCode(),
+                memberId, command.bakeryName(), command.businessNumber(), command.businessAddress(),
+                command.businessRepresentativeName(), true, verifiedAccount.bankCode(),
                 verifiedAccount.accountNumber(), verifiedAccount.accountHolder(), true
         );
         Seller saved = sellerRepository.save(seller);
 
-        return new ApplicationCreateResponse(saved.getId(), saved.getMemberId(), saved.getBakeryName(), saved.getApplicationStatus());
+        return new ApplicationCreateResult(saved.getId(), saved.getMemberId(), saved.getBakeryName(), saved.getApplicationStatus());
     }
 
     private void verifyBusinessOrThrow(String businessNumber, String businessRepresentativeName) {
@@ -120,7 +117,7 @@ public class SellerService {
         }
     }
 
-    public ApplicationStatusUpdateResponse updateApplicationStatus(Long id, ApplicationStatusUpdateRequest request) {
+    public ApplicationStatusUpdateResult updateApplicationStatus(Long id, ApplicationStatusUpdateCommand command) {
         if (!currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)) {
             throw new AdminAccessDeniedException();
         }
@@ -128,23 +125,23 @@ public class SellerService {
         Seller seller = sellerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));
 
-        if (request.applicationStatus() == ApplicationStatus.APPROVED) {
+        if (command.applicationStatus() == ApplicationStatus.APPROVED) {
             seller.approve();
         } else {
-            seller.reject(request.rejectReason());
+            seller.reject(command.rejectReason());
         }
 
         Seller saved = sellerRepository.save(seller);
 
-        return new ApplicationStatusUpdateResponse(saved.getId(), saved.getApplicationStatus(), saved.getRejectReason(), saved.getUpdatedAt());
+        return new ApplicationStatusUpdateResult(saved.getId(), saved.getApplicationStatus(), saved.getRejectReason(), saved.getUpdatedAt());
     }
 
-    public MySellerResponse getMySeller() {
+    public MySellerResult getMySeller() {
         Long memberId = currentMemberProvider.getId();
         Seller seller = sellerRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));
 
-        return new MySellerResponse(
+        return new MySellerResult(
                 seller.getId(),
                 seller.getMemberId(),
                 seller.getBakeryName(),
@@ -158,11 +155,11 @@ public class SellerService {
         );
     }
 
-    public SellerResponse getSeller(Long id) {
+    public SellerResult getSeller(Long id) {
         Seller seller = sellerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("대상을 찾을 수 없습니다."));
 
-        return new SellerResponse(
+        return new SellerResult(
                 seller.getId(),
                 seller.getMemberId(),
                 seller.getBakeryName(),
@@ -175,13 +172,13 @@ public class SellerService {
         );
     }
 
-    public List<MySellerResponse> getPendingSellers(ApplicationStatus applicationStatus) {
+    public List<MySellerResult> getPendingSellers(ApplicationStatus applicationStatus) {
         if (!currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)) {
             throw new AdminAccessDeniedException();
         }
 
         return sellerRepository.findByApplicationStatus(applicationStatus).stream()
-                .map(seller -> new MySellerResponse(
+                .map(seller -> new MySellerResult(
                         seller.getId(),
                         seller.getMemberId(),
                         seller.getBakeryName(),

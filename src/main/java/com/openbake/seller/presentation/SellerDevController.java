@@ -34,6 +34,6 @@ public class SellerDevController {
     @GetMapping("/settlement-account/verification-requests/{verificationRequestId}/mock-code")
     public ApiResponse<AccountVerificationCodeResponse> getMockVerificationCode(
             @Parameter(description = "계좌 인증 요청 ID", example = "vr_20260723_001") @PathVariable String verificationRequestId) {
-        return ApiResponse.ok(sellerService.getMockVerificationCode(verificationRequestId));
+        return ApiResponse.ok(AccountVerificationCodeResponse.from(sellerService.getMockVerificationCode(verificationRequestId)));
     }
 }

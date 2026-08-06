@@ -1,5 +1,6 @@
 package com.openbake.drop.application;
 
+import com.openbake.drop.application.dto.DropReserveRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +57,8 @@ class DropLockFacadeTest {
                     readyLatch.countDown();
                     try {
                         startLatch.await();
-                        dropLockFacade.reserveStock(dropId, memberId, 1);
+                        DropReserveRequest request = new DropReserveRequest(1);
+                        dropLockFacade.reserveStock(dropId, memberId, request);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     } finally {

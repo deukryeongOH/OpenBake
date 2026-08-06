@@ -1,7 +1,7 @@
 package com.openbake.payment.application;
 
 import com.openbake.payment.domain.DepositAccount;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
+import com.openbake.payment.infrastructure.DepositAccountJpaRepository;
 import com.openbake.payment.presentation.dto.DepositResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,7 @@ class DepositServiceTest {
     private DepositService depositService;
 
     @Autowired
-    private DepositAccountRepository depositAccountRepository;
+    private DepositAccountJpaRepository depositAccountJpaRepository;
 
     @Test
     @DisplayName("기존 계좌가 있으면 잔액을 반환한다")
@@ -31,7 +31,7 @@ class DepositServiceTest {
         // given — 잔액 30,000원인 계좌 생성
         DepositAccount account = DepositAccount.createMemberAccount(1L);
         account.charge(new BigDecimal("30000"));
-        depositAccountRepository.save(account);
+        depositAccountJpaRepository.save(account);
 
         // when
         DepositResponse response = depositService.getBalance(1L);
@@ -54,6 +54,6 @@ class DepositServiceTest {
         assertThat(response.hasChargeInProgress()).isFalse();
 
         // DB에도 계좌가 생겼는지 확인
-        assertThat(depositAccountRepository.findByMemberId(999L)).isPresent();
+        assertThat(depositAccountJpaRepository.findByMemberId(999L)).isPresent();
     }
 }

@@ -5,11 +5,10 @@ import com.openbake.common.exception.ErrorCode;
 import com.openbake.payment.domain.ChargeRequest;
 import com.openbake.payment.domain.ChargeStatus;
 import com.openbake.payment.domain.DepositAccount;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
-import com.openbake.payment.infrastructure.WalletTransactionRepository;
+import com.openbake.payment.infrastructure.ChargeRequestJpaRepository;
+import com.openbake.payment.infrastructure.DepositAccountJpaRepository;
+import com.openbake.payment.infrastructure.WalletTransactionJpaRepository;
 import com.openbake.payment.presentation.dto.ChargeCreateResponse;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,13 +31,13 @@ class ChargeServiceTest {
     private ChargeService chargeService;
 
     @Autowired
-    private ChargeRequestRepository chargeRequestRepository;
+    private ChargeRequestJpaRepository chargeRequestJpaRepository;
 
     @Autowired
-    private DepositAccountRepository depositAccountRepository;
+    private DepositAccountJpaRepository depositAccountJpaRepository;
 
     @Autowired
-    private WalletTransactionRepository walletTransactionRepository;
+    private WalletTransactionJpaRepository walletTransactionJpaRepository;
 
     @Nested
     @DisplayName("createChargeRequest()")
@@ -53,7 +52,7 @@ class ChargeServiceTest {
             assertThat(response.pgOrderId()).isNotBlank();
 
             // DB에서 확인
-            ChargeRequest saved = chargeRequestRepository.findById(response.chargeRequestId()).get();
+            ChargeRequest saved = chargeRequestJpaRepository.findById(response.chargeRequestId()).get();
             assertThat(saved.getStatus()).isEqualTo(ChargeStatus.READY);
             assertThat(saved.getMemberId()).isEqualTo(1L);
         }
@@ -95,11 +94,11 @@ class ChargeServiceTest {
             ChargeCreateResponse second = chargeService.createChargeRequest(1L, new BigDecimal("20000"));
 
             // 기존 건은 EXPIRED
-            ChargeRequest firstRequest = chargeRequestRepository.findById(first.chargeRequestId()).get();
+            ChargeRequest firstRequest = chargeRequestJpaRepository.findById(first.chargeRequestId()).get();
             assertThat(firstRequest.getStatus()).isEqualTo(ChargeStatus.EXPIRED);
 
             // 새 건은 READY, pgOrderId가 다름
-            ChargeRequest secondRequest = chargeRequestRepository.findById(second.chargeRequestId()).get();
+            ChargeRequest secondRequest = chargeRequestJpaRepository.findById(second.chargeRequestId()).get();
             assertThat(secondRequest.getStatus()).isEqualTo(ChargeStatus.READY);
             assertThat(secondRequest.getPgOrderId()).isNotEqualTo(firstRequest.getPgOrderId());
         }
@@ -109,7 +108,7 @@ class ChargeServiceTest {
         void allowsNewRequestWhenInProgressExists() {
             // given — 기존 요청을 IN_PROGRESS로 만듦
             ChargeCreateResponse existing = chargeService.createChargeRequest(1L, new BigDecimal("10000"));
-            ChargeRequest existingRequest = chargeRequestRepository.findById(existing.chargeRequestId()).get();
+            ChargeRequest existingRequest = chargeRequestJpaRepository.findById(existing.chargeRequestId()).get();
             existingRequest.markInProgress("pk_existing");
 
             // when — 새 충전 요청 생성
@@ -179,7 +178,7 @@ class ChargeServiceTest {
             // 회원 계좌 미리 생성 (잔액 5000원)
             DepositAccount account = DepositAccount.createMemberAccount(1L);
             account.charge(new BigDecimal("5000"));
-            depositAccountRepository.save(account);
+            depositAccountJpaRepository.save(account);
 
             // when
             ChargeService.ChargeCompleteResult result = chargeService.completeCharge(request, "카드");
@@ -189,7 +188,7 @@ class ChargeServiceTest {
             assertThat(result.chargeRequest().getStatus()).isEqualTo(ChargeStatus.DONE);
 
             // 원장 기록 확인
-            assertThat(walletTransactionRepository.findAll()).hasSize(1);
+            assertThat(walletTransactionJpaRepository.findAll()).hasSize(1);
         }
 
         @Test
@@ -203,7 +202,7 @@ class ChargeServiceTest {
 
             // 계좌 자동 생성 + 0 + 10000 = 10000
             assertThat(result.balanceAfter()).isEqualByComparingTo("10000");
-            assertThat(depositAccountRepository.findByMemberId(2L)).isPresent();
+            assertThat(depositAccountJpaRepository.findByMemberId(2L)).isPresent();
         }
     }
 
@@ -238,7 +237,7 @@ class ChargeServiceTest {
             chargeService.expireStaleRequests();
 
             // 방금 만든 건 30분 안 지났으므로 READY 유지
-            ChargeRequest request = chargeRequestRepository.findAll().get(0);
+            ChargeRequest request = chargeRequestJpaRepository.findAll().get(0);
             assertThat(request.getStatus()).isEqualTo(ChargeStatus.READY);
         }
     }

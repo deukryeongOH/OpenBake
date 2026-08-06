@@ -7,9 +7,9 @@ import com.openbake.payment.domain.DepositAccount;
 import com.openbake.payment.domain.OrderPayment;
 import com.openbake.payment.domain.PaymentStatus;
 import com.openbake.payment.domain.WalletTransaction;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
-import com.openbake.payment.infrastructure.OrderPaymentRepository;
-import com.openbake.payment.infrastructure.WalletTransactionRepository;
+import com.openbake.payment.infrastructure.DepositAccountJpaRepository;
+import com.openbake.payment.infrastructure.OrderPaymentJpaRepository;
+import com.openbake.payment.infrastructure.WalletTransactionJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -34,25 +34,25 @@ class PaymentServiceTest {
     private PaymentService paymentService;
 
     @Autowired
-    private DepositAccountRepository depositAccountRepository;
+    private DepositAccountJpaRepository depositAccountJpaRepository;
 
     @Autowired
-    private OrderPaymentRepository orderPaymentRepository;
+    private OrderPaymentJpaRepository orderPaymentJpaRepository;
 
     @Autowired
-    private WalletTransactionRepository walletTransactionRepository;
+    private WalletTransactionJpaRepository walletTransactionJpaRepository;
 
     private DepositAccount memberAccount;
     private DepositAccount platformAccount;
 
     @BeforeEach
     void setUp() {
-        memberAccount = depositAccountRepository.save(DepositAccount.createMemberAccount(1L));
+        memberAccount = depositAccountJpaRepository.save(DepositAccount.createMemberAccount(1L));
         memberAccount.charge(new BigDecimal("50000"));
-        depositAccountRepository.save(memberAccount);
+        depositAccountJpaRepository.save(memberAccount);
 
-        platformAccount = depositAccountRepository.findByAccountType(AccountType.PLATFORM)
-                .orElseGet(() -> depositAccountRepository.save(DepositAccount.createPlatformAccount()));
+        platformAccount = depositAccountJpaRepository.findByAccountType(AccountType.PLATFORM)
+                .orElseGet(() -> depositAccountJpaRepository.save(DepositAccount.createPlatformAccount()));
     }
 
     @Nested
@@ -64,7 +64,7 @@ class PaymentServiceTest {
         void deductsBalance() {
             paymentService.pay(100L, 1L, new BigDecimal("5000"));
 
-            DepositAccount account = depositAccountRepository.findByMemberId(1L).get();
+            DepositAccount account = depositAccountJpaRepository.findByMemberId(1L).get();
             assertThat(account.getBalance()).isEqualByComparingTo("45000");
         }
 
@@ -73,7 +73,7 @@ class PaymentServiceTest {
         void createsOrderPayment() {
             paymentService.pay(100L, 1L, new BigDecimal("5000"));
 
-            OrderPayment payment = orderPaymentRepository.findByOrderId(100L).get();
+            OrderPayment payment = orderPaymentJpaRepository.findByOrderId(100L).get();
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
             assertThat(payment.getAmount()).isEqualByComparingTo("5000");
         }
@@ -83,7 +83,7 @@ class PaymentServiceTest {
         void createsWalletTransactions() {
             paymentService.pay(100L, 1L, new BigDecimal("5000"));
 
-            List<WalletTransaction> transactions = walletTransactionRepository.findAll();
+            List<WalletTransaction> transactions = walletTransactionJpaRepository.findAll();
             assertThat(transactions).hasSize(2);
 
             WalletTransaction memberTx = transactions.stream()
@@ -120,7 +120,7 @@ class PaymentServiceTest {
             paymentService.pay(100L, 1L, new BigDecimal("5000"));
             paymentService.refund(100L);
 
-            DepositAccount account = depositAccountRepository.findByMemberId(1L).get();
+            DepositAccount account = depositAccountJpaRepository.findByMemberId(1L).get();
             assertThat(account.getBalance()).isEqualByComparingTo("50000");
         }
 
@@ -130,7 +130,7 @@ class PaymentServiceTest {
             paymentService.pay(100L, 1L, new BigDecimal("5000"));
             paymentService.refund(100L);
 
-            OrderPayment payment = orderPaymentRepository.findByOrderId(100L).get();
+            OrderPayment payment = orderPaymentJpaRepository.findByOrderId(100L).get();
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
         }
 
@@ -158,7 +158,7 @@ class PaymentServiceTest {
             paymentService.pay(100L, 1L, new BigDecimal("5000"));
             paymentService.confirmPayment(100L);
 
-            OrderPayment payment = orderPaymentRepository.findByOrderId(100L).get();
+            OrderPayment payment = orderPaymentJpaRepository.findByOrderId(100L).get();
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRMED);
         }
 

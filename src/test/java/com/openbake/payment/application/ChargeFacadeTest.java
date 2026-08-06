@@ -5,9 +5,9 @@ import com.openbake.common.exception.ErrorCode;
 import com.openbake.payment.domain.ChargeRequest;
 import com.openbake.payment.domain.ChargeStatus;
 import com.openbake.payment.domain.DepositAccount;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
-import com.openbake.payment.infrastructure.WalletTransactionRepository;
+import com.openbake.payment.infrastructure.ChargeRequestJpaRepository;
+import com.openbake.payment.infrastructure.DepositAccountJpaRepository;
+import com.openbake.payment.infrastructure.WalletTransactionJpaRepository;
 import com.openbake.payment.application.port.PgApproveException;
 import com.openbake.payment.application.port.PgApproveResponse;
 import com.openbake.payment.application.port.PgClient;
@@ -63,13 +63,13 @@ class ChargeFacadeTest {
     private PgClient pgClient;
 
     @Autowired
-    private ChargeRequestRepository chargeRequestRepository;
+    private ChargeRequestJpaRepository chargeRequestJpaRepository;
 
     @Autowired
-    private DepositAccountRepository depositAccountRepository;
+    private DepositAccountJpaRepository depositAccountJpaRepository;
 
     @Autowired
-    private WalletTransactionRepository walletTransactionRepository;
+    private WalletTransactionJpaRepository walletTransactionJpaRepository;
 
     @Autowired
     private TransactionTemplate txTemplate;
@@ -104,7 +104,7 @@ class ChargeFacadeTest {
         // given — 회원 계좌 (잔액 5000원)
         DepositAccount account = DepositAccount.createMemberAccount(MEMBER_ID_SUCCESS);
         account.charge(new BigDecimal("5000"));
-        depositAccountRepository.save(account);
+        depositAccountJpaRepository.save(account);
 
         ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID_SUCCESS, new BigDecimal("10000"));
 
@@ -119,7 +119,7 @@ class ChargeFacadeTest {
         assertThat(response.chargedAmount()).isEqualByComparingTo("10000");
         assertThat(response.balanceAfter()).isEqualByComparingTo("15000");
 
-        ChargeRequest request = chargeRequestRepository.findById(created.chargeRequestId()).get();
+        ChargeRequest request = chargeRequestJpaRepository.findById(created.chargeRequestId()).get();
         assertThat(request.getStatus()).isEqualTo(ChargeStatus.DONE);
     }
 
@@ -127,7 +127,7 @@ class ChargeFacadeTest {
     @DisplayName("PG 승인 실패 시 FAILED 상태가 되고 예외가 발생한다")
     void approveFailure() {
         // given
-        depositAccountRepository.save(DepositAccount.createMemberAccount(MEMBER_ID_FAIL));
+        depositAccountJpaRepository.save(DepositAccount.createMemberAccount(MEMBER_ID_FAIL));
         ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID_FAIL, new BigDecimal("10000"));
 
         given(pgClient.approve(eq("fail_key"), eq(created.pgOrderId()), any()))
@@ -138,7 +138,7 @@ class ChargeFacadeTest {
                 chargeFacade.approve(MEMBER_ID_FAIL, "fail_key", created.pgOrderId(), new BigDecimal("10000"))
         ).isInstanceOf(PgApproveException.class);
 
-        ChargeRequest request = chargeRequestRepository.findById(created.chargeRequestId()).get();
+        ChargeRequest request = chargeRequestJpaRepository.findById(created.chargeRequestId()).get();
         assertThat(request.getStatus()).isEqualTo(ChargeStatus.FAILED);
         assertThat(request.getFailureCode()).isEqualTo("CARD_LIMIT_EXCEEDED");
     }
@@ -149,7 +149,7 @@ class ChargeFacadeTest {
         // given — 회원 계좌 (잔액 5000원)
         DepositAccount account = DepositAccount.createMemberAccount(MEMBER_ID_UNKNOWN);
         account.charge(new BigDecimal("5000"));
-        depositAccountRepository.save(account);
+        depositAccountJpaRepository.save(account);
 
         ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID_UNKNOWN, new BigDecimal("10000"));
 
@@ -161,10 +161,10 @@ class ChargeFacadeTest {
                 chargeFacade.approve(MEMBER_ID_UNKNOWN, "payment_key_timeout", created.pgOrderId(), new BigDecimal("10000"))
         ).isInstanceOf(PgUnknownResultException.class);
 
-        ChargeRequest request = chargeRequestRepository.findById(created.chargeRequestId()).get();
+        ChargeRequest request = chargeRequestJpaRepository.findById(created.chargeRequestId()).get();
         assertThat(request.getStatus()).isEqualTo(ChargeStatus.IN_PROGRESS);
 
-        DepositAccount updated = depositAccountRepository.findByMemberId(MEMBER_ID_UNKNOWN).get();
+        DepositAccount updated = depositAccountJpaRepository.findByMemberId(MEMBER_ID_UNKNOWN).get();
         assertThat(updated.getBalance()).isEqualByComparingTo("5000");
     }
 
@@ -172,7 +172,7 @@ class ChargeFacadeTest {
     @DisplayName("[동시성] 같은 pgOrderId로 동시 승인 요청 시 PG 호출은 1회만 발생한다")
     void concurrentApprove_onlyOnePgCall() throws Exception {
         // given — 회원 계좌 (잔액 0원) + 충전 요청
-        depositAccountRepository.save(DepositAccount.createMemberAccount(MEMBER_ID_CONCURRENT));
+        depositAccountJpaRepository.save(DepositAccount.createMemberAccount(MEMBER_ID_CONCURRENT));
         ChargeCreateResponse created = chargeService.createChargeRequest(
                 MEMBER_ID_CONCURRENT, new BigDecimal("10000"));
 
@@ -231,10 +231,10 @@ class ChargeFacadeTest {
         verify(pgClient, times(1)).approve(eq(paymentKey), eq(pgOrderId), any());
 
         // 잔액이 1회 충전분만 반영됨 (0 + 10000 = 10000)
-        DepositAccount finalAccount = depositAccountRepository.findByMemberId(MEMBER_ID_CONCURRENT).get();
+        DepositAccount finalAccount = depositAccountJpaRepository.findByMemberId(MEMBER_ID_CONCURRENT).get();
         assertThat(finalAccount.getBalance()).isEqualByComparingTo("10000");
 
-        ChargeRequest request = chargeRequestRepository.findById(created.chargeRequestId()).get();
+        ChargeRequest request = chargeRequestJpaRepository.findById(created.chargeRequestId()).get();
         assertThat(request.getStatus()).isEqualTo(ChargeStatus.DONE);
     }
 }

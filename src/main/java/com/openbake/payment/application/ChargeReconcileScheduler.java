@@ -2,7 +2,7 @@ package com.openbake.payment.application;
 
 import com.openbake.payment.domain.ChargeRequest;
 import com.openbake.payment.domain.ChargeStatus;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
+import com.openbake.payment.domain.ChargeRequestRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -4,9 +4,9 @@ import com.openbake.payment.application.ChargeService;
 import com.openbake.payment.domain.ChargeRequest;
 import com.openbake.payment.domain.ChargeStatus;
 import com.openbake.payment.domain.DepositAccount;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
-import com.openbake.payment.infrastructure.WalletTransactionRepository;
+import com.openbake.payment.infrastructure.ChargeRequestJpaRepository;
+import com.openbake.payment.infrastructure.DepositAccountJpaRepository;
+import com.openbake.payment.infrastructure.WalletTransactionJpaRepository;
 import com.openbake.payment.application.port.PgClient;
 import com.openbake.payment.application.port.PgPaymentStatus;
 import com.openbake.payment.presentation.dto.ChargeCreateResponse;
@@ -49,13 +49,13 @@ class WebhookControllerTest {
     private ChargeService chargeService;
 
     @Autowired
-    private ChargeRequestRepository chargeRequestRepository;
+    private ChargeRequestJpaRepository chargeRequestJpaRepository;
 
     @Autowired
-    private DepositAccountRepository depositAccountRepository;
+    private DepositAccountJpaRepository depositAccountJpaRepository;
 
     @Autowired
-    private WalletTransactionRepository walletTransactionRepository;
+    private WalletTransactionJpaRepository walletTransactionJpaRepository;
 
     @MockitoBean
     private PgClient pgClient;
@@ -84,7 +84,7 @@ class WebhookControllerTest {
      * 충전 요청을 생성하고 IN_PROGRESS로 전환한 ChargeRequest를 반환한다.
      */
     private ChargeRequest createInProgressRequest(String paymentKey) {
-        depositAccountRepository.save(DepositAccount.createMemberAccount(MEMBER_ID));
+        depositAccountJpaRepository.save(DepositAccount.createMemberAccount(MEMBER_ID));
         ChargeCreateResponse created = chargeService.createChargeRequest(MEMBER_ID, new BigDecimal("10000"));
         return chargeService.markInProgress(created.pgOrderId(), paymentKey, MEMBER_ID, new BigDecimal("10000"));
     }
@@ -108,11 +108,11 @@ class WebhookControllerTest {
                 .andExpect(status().isOk());
 
         // then — 상태 변화 없음
-        ChargeRequest updated = chargeRequestRepository.findById(request.getId()).get();
+        ChargeRequest updated = chargeRequestJpaRepository.findById(request.getId()).get();
         assertThat(updated.getStatus()).isEqualTo(ChargeStatus.IN_PROGRESS);
 
         // 잔액 변화 없음 (0원 그대로)
-        DepositAccount account = depositAccountRepository.findByMemberId(MEMBER_ID).get();
+        DepositAccount account = depositAccountJpaRepository.findByMemberId(MEMBER_ID).get();
         assertThat(account.getBalance()).isEqualByComparingTo("0");
     }
 
@@ -135,11 +135,11 @@ class WebhookControllerTest {
                 .andExpect(status().isOk());
 
         // then — DONE 전이 + 잔액 증가
-        ChargeRequest updated = chargeRequestRepository.findById(request.getId()).get();
+        ChargeRequest updated = chargeRequestJpaRepository.findById(request.getId()).get();
         assertThat(updated.getStatus()).isEqualTo(ChargeStatus.DONE);
         assertThat(updated.getPgMethod()).isEqualTo("카드");
 
-        DepositAccount account = depositAccountRepository.findByMemberId(MEMBER_ID).get();
+        DepositAccount account = depositAccountJpaRepository.findByMemberId(MEMBER_ID).get();
         assertThat(account.getBalance()).isEqualByComparingTo("10000");
     }
 

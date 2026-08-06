@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:17
     container_name: openbake-postgres
+    restart: always
     ports:
       - "5432:5432"
     environment:
@@ -21,6 +22,7 @@ services:
   redis:
     image: redis:7
     container_name: openbake-redis
+    restart: always
     ports:
       - "6379:6379"
     healthcheck:
@@ -36,6 +38,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: openbake-backend
+    restart: always
     ports:
       - "8080:8080"
     env_file:
@@ -61,6 +64,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: openbake-nginx
+    restart: always
     ports:
       - "80:80"
       - "443:443"

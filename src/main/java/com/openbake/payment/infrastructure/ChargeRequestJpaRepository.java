@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-public interface ChargeRequestRepository extends JpaRepository<ChargeRequest, Long> {
+public interface ChargeRequestJpaRepository extends JpaRepository<ChargeRequest, Long> {
 
     /**
      * 비관적 락으로 ChargeRequest 조회.

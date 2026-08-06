@@ -5,7 +5,8 @@ import com.openbake.payment.application.port.PgApproveException;
 import com.openbake.payment.application.port.PgApproveResponse;
 import com.openbake.payment.application.port.PgClient;
 import com.openbake.payment.application.port.PgUnknownResultException;
-import com.openbake.payment.presentation.dto.ChargeApproveResponse;
+import com.openbake.payment.application.dto.ChargeApproveCommand;
+import com.openbake.payment.application.dto.ChargeApproveResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -39,7 +40,11 @@ public class ChargeFacade {
      * 충전 승인 처리.
      * 프론트가 토스 결제창 완료 후 보내는 요청을 받아서 PG 승인까지 처리한다.
      */
-    public ChargeApproveResponse approve(Long memberId, String pgPaymentKey, String pgOrderId, BigDecimal amount) {
+    public ChargeApproveResult approve(ChargeApproveCommand command) {
+        Long memberId = command.memberId();
+        String pgPaymentKey = command.paymentKey();
+        String pgOrderId = command.orderId();
+        BigDecimal amount = command.amount();
 
         // [트랜잭션 1] 상태를 IN_PROGRESS로 바꾸고 커밋
         ChargeRequest request = chargeService.markInProgress(pgOrderId, pgPaymentKey, memberId, amount);
@@ -51,7 +56,7 @@ public class ChargeFacade {
             // [트랜잭션 2] 성공 — 예치금 증가 + 원장 기록 + DONE
             ChargeService.ChargeCompleteResult result = chargeService.completeCharge(request, pgResponse.method());
 
-            return new ChargeApproveResponse(
+            return new ChargeApproveResult(
                     request.getId(),
                     result.chargeRequest().getStatus().name(),
                     amount,

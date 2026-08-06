@@ -6,11 +6,12 @@ import com.openbake.payment.domain.ChargeStatus;
 import com.openbake.payment.domain.DepositAccount;
 import com.openbake.payment.domain.TransactionType;
 import com.openbake.payment.domain.WalletTransaction;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
-import com.openbake.payment.infrastructure.WalletTransactionRepository;
-import com.openbake.payment.presentation.dto.DepositResponse;
-import com.openbake.payment.presentation.dto.TransactionResponse;
+import com.openbake.payment.domain.ChargeRequestRepository;
+import com.openbake.payment.domain.DepositAccountRepository;
+import com.openbake.payment.domain.WalletTransactionRepository;
+import com.openbake.payment.application.dto.DepositResult;
+import com.openbake.payment.application.dto.GetTransactionsQuery;
+import com.openbake.payment.application.dto.TransactionResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -37,7 +38,7 @@ public class DepositService {
      * → 아직 충전한 적 없는 신규 회원도 조회 가능.
      */
     @Transactional
-    public DepositResponse getBalance(Long memberId) {
+    public DepositResult getBalance(Long memberId) {
         DepositAccount account = depositAccountRepository.findByMemberId(memberId)
                 .orElseGet(() -> depositAccountRepository.save(
                         DepositAccount.createMemberAccount(memberId)
@@ -47,7 +48,7 @@ public class DepositService {
                 memberId, List.of(ChargeStatus.READY, ChargeStatus.IN_PROGRESS)
         );
 
-        return new DepositResponse(memberId, account.getBalance(), hasChargeInProgress);
+        return new DepositResult(memberId, account.getBalance(), hasChargeInProgress);
     }
 
     /**
@@ -56,28 +57,27 @@ public class DepositService {
      * transactionType이 지정되면 해당 유형만 필터링.
      */
     @Transactional(readOnly = true)
-    public Page<TransactionResponse> getTransactions(Long memberId, TransactionType transactionType,
-                                                     int page, int size) {
-        int clampedSize = Math.min(size, MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(page, clampedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+    public Page<TransactionResult> getTransactions(GetTransactionsQuery query) {
+        int clampedSize = Math.min(query.size(), MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(query.page(), clampedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        DepositAccount account = depositAccountRepository.findByMemberId(memberId)
+        DepositAccount account = depositAccountRepository.findByMemberId(query.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPOSIT_ACCOUNT_NOT_FOUND));
 
         Page<WalletTransaction> transactions;
-        if (transactionType != null) {
+        if (query.transactionType() != null) {
             transactions = walletTransactionRepository.findByDepositAccountIdAndTransactionType(
-                    account.getId(), transactionType, pageable);
+                    account.getId(), query.transactionType(), pageable);
         } else {
             transactions = walletTransactionRepository.findByDepositAccountId(account.getId(), pageable);
         }
 
-        return transactions.map(this::toResponse);
+        return transactions.map(this::toResult);
     }
 
-    private TransactionResponse toResponse(WalletTransaction tx) {
+    private TransactionResult toResult(WalletTransaction tx) {
         String description = generateDescription(tx);
-        return new TransactionResponse(
+        return new TransactionResult(
                 tx.getId(),
                 tx.getTransactionType().name(),
                 tx.getAmount(),

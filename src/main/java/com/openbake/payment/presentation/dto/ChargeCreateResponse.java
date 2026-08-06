@@ -1,5 +1,6 @@
 package com.openbake.payment.presentation.dto;
 
+import com.openbake.payment.application.dto.ChargeCreateResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,4 +17,10 @@ public record ChargeCreateResponse(
         @Schema(description = "충전 요청 만료 시각 (요청 + 30분)", example = "2026-07-17T14:28:40")
         LocalDateTime expiresAt
 ) {
+    public static ChargeCreateResponse from(ChargeCreateResult result) {
+        return new ChargeCreateResponse(
+                result.chargeRequestId(), result.pgOrderId(), result.amount(),
+                result.orderName(), result.expiresAt()
+        );
+    }
 }

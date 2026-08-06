@@ -4,9 +4,10 @@ import com.openbake.payment.domain.DepositAccount;
 import com.openbake.payment.domain.ReferenceType;
 import com.openbake.payment.domain.TransactionType;
 import com.openbake.payment.domain.WalletTransaction;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
-import com.openbake.payment.infrastructure.WalletTransactionRepository;
-import com.openbake.payment.presentation.dto.DepositResponse;
+import com.openbake.payment.domain.DepositAccountRepository;
+import com.openbake.payment.domain.WalletTransactionRepository;
+import com.openbake.payment.application.dto.DepositResult;
+import com.openbake.payment.application.dto.DevChargeCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,10 @@ public class DepositDevService {
     private final WalletTransactionRepository walletTransactionRepository;
 
     @Transactional
-    public DepositResponse devCharge(Long memberId, BigDecimal amount) {
+    public DepositResult devCharge(DevChargeCommand command) {
+        Long memberId = command.memberId();
+        BigDecimal amount = command.amount();
+
         DepositAccount account = depositAccountRepository.findByMemberIdForUpdate(memberId)
                 .orElseGet(() -> depositAccountRepository.save(
                         DepositAccount.createMemberAccount(memberId)
@@ -41,6 +45,6 @@ public class DepositDevService {
                 0L  // dev 충전은 ChargeRequest가 없으므로 0
         ));
 
-        return new DepositResponse(memberId, account.getBalance(), false);
+        return new DepositResult(memberId, account.getBalance(), false);
     }
 }

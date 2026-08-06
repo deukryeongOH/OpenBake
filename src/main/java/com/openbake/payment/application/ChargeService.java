@@ -8,11 +8,13 @@ import com.openbake.payment.domain.DepositAccount;
 import com.openbake.payment.domain.ReferenceType;
 import com.openbake.payment.domain.TransactionType;
 import com.openbake.payment.domain.WalletTransaction;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
-import com.openbake.payment.infrastructure.DepositAccountRepository;
-import com.openbake.payment.infrastructure.WalletTransactionRepository;
-import com.openbake.payment.presentation.dto.ChargeCreateResponse;
-import com.openbake.payment.presentation.dto.ChargeStatusResponse;
+import com.openbake.payment.domain.ChargeRequestRepository;
+import com.openbake.payment.domain.DepositAccountRepository;
+import com.openbake.payment.domain.WalletTransactionRepository;
+import com.openbake.payment.application.dto.ChargeCreateCommand;
+import com.openbake.payment.application.dto.ChargeCreateResult;
+import com.openbake.payment.application.dto.ChargeStatusResult;
+import com.openbake.payment.application.dto.GetChargeStatusQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,14 +40,10 @@ public class ChargeService {
      * [트랜잭션 1] 충전 요청 생성.
      * ChargeRequest를 READY 상태로 만들고, 프론트가 PG 결제창을 띄우는 데 필요한 정보를 반환한다.
      */
-    private static final BigDecimal MIN_CHARGE_AMOUNT = new BigDecimal("1000");
-    private static final BigDecimal MAX_CHARGE_AMOUNT = new BigDecimal("500000");
-    private static final BigDecimal CHARGE_AMOUNT_UNIT = new BigDecimal("1000");
-
     @Transactional
-    public ChargeCreateResponse createChargeRequest(Long memberId, BigDecimal amount) {
-        // 금액 검증: 최소 1,000원, 최대 500,000원, 1,000원 단위
-        validateChargeAmount(amount);
+    public ChargeCreateResult createChargeRequest(ChargeCreateCommand command) {
+        Long memberId = command.memberId();
+        BigDecimal amount = command.amount();
 
         // 기존 READY 건이 있으면 만료 처리 (결제창 안 끝낸 상태 — 돈 안 나감)
         // List로 받는 이유: 기존 existsBy 검사가 확인-후-저장이라 레이스가 있었고,
@@ -65,7 +63,7 @@ public class ChargeService {
 
         String orderName = String.format("예치금 %,d원 충전", amount.intValue());
 
-        return new ChargeCreateResponse(
+        return new ChargeCreateResult(
                 request.getId(), pgOrderId, amount,
                 orderName, request.getExpiresAt()
         );
@@ -163,13 +161,13 @@ public class ChargeService {
      * 프론트가 PG_TIMEOUT(504) 이후 폴링하거나, 충전 내역에서 상태를 확인할 때 사용.
      */
     @Transactional(readOnly = true)
-    public ChargeStatusResponse getChargeStatus(Long chargeRequestId, Long memberId) {
-        ChargeRequest request = chargeRequestRepository.findById(chargeRequestId)
+    public ChargeStatusResult getChargeStatus(GetChargeStatusQuery query) {
+        ChargeRequest request = chargeRequestRepository.findById(query.chargeRequestId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CHARGE_REQUEST_NOT_FOUND));
 
-        request.validateOwner(memberId);
+        request.validateOwner(query.memberId());
 
-        return new ChargeStatusResponse(
+        return new ChargeStatusResult(
                 request.getId(),
                 request.getAmount(),
                 request.getStatus().name(),
@@ -195,12 +193,4 @@ public class ChargeService {
         }
     }
 
-    private void validateChargeAmount(BigDecimal amount) {
-        if (amount == null
-                || amount.compareTo(MIN_CHARGE_AMOUNT) < 0
-                || amount.compareTo(MAX_CHARGE_AMOUNT) > 0
-                || amount.remainder(CHARGE_AMOUNT_UNIT).compareTo(BigDecimal.ZERO) != 0) {
-            throw new BusinessException(ErrorCode.INVALID_CHARGE_AMOUNT);
-        }
-    }
 }

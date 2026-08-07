@@ -28,7 +28,7 @@ public class OrderReservationReleaser {
             CartItem item = cart.getItems();
             if (item != null) {
                 //재고 복구는 drop 소유라 rollbackStock 을 호출한다(직접 되돌리지 않는다).
-                dropLockService.rollbackStock(item.getDropId(), memberId, item.getQuantity());
+                dropLockService.rollbackStock(item.getDropId(), memberId);
             }
             //결제 실패한 장바구니는 더 못 쓰게 정리한다.
             cartRepository.delete(cart);

@@ -21,39 +21,41 @@ public class DropLockService {
     private final DropInventoryRepository dropInventoryRepository;
     private final DropEntryRepository dropEntryRepository;
     private final QueueManager queueManager;
-//    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public void decreaseQuantity(Long dropId, Long memberId, int quantity) {
-        DropEntry dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NEVER_ENTERED));
-
-        if (dropEntry.getEntryStatus() != EntryStatus.ENTERED) {
-            throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
-        }
+    public void decreaseQuantity(Long dropId, Long memberId, int selectQuantity) {
+        DropEntry dropEntry = checkEntryStatus(dropId, memberId);
 
         DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
-        dropInventory.decreaseQuantity(quantity);
+        dropInventory.decreaseQuantity(selectQuantity);
 
         if (dropInventory.getRemainQuantity() == 0) {
             dropService.changeDropStatusCompleted(dropInventory.getDropId());
             queueManager.markSoldOut(dropId);
         }
 
-        dropEntry.reserveEntry();
+        dropEntry.reserveEntryAndSaveSelectQuantity(selectQuantity);
     }
 
     @Transactional
-    public void rollbackStock(Long dropId, Long memberId, int quantity){
-        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
-        dropInventory.increaseStock(quantity);
-
+    public void rollbackStock(Long dropId, Long memberId){
         DropEntry dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NEVER_ENTERED));
+
+        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
+        dropInventory.increaseStock(dropEntry.getSelectQuantity());
 
         dropEntry.failEntry(); // entryStatus를 fail로 바꿈.
 
         reviveIfSoldOutCompleted(dropId, dropInventory);
+    }
+
+    @Transactional(readOnly = true)
+    public int getSelectQuantity(Long dropId, Long memberId){
+        DropEntry dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NEVER_ENTERED));
+
+        return dropEntry.getSelectQuantity();
     }
 
     private void reviveIfSoldOutCompleted(Long dropId, DropInventory dropInventory) {
@@ -66,16 +68,14 @@ public class DropLockService {
         }
     }
 
-    public void checkEntryStatus(Long dropId, Long memberId) {
+    public DropEntry checkEntryStatus(Long dropId, Long memberId) {
         DropEntry dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NEVER_ENTERED));
 
         if (dropEntry.getEntryStatus() != EntryStatus.ENTERED) {
             throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
         }
-//        if (!queueManager.isActive(dropId, memberId)) {
-//            throw new BusinessException(ErrorCode.NOT_ENTERED_STATUS);
-//        } TTL 만료 유저를 막으려고 추가한 것 같은데 이미 checkActiveMembers의 failExpiredEntries가 이미 entryStatus를 Failed로 바꿔서 필요 없음.
+        return dropEntry;
     }
 
 
@@ -88,11 +88,11 @@ public class DropLockService {
     }
 
 
+    public void checkSelectQuantity(Long dropId, int quantity) {
+        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
 
-//    public void confirmEventPublisher(Long dropId, Long memberId, int quantity) {
-//        DropQuantityReservedEvent event = DropQuantityReservedEvent.of(dropId, memberId, quantity);
-//        eventPublisher.publishEvent(event);
-//
-//        log.info("DropLockService 재고 선점 및 이벤트 발행 완료 dropId: {}, memberId: {}, quantity: {}", dropId, memberId, quantity);
-//    }
+        if (quantity > dropInventory.getRemainQuantity()) {
+            throw new BusinessException(ErrorCode.INVALID_USER_SELECT_QUANTITY);
+        }
+    }
 }

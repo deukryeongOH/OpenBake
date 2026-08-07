@@ -32,6 +32,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -171,6 +172,51 @@ class CartServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.CART_STOCK_NOT_RESERVED);
+    }
+
+    @Test
+    @DisplayName("요청 수량이 선점 수량보다 많으면 예외가 발생한다")
+    void create_quantityMismatch_moreThanReserved() {
+        // given
+        Long memberId = 1L;
+        Long dropId = 7L;
+        when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
+
+        DropEntry entry = DropEntry.createInitialEntry(dropId, memberId);
+        entry.reserveEntryAndSaveSelectQuantity(2); // drop 이 실제로 선점한 수량
+        when(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .thenReturn(Optional.of(entry));
+
+        // when & then — 프론트가 선점량보다 많은 3 을 보냈다
+        assertThatThrownBy(() -> cartService.create(memberId, dropId, 3))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
+
+        //장바구니가 만들어지면 안 된다.
+        verify(cartRepository, never()).save(any(Cart.class));
+    }
+
+    @Test
+    @DisplayName("요청 수량이 선점 수량보다 적어도 예외가 발생한다")
+    void create_quantityMismatch_lessThanReserved() {
+        // given
+        Long memberId = 1L;
+        Long dropId = 7L;
+        when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
+
+        DropEntry entry = DropEntry.createInitialEntry(dropId, memberId);
+        entry.reserveEntryAndSaveSelectQuantity(3);
+        when(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .thenReturn(Optional.of(entry));
+
+        // when & then — 적게 보내도 복구 수량이 어긋나므로 똑같이 막는다
+        assertThatThrownBy(() -> cartService.create(memberId, dropId, 2))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
+
+        verify(cartRepository, never()).save(any(Cart.class));
     }
 
     @Test

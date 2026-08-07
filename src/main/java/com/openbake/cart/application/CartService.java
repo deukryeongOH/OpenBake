@@ -45,7 +45,7 @@ public class CartService {
      * 장바구니 생성.
      * 재고 차감은 cart 가 하지 않는다. 드롭 상세에서 "담기"를 누르면 drop 이 재고를 선점/차감하고,
      * 그 뒤 이 API 가 호출돼 장바구니를 만든다. cart 는 drop 이 실제로 선점했는지(DropEntry=RESERVED)만
-     * 확인하고 장바구니를 기록한다.
+     * 확인하고 장바구니를 기록한다. 요청 수량이 선점 수량과 다르면 CA007 로 막는다.
      */
     @Transactional
     public CartCreateResult create(Long memberId, Long dropId, int quantity) {
@@ -76,6 +76,12 @@ public class CartService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED));
         if (entry.getEntryStatus() != EntryStatus.RESERVED) {
             throw new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED);
+        }
+
+        //선점 수량 대조 — 요청 수량이 drop 이 실제로 차감한 수량과 같아야 한다.
+        //다르면 이탈 시 drop 이 selectQuantity 로 복구하므로 재고가 어긋난다.
+        if (entry.getSelectQuantity() != quantity) {
+            throw new BusinessException(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
         }
 
         Cart cart = Cart.create(memberId, now.plus(cartTtl));

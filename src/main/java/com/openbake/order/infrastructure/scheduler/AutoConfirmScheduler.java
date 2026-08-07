@@ -1,4 +1,4 @@
-package com.openbake.order.infrastructure;
+package com.openbake.order.infrastructure.scheduler;
 
 import com.openbake.order.application.OrderService;
 import lombok.RequiredArgsConstructor;

@@ -19,7 +19,7 @@ public record CartDetailResponse(
         SellerInfo seller,
 
         @Schema(description = "수량", example = "2")
-        Integer quantity,
+        int quantity,
 
         @Schema(description = "예상 결제 금액 = 조회 시점 가격 × 수량. 결제 시점 금액과 달라질 수 있다.", example = "24000")
         BigDecimal estimatedAmount,
@@ -34,7 +34,7 @@ public record CartDetailResponse(
         LocalDateTime expiresAt,
 
         @Schema(description = "만료까지 남은 초. 화면 타이머용.", example = "540")
-        Integer remainingSeconds
+        int remainingSeconds
 ) {
 
     public static CartDetailResponse from(CartDetailResult result) {

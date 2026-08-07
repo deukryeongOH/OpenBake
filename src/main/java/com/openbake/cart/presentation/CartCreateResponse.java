@@ -12,7 +12,7 @@ public record CartCreateResponse (
         Long dropId,
 
         @Schema(description = "수량", example = "2")
-        Integer quantity,
+        int quantity,
 
         @Schema(description = "만료 시각. 지나면 선점 재고가 회수되고 다시 담아야 한다.", example = "2026-07-28T14:15:00")
         LocalDateTime expiresAt,

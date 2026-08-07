@@ -9,12 +9,12 @@ public record CartDetailResult(
         Long cartId,
         DropInfo drop,
         SellerInfo seller,
-        Integer quantity,
+        int quantity,
         BigDecimal estimatedAmount,
         List<LocalDate> pickupDates,
         LocalDate selectedPickupDate,
         LocalDateTime expiresAt,
-        Integer remainingSeconds
+        int remainingSeconds
 ) {
 
     public record DropInfo(

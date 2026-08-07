@@ -110,7 +110,7 @@ public class OrderService {
         // 6. 주문 생성 — 결제에 넘길 orderId 가 필요하므로 즉시 flush 해 PK 를 확보한다.
         Order order = Order.create(memberId, sellerId, pickupDate, totalAmount);
         order.addItem(OrderItem.create(dropId, quantity, priceSnapshot, dropNameSnapshot));
-        Order saved = orderRepository.saveAndFlush(order);
+        Order saved = orderRepository.save(order);
 
         // 7. 결제 — 예치금 차감. 실패(잔액 부족 등) 시 담기 때 선점된 재고를 복구하고 장바구니를 정리한다.
         //    재고 차감은 담기 시점에 drop 이 이미 커밋했으므로, 여기 트랜잭션 롤백만으로는 안 돌아온다.

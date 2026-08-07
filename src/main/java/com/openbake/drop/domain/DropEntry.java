@@ -15,17 +15,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Getter
-@Table(
-        name = "drop_entries",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_drop_member",
-                        columnNames = {"drop_id", "member_id"}
-                )
-        },indexes = {
-        @Index(name = "idx_member_entry_time", columnList = "member_id, entry_time DESC")
-        }
-) // drop_id와 member_id 복합 유니크 제약조건 (로직 중복 검증에서 뚫리면 최후의 보루)
+@Table(name = "drop_entries")
 @EntityListeners(AuditingEntityListener.class) // JPA Auditing 적용
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DropEntry {

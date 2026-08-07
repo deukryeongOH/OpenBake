@@ -242,7 +242,7 @@ public class CartService {
     private void rollbackStockIfPresent(Cart cart) {
         CartItem item = cart.getItems();
         if (item != null) {
-            dropLockService.rollbackStock(item.getDropId(), cart.getMemberId(), item.getQuantity());
+            dropLockService.rollbackStock(item.getDropId(), cart.getMemberId());
         }
     }
 }

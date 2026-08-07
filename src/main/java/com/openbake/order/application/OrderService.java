@@ -236,7 +236,7 @@ public class OrderService {
         // 재고 복구 — 선점했던 수량을 drop 에 되돌린다(동기 호출). 재고 소유는 drop 이다.
         // 차감은 order 가 하지 않았고(담기 시점에 drop 이 함), 복구만 예외 상황에서 요청한다.
         OrderItem item = order.getOrderItem();
-        dropLockService.rollbackStock(item.getDropId(), memberId, item.getQuantity());
+        dropLockService.rollbackStock(item.getDropId(), memberId);
 
         BigDecimal balanceAfter = depositService.getBalance(memberId).balance();
 

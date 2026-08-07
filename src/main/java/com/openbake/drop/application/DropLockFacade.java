@@ -22,6 +22,8 @@ public class DropLockFacade {
     public void reserveStock(Long dropId, Long memberId, DropReserveCommand command) {
         // 1인당 제한 수량과 선택 수량 검증
         dropLockService.checkLimitQuantityPerPerson(dropId, command.quantity());
+        // 남은 수량과 선택 수량 검증
+        dropLockService.checkSelectQuantity(dropId, command.quantity());
         // 대기열에 통과된 직후인지 상태 검증
         dropLockService.checkEntryStatus(dropId, memberId);
 

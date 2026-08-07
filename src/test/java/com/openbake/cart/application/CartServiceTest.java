@@ -76,7 +76,7 @@ class CartServiceTest {
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
 
         DropEntry entry = DropEntry.createInitialEntry(dropId, memberId);
-        entry.reserveEntry();
+        entry.reserveEntryAndSaveSelectQuantity(quantity);
         when(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .thenReturn(Optional.of(entry));
 
@@ -121,7 +121,7 @@ class CartServiceTest {
 
         Long newDropId = 7L;
         DropEntry entry = DropEntry.createInitialEntry(newDropId, memberId);
-        entry.reserveEntry();
+        entry.reserveEntryAndSaveSelectQuantity(2);
         when(dropEntryRepository.findByDropIdAndMemberId(newDropId, memberId))
                 .thenReturn(Optional.of(entry));
         when(cartRepository.saveAndFlush(any(Cart.class)))
@@ -131,7 +131,7 @@ class CartServiceTest {
         CartCreateResult result = cartService.create(memberId, newDropId, 2);
 
         // then
-        verify(dropLockService).rollbackStock(oldDropId, memberId, 3);
+        verify(dropLockService).rollbackStock(oldDropId, memberId);
         verify(cartRepository).delete(existing);
         assertThat(result.dropId()).isEqualTo(newDropId);
     }
@@ -306,7 +306,7 @@ class CartServiceTest {
         cartService.deleteCart(memberId);
 
         // then
-        verify(dropLockService).rollbackStock(dropId, memberId, 2);
+        verify(dropLockService).rollbackStock(dropId, memberId);
         verify(cartRepository).delete(cart);
     }
 
@@ -328,8 +328,8 @@ class CartServiceTest {
 
         // then
         assertThat(count).isEqualTo(2);
-        verify(dropLockService).rollbackStock(7L, 1L, 2);
-        verify(dropLockService).rollbackStock(8L, 2L, 1);
+        verify(dropLockService).rollbackStock(7L, 1L);
+        verify(dropLockService).rollbackStock(8L, 2L);
         verify(cartRepository).deleteAll(List.of(cart1, cart2));
     }
 

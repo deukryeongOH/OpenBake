@@ -1,5 +1,6 @@
 package com.openbake.member.presentation.dto.auth;
 
+import com.openbake.member.application.dto.auth.OAuthLoginResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record OAuthLoginResponse(
@@ -15,4 +16,9 @@ public record OAuthLoginResponse(
         String name,
         @Schema(description = "신규 가입 여부", example = "false")
         boolean newMember
-) {}
+) {
+        public static OAuthLoginResponse from(OAuthLoginResult result) {
+                return new OAuthLoginResponse(result.memberId(), result.accessToken(), result.refreshToken(),
+                        result.email(), result.name(), result.newMember());
+        }
+}

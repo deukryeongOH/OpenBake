@@ -3,8 +3,8 @@ package com.openbake.seller.presentation;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.member.domain.AccessTokenRepository;
 import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.seller.application.AccountVerificationCodeResult;
 import com.openbake.seller.application.SellerService;
-import com.openbake.seller.presentation.dto.AccountVerificationCodeResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +44,7 @@ class SellerDevControllerTest {
     @DisplayName("local/dev 프로파일에서는 목업 인증 코드를 조회할 수 있다")
     void getMockVerificationCode_success() throws Exception {
         given(sellerService.getMockVerificationCode("vr_1"))
-                .willReturn(new AccountVerificationCodeResponse("vr_1", "1234", LocalDateTime.now().plusMinutes(3)));
+                .willReturn(new AccountVerificationCodeResult("vr_1", "1234", LocalDateTime.now().plusMinutes(3)));
 
         mockMvc.perform(get("/api/v1/sellers/settlement-account/verification-requests/vr_1/mock-code"))
                 .andExpect(status().isOk())

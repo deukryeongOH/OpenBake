@@ -1,5 +1,6 @@
 package com.openbake.member.presentation.dto.auth;
 
+import com.openbake.member.application.dto.auth.SignupCommand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -14,4 +15,8 @@ public record SignupRequest (
         @NotBlank String name,
         @Schema(description = "휴대폰 번호", example = "010-1234-5678")
         @NotBlank String phoneNumber
-) {}
+) {
+        public SignupCommand toCommand() {
+                return new SignupCommand(email, password, name, phoneNumber);
+        }
+}

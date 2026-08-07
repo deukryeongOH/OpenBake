@@ -1,7 +1,7 @@
 package com.openbake.payment.application;
 
 import com.openbake.payment.domain.ChargeRequest;
-import com.openbake.payment.infrastructure.ChargeRequestRepository;
+import com.openbake.payment.domain.ChargeRequestRepository;
 import com.openbake.payment.application.port.PgClient;
 import com.openbake.payment.application.port.PgPaymentStatus;
 import lombok.RequiredArgsConstructor;

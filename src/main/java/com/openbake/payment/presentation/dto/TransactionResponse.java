@@ -1,5 +1,6 @@
 package com.openbake.payment.presentation.dto;
 
+import com.openbake.payment.application.dto.TransactionResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -22,4 +23,11 @@ public record TransactionResponse(
         @Schema(description = "거래 일시", example = "2026-07-17T13:58:40")
         LocalDateTime createdAt
 ) {
+    public static TransactionResponse from(TransactionResult result) {
+        return new TransactionResponse(
+                result.id(), result.transactionType(), result.amount(),
+                result.balanceAfter(), result.description(), result.referenceType(),
+                result.referenceId(), result.createdAt()
+        );
+    }
 }

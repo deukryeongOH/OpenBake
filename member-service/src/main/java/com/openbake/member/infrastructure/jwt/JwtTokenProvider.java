@@ -1,6 +1,7 @@
 package com.openbake.member.infrastructure.jwt;
 
 import com.openbake.member.domain.Role;
+import com.openbake.member.domain.TokenProvider;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.JwtException;
@@ -15,7 +16,7 @@ import java.util.Date;
 
 @Component
 @EnableConfigurationProperties(JwtProperties.class)
-public class JwtTokenProvider {
+public class JwtTokenProvider implements TokenProvider {
 
     private static final String ROLE_CLAIM = "role";
 

@@ -2,6 +2,11 @@ package com.openbake.order.presentation;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
+import com.openbake.order.application.OrderCancelResult;
+import com.openbake.order.application.OrderConfirmResult;
+import com.openbake.order.application.OrderCreateResult;
+import com.openbake.order.application.OrderDetailResult;
+import com.openbake.order.application.OrderPageResult;
 import com.openbake.order.application.OrderService;
 import com.openbake.order.presentation.dto.OrderCancelResponse;
 import com.openbake.order.presentation.dto.OrderConfirmResponse;
@@ -51,7 +56,8 @@ public class OrderController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<OrderCreateResponse> create(@Valid @RequestBody OrderCreateRequest request) {
         Long memberId = currentMemberProvider.getId();
-        return ApiResponse.ok(orderService.create(memberId, request));
+        OrderCreateResult result = orderService.create(memberId, request.getTermsAgreed());
+        return ApiResponse.ok(OrderCreateResponse.from(result));
     }
 
     //주문 목록 조회(본인, 최신순). orderState 로 상태 필터. 상태 200.
@@ -72,7 +78,8 @@ public class OrderController {
             @Parameter(description = "페이지 크기 (최대 50, 초과 시 50으로 잘림)", example = "10")
             @RequestParam(defaultValue = "10") int size) {
         Long memberId = currentMemberProvider.getId();
-        return ApiResponse.ok(orderService.getOrders(memberId, orderState, page, size));
+        OrderPageResult result = orderService.getOrders(memberId, orderState, page, size);
+        return ApiResponse.ok(OrderPageResponse.from(result));
     }
 
     //주문 상세 조회(본인만). 상태 200.
@@ -89,7 +96,8 @@ public class OrderController {
     public ApiResponse<OrderDetailResponse> getOrderDetail(
             @Parameter(description = "주문 ID", example = "101") @PathVariable Long orderId) {
         Long memberId = currentMemberProvider.getId();
-        return ApiResponse.ok(orderService.getOrderDetail(memberId, orderId));
+        OrderDetailResult result = orderService.getOrderDetail(memberId, orderId);
+        return ApiResponse.ok(OrderDetailResponse.from(result));
     }
 
     //주문 취소(본인). 전액 환불 + 재고 복구. 상태 200.
@@ -107,7 +115,8 @@ public class OrderController {
     public ApiResponse<OrderCancelResponse> cancel(
             @Parameter(description = "취소할 주문 ID", example = "101") @PathVariable Long orderId) {
         Long memberId = currentMemberProvider.getId();
-        return ApiResponse.ok(orderService.cancel(memberId, orderId));
+        OrderCancelResult result = orderService.cancel(memberId, orderId);
+        return ApiResponse.ok(OrderCancelResponse.from(result));
     }
 
     //구매 확정(판매자). 해당 주문의 판매자만 가능. 판매자 판정은 서비스에서 CurrentSellerProvider 로 한다.
@@ -124,6 +133,7 @@ public class OrderController {
     @PatchMapping("/{orderId}/confirm")
     public ApiResponse<OrderConfirmResponse> confirm(
             @Parameter(description = "확정할 주문 ID", example = "101") @PathVariable Long orderId) {
-        return ApiResponse.ok(orderService.confirm(orderId));
+        OrderConfirmResult result = orderService.confirm(orderId);
+        return ApiResponse.ok(OrderConfirmResponse.from(result));
     }
 }

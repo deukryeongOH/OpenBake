@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface DepositAccountRepository extends JpaRepository<DepositAccount, Long> {
+public interface DepositAccountJpaRepository extends JpaRepository<DepositAccount, Long> {
 
     Optional<DepositAccount> findByMemberId(Long memberId);
 

@@ -13,10 +13,10 @@ import com.openbake.member.domain.MemberStatus;
 import com.openbake.member.domain.RefreshTokenRepository;
 import com.openbake.member.infrastructure.AuthCredentialRepositoryImpl;
 import com.openbake.member.infrastructure.MemberRepositoryImpl;
-import com.openbake.member.presentation.dto.member.MemberResponse;
-import com.openbake.member.presentation.dto.member.MemberUpdateRequest;
-import com.openbake.member.presentation.dto.member.MemberUpdateResponse;
-import com.openbake.member.presentation.dto.member.PasswordChangeRequest;
+import com.openbake.member.application.dto.member.MemberResult;
+import com.openbake.member.application.dto.member.MemberUpdateCommand;
+import com.openbake.member.application.dto.member.MemberUpdateResult;
+import com.openbake.member.application.dto.member.PasswordChangeCommand;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -72,7 +72,7 @@ class MemberServiceTest {
         AuthCredential credential = AuthCredential.createLocal(1L, "test@example.com", "encodedPassword");
         given(authCredentialRepository.findByMemberId(1L)).willReturn(Optional.of(credential));
 
-        MemberResponse response = memberService.getMemberById(1L);
+        MemberResult response = memberService.getMemberById(1L);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.name()).isEqualTo("홍길동");
@@ -92,7 +92,7 @@ class MemberServiceTest {
         AuthCredential credential = AuthCredential.createLocal(1L, "test@example.com", "encodedPassword");
         given(authCredentialRepository.findByMemberId(1L)).willReturn(Optional.of(credential));
 
-        MemberResponse response = memberService.getMemberById(1L);
+        MemberResult response = memberService.getMemberById(1L);
 
         assertThat(response.id()).isEqualTo(1L);
     }
@@ -144,9 +144,9 @@ class MemberServiceTest {
         ReflectionTestUtils.setField(member, "id", 1L);
         given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 
-        MemberUpdateRequest request = new MemberUpdateRequest("김철수", "010-9999-8888");
+        MemberUpdateCommand request = new MemberUpdateCommand("김철수", "010-9999-8888");
 
-        MemberUpdateResponse response = memberService.updateMember(1L, request);
+        MemberUpdateResult response = memberService.updateMember(1L, request);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.name()).isEqualTo("김철수");
@@ -164,9 +164,9 @@ class MemberServiceTest {
         ReflectionTestUtils.setField(member, "id", 1L);
         given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 
-        MemberUpdateRequest request = new MemberUpdateRequest("김철수", null);
+        MemberUpdateCommand request = new MemberUpdateCommand("김철수", null);
 
-        MemberUpdateResponse response = memberService.updateMember(1L, request);
+        MemberUpdateResult response = memberService.updateMember(1L, request);
 
         assertThat(response.name()).isEqualTo("김철수");
         assertThat(response.phoneNumber()).isEqualTo("010-1234-5678");
@@ -177,7 +177,7 @@ class MemberServiceTest {
     void updateMember_notOwner_throwsException() {
         given(currentMemberProvider.getId()).willReturn(2L);
 
-        MemberUpdateRequest request = new MemberUpdateRequest("김철수", "010-9999-8888");
+        MemberUpdateCommand request = new MemberUpdateCommand("김철수", "010-9999-8888");
 
         assertThatThrownBy(() -> memberService.updateMember(1L, request))
                 .isInstanceOf(AccessDeniedException.class);
@@ -192,7 +192,7 @@ class MemberServiceTest {
         given(currentMemberProvider.getId()).willReturn(1L);
         given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
-        MemberUpdateRequest request = new MemberUpdateRequest("김철수", "010-9999-8888");
+        MemberUpdateCommand request = new MemberUpdateCommand("김철수", "010-9999-8888");
 
         assertThatThrownBy(() -> memberService.updateMember(1L, request))
                 .isInstanceOf(EntityNotFoundException.class);
@@ -209,7 +209,7 @@ class MemberServiceTest {
         given(passwordEncoder.matches("oldPassword123", "encodedOldPassword")).willReturn(true);
         given(passwordEncoder.encode("newPassword456")).willReturn("encodedNewPassword");
 
-        PasswordChangeRequest request = new PasswordChangeRequest("oldPassword123", "newPassword456");
+        PasswordChangeCommand request = new PasswordChangeCommand("oldPassword123", "newPassword456");
 
         memberService.changePassword(1L, request);
 
@@ -221,7 +221,7 @@ class MemberServiceTest {
     void changePassword_notOwner_throwsException() {
         given(currentMemberProvider.getId()).willReturn(2L);
 
-        PasswordChangeRequest request = new PasswordChangeRequest("oldPassword123", "newPassword456");
+        PasswordChangeCommand request = new PasswordChangeCommand("oldPassword123", "newPassword456");
 
         assertThatThrownBy(() -> memberService.changePassword(1L, request))
                 .isInstanceOf(AccessDeniedException.class);
@@ -235,7 +235,7 @@ class MemberServiceTest {
         given(currentMemberProvider.getId()).willReturn(1L);
         given(authCredentialRepository.findByMemberId(1L)).willReturn(Optional.empty());
 
-        PasswordChangeRequest request = new PasswordChangeRequest("oldPassword123", "newPassword456");
+        PasswordChangeCommand request = new PasswordChangeCommand("oldPassword123", "newPassword456");
 
         assertThatThrownBy(() -> memberService.changePassword(1L, request))
                 .isInstanceOf(EntityNotFoundException.class);
@@ -249,7 +249,7 @@ class MemberServiceTest {
         AuthCredential credential = AuthCredential.createGoogle(1L, AuthProvider.GOOGLE, "google-sub", "test@example.com");
         given(authCredentialRepository.findByMemberId(1L)).willReturn(Optional.of(credential));
 
-        PasswordChangeRequest request = new PasswordChangeRequest("oldPassword123", "newPassword456");
+        PasswordChangeCommand request = new PasswordChangeCommand("oldPassword123", "newPassword456");
 
         assertThatThrownBy(() -> memberService.changePassword(1L, request))
                 .isInstanceOf(AccessDeniedException.class);
@@ -267,7 +267,7 @@ class MemberServiceTest {
 
         given(passwordEncoder.matches("wrongPassword", "encodedOldPassword")).willReturn(false);
 
-        PasswordChangeRequest request = new PasswordChangeRequest("wrongPassword", "newPassword456");
+        PasswordChangeCommand request = new PasswordChangeCommand("wrongPassword", "newPassword456");
 
         assertThatThrownBy(() -> memberService.changePassword(1L, request))
                 .isInstanceOf(AuthenticationFailedException.class);

@@ -1,5 +1,6 @@
 package com.openbake.seller.presentation.dto;
 
+import com.openbake.seller.application.AccountVerificationStartResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -9,4 +10,8 @@ public record AccountVerificationStartResponse(
         String verificationRequestId,
         @Schema(description = "인증 코드 만료 시각")
         LocalDateTime expiresAt
-) {}
+) {
+        public static AccountVerificationStartResponse from(AccountVerificationStartResult result) {
+                return new AccountVerificationStartResponse(result.verificationRequestId(), result.expiresAt());
+        }
+}

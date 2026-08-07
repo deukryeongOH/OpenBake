@@ -14,24 +14,11 @@ import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.seller.domain.AccountVerificationRepository;
 import com.openbake.seller.domain.AccountVerificationSession;
 import com.openbake.seller.domain.ApplicationStatus;
+import com.openbake.seller.domain.BankRegistry;
+import com.openbake.seller.domain.BusinessRegistry;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
 import com.openbake.seller.domain.VerifiedAccount;
-import com.openbake.seller.infrastructure.MockBankRegistry;
-import com.openbake.seller.infrastructure.MockBusinessRegistry;
-import com.openbake.seller.presentation.dto.AccountVerificationCodeResponse;
-import com.openbake.seller.presentation.dto.AccountVerificationConfirmRequest;
-import com.openbake.seller.presentation.dto.AccountVerificationConfirmResponse;
-import com.openbake.seller.presentation.dto.AccountVerificationStartRequest;
-import com.openbake.seller.presentation.dto.AccountVerificationStartResponse;
-import com.openbake.seller.presentation.dto.ApplicationStatusUpdateRequest;
-import com.openbake.seller.presentation.dto.ApplicationStatusUpdateResponse;
-import com.openbake.seller.presentation.dto.ApplicationCreateRequest;
-import com.openbake.seller.presentation.dto.ApplicationCreateResponse;
-import com.openbake.seller.presentation.dto.BusinessVerificationRequest;
-import com.openbake.seller.presentation.dto.BusinessVerificationResponse;
-import com.openbake.seller.presentation.dto.MySellerResponse;
-import com.openbake.seller.presentation.dto.SellerResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,10 +43,10 @@ class SellerServiceTest {
     private SellerRepository sellerRepository;
 
     @Mock
-    private MockBusinessRegistry mockBusinessRegistry;
+    private BusinessRegistry mockBusinessRegistry;
 
     @Mock
-    private MockBankRegistry mockBankRegistry;
+    private BankRegistry mockBankRegistry;
 
     @Mock
     private CurrentMemberProvider currentMemberProvider;
@@ -73,11 +60,11 @@ class SellerServiceTest {
     @Test
     @DisplayName("등록된 사업자 정보와 일치하면 인증에 성공한다")
     void verifyBusiness_success() {
-        BusinessVerificationRequest request =
-                new BusinessVerificationRequest("123-45-67890", "서울시", "이세종");
+        BusinessVerificationCommand request =
+                new BusinessVerificationCommand("123-45-67890", "서울시", "이세종");
         given(mockBusinessRegistry.isRegistered("123-45-67890", "이세종")).willReturn(true);
 
-        BusinessVerificationResponse response = sellerService.verifyBusiness(request);
+        BusinessVerificationResult response = sellerService.verifyBusiness(request);
 
         assertThat(response.verified()).isTrue();
         assertThat(response.businessNumber()).isEqualTo("123-45-67890");
@@ -86,8 +73,8 @@ class SellerServiceTest {
     @Test
     @DisplayName("등록된 사업자 정보와 불일치하면 예외가 발생한다")
     void verifyBusiness_fail() {
-        BusinessVerificationRequest request =
-                new BusinessVerificationRequest("123-45-67890", "서울시", "홍길동");
+        BusinessVerificationCommand request =
+                new BusinessVerificationCommand("123-45-67890", "서울시", "홍길동");
         given(mockBusinessRegistry.isRegistered("123-45-67890", "홍길동")).willReturn(false);
 
         assertThatThrownBy(() -> sellerService.verifyBusiness(request))
@@ -97,8 +84,8 @@ class SellerServiceTest {
     @Test
     @DisplayName("등록되지 않은 은행 코드면 예외가 발생한다")
     void requestAccountVerification_invalidBankCode() {
-        AccountVerificationStartRequest request =
-                new AccountVerificationStartRequest("999", "1101234567", "이세종");
+        AccountVerificationStartCommand request =
+                new AccountVerificationStartCommand("999", "1101234567", "이세종");
         given(mockBankRegistry.isValidBankCode("999")).willReturn(false);
 
         assertThatThrownBy(() -> sellerService.requestAccountVerification(request))
@@ -108,12 +95,12 @@ class SellerServiceTest {
     @Test
     @DisplayName("계좌 인증 요청 성공 시 세션을 저장하고 만료 시각을 반환한다")
     void requestAccountVerification_success() {
-        AccountVerificationStartRequest request =
-                new AccountVerificationStartRequest("088", "1101234567", "이세종");
+        AccountVerificationStartCommand request =
+                new AccountVerificationStartCommand("088", "1101234567", "이세종");
         given(mockBankRegistry.isValidBankCode("088")).willReturn(true);
         given(currentMemberProvider.getId()).willReturn(1L);
 
-        AccountVerificationStartResponse response = sellerService.requestAccountVerification(request);
+        AccountVerificationStartResult response = sellerService.requestAccountVerification(request);
 
         assertThat(response.verificationRequestId()).isNotBlank();
         assertThat(response.expiresAt()).isAfter(LocalDateTime.now());
@@ -128,7 +115,7 @@ class SellerServiceTest {
                 1L, "088", "1101234567", "이세종", "1234", LocalDateTime.now().plusMinutes(3));
         given(accountVerificationRepository.findSession("vr_1")).willReturn(Optional.of(session));
 
-        AccountVerificationCodeResponse response = sellerService.getMockVerificationCode("vr_1");
+        AccountVerificationCodeResult response = sellerService.getMockVerificationCode("vr_1");
 
         assertThat(response.code()).isEqualTo("1234");
     }
@@ -148,7 +135,7 @@ class SellerServiceTest {
         given(currentMemberProvider.getId()).willReturn(1L);
         given(accountVerificationRepository.findSession("vr_1")).willReturn(Optional.empty());
 
-        AccountVerificationConfirmRequest request = new AccountVerificationConfirmRequest("1234");
+        AccountVerificationConfirmCommand request = new AccountVerificationConfirmCommand("1234");
 
         assertThatThrownBy(() -> sellerService.verifyAccount("vr_1", request))
                 .isInstanceOf(EntityNotFoundException.class);
@@ -162,7 +149,7 @@ class SellerServiceTest {
                 1L, "088", "1101234567", "이세종", "1234", LocalDateTime.now().plusMinutes(3));
         given(accountVerificationRepository.findSession("vr_1")).willReturn(Optional.of(session));
 
-        AccountVerificationConfirmRequest request = new AccountVerificationConfirmRequest("1234");
+        AccountVerificationConfirmCommand request = new AccountVerificationConfirmCommand("1234");
 
         assertThatThrownBy(() -> sellerService.verifyAccount("vr_1", request))
                 .isInstanceOf(EntityNotFoundException.class);
@@ -176,7 +163,7 @@ class SellerServiceTest {
                 1L, "088", "1101234567", "이세종", "1234", LocalDateTime.now().minusMinutes(1));
         given(accountVerificationRepository.findSession("vr_1")).willReturn(Optional.of(session));
 
-        AccountVerificationConfirmRequest request = new AccountVerificationConfirmRequest("1234");
+        AccountVerificationConfirmCommand request = new AccountVerificationConfirmCommand("1234");
 
         assertThatThrownBy(() -> sellerService.verifyAccount("vr_1", request))
                 .isInstanceOf(AccountVerificationExpiredException.class);
@@ -191,7 +178,7 @@ class SellerServiceTest {
                 1L, "088", "1101234567", "이세종", "1234", LocalDateTime.now().plusMinutes(3));
         given(accountVerificationRepository.findSession("vr_1")).willReturn(Optional.of(session));
 
-        AccountVerificationConfirmRequest request = new AccountVerificationConfirmRequest("9999");
+        AccountVerificationConfirmCommand request = new AccountVerificationConfirmCommand("9999");
 
         assertThatThrownBy(() -> sellerService.verifyAccount("vr_1", request))
                 .isInstanceOf(AccountVerificationFailedException.class);
@@ -205,9 +192,9 @@ class SellerServiceTest {
                 1L, "088", "1101234567", "이세종", "1234", LocalDateTime.now().plusMinutes(3));
         given(accountVerificationRepository.findSession("vr_1")).willReturn(Optional.of(session));
 
-        AccountVerificationConfirmRequest request = new AccountVerificationConfirmRequest("1234");
+        AccountVerificationConfirmCommand request = new AccountVerificationConfirmCommand("1234");
 
-        AccountVerificationConfirmResponse response = sellerService.verifyAccount("vr_1", request);
+        AccountVerificationConfirmResult response = sellerService.verifyAccount("vr_1", request);
 
         assertThat(response.verified()).isTrue();
         verify(accountVerificationRepository).saveVerifiedAccount(eq(1L), any(VerifiedAccount.class));
@@ -217,7 +204,7 @@ class SellerServiceTest {
     @Test
     @DisplayName("사업자/계좌 인증을 모두 마친 회원은 판매자 신청에 성공한다")
     void applySeller_success() {
-        ApplicationCreateRequest request = new ApplicationCreateRequest("세종베이커리", "123-45-67890", "서울시", "이세종");
+        ApplicationCreateCommand request = new ApplicationCreateCommand("세종베이커리", "123-45-67890", "서울시", "이세종");
         given(currentMemberProvider.getId()).willReturn(1L);
         given(sellerRepository.findByMemberId(1L)).willReturn(Optional.empty());
         given(mockBusinessRegistry.isRegistered("123-45-67890", "이세종")).willReturn(true);
@@ -225,7 +212,7 @@ class SellerServiceTest {
                 .willReturn(Optional.of(new VerifiedAccount("088", "1101234567", "이세종", LocalDateTime.now())));
         given(sellerRepository.save(any(Seller.class))).willAnswer(invocation -> invocation.getArgument(0));
 
-        ApplicationCreateResponse response = sellerService.applySeller(request);
+        ApplicationCreateResult response = sellerService.applySeller(request);
 
         assertThat(response.memberId()).isEqualTo(1L);
         assertThat(response.bakeryName()).isEqualTo("세종베이커리");
@@ -235,7 +222,7 @@ class SellerServiceTest {
     @Test
     @DisplayName("이미 판매자 신청을 완료한 회원이 재신청하면 예외가 발생한다")
     void applySeller_duplicate() {
-        ApplicationCreateRequest request = new ApplicationCreateRequest("세종베이커리", "123-45-67890", "서울시", "이세종");
+        ApplicationCreateCommand request = new ApplicationCreateCommand("세종베이커리", "123-45-67890", "서울시", "이세종");
         given(currentMemberProvider.getId()).willReturn(1L);
         given(sellerRepository.findByMemberId(1L)).willReturn(Optional.of(
                 new Seller(1L, "세종베이커리", "123-45-67890", "서울시", "이세종",
@@ -248,7 +235,7 @@ class SellerServiceTest {
     @Test
     @DisplayName("요청에 담긴 사업자 정보가 등록된 정보와 불일치하면 예외가 발생한다")
     void applySeller_businessMismatch() {
-        ApplicationCreateRequest request = new ApplicationCreateRequest("세종베이커리", "123-45-67890", "서울시", "홍길동");
+        ApplicationCreateCommand request = new ApplicationCreateCommand("세종베이커리", "123-45-67890", "서울시", "홍길동");
         given(currentMemberProvider.getId()).willReturn(1L);
         given(sellerRepository.findByMemberId(1L)).willReturn(Optional.empty());
         given(mockBusinessRegistry.isRegistered("123-45-67890", "홍길동")).willReturn(false);
@@ -260,7 +247,7 @@ class SellerServiceTest {
     @Test
     @DisplayName("계좌 인증이 완료되지 않은 상태로 신청하면 예외가 발생한다")
     void applySeller_accountNotVerified() {
-        ApplicationCreateRequest request = new ApplicationCreateRequest("세종베이커리", "123-45-67890", "서울시", "이세종");
+        ApplicationCreateCommand request = new ApplicationCreateCommand("세종베이커리", "123-45-67890", "서울시", "이세종");
         given(currentMemberProvider.getId()).willReturn(1L);
         given(sellerRepository.findByMemberId(1L)).willReturn(Optional.empty());
         given(mockBusinessRegistry.isRegistered("123-45-67890", "이세종")).willReturn(true);
@@ -274,7 +261,7 @@ class SellerServiceTest {
     @DisplayName("admin 권한이 없으면 승인/반려 처리 시 예외가 발생한다")
     void updateApplicationStatus_notAdmin() {
         given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(false);
-        ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
+        ApplicationStatusUpdateCommand request = new ApplicationStatusUpdateCommand(ApplicationStatus.APPROVED, null);
 
         assertThatThrownBy(() -> sellerService.updateApplicationStatus(1L, request))
                 .isInstanceOf(AdminAccessDeniedException.class);
@@ -285,7 +272,7 @@ class SellerServiceTest {
     void updateApplicationStatus_notFound() {
         given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.empty());
-        ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
+        ApplicationStatusUpdateCommand request = new ApplicationStatusUpdateCommand(ApplicationStatus.APPROVED, null);
 
         assertThatThrownBy(() -> sellerService.updateApplicationStatus(1L, request))
                 .isInstanceOf(EntityNotFoundException.class);
@@ -299,9 +286,9 @@ class SellerServiceTest {
         given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.of(seller));
         given(sellerRepository.save(seller)).willReturn(seller);
-        ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
+        ApplicationStatusUpdateCommand request = new ApplicationStatusUpdateCommand(ApplicationStatus.APPROVED, null);
 
-        ApplicationStatusUpdateResponse response = sellerService.updateApplicationStatus(1L, request);
+        ApplicationStatusUpdateResult response = sellerService.updateApplicationStatus(1L, request);
 
         assertThat(response.applicationStatus()).isEqualTo(ApplicationStatus.APPROVED);
     }
@@ -314,10 +301,10 @@ class SellerServiceTest {
         given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.of(seller));
         given(sellerRepository.save(seller)).willReturn(seller);
-        ApplicationStatusUpdateRequest request =
-                new ApplicationStatusUpdateRequest(ApplicationStatus.REJECTED, "주소 불일치");
+        ApplicationStatusUpdateCommand request =
+                new ApplicationStatusUpdateCommand(ApplicationStatus.REJECTED, "주소 불일치");
 
-        ApplicationStatusUpdateResponse response = sellerService.updateApplicationStatus(1L, request);
+        ApplicationStatusUpdateResult response = sellerService.updateApplicationStatus(1L, request);
 
         assertThat(response.applicationStatus()).isEqualTo(ApplicationStatus.REJECTED);
         assertThat(response.rejectReason()).isEqualTo("주소 불일치");
@@ -331,7 +318,7 @@ class SellerServiceTest {
         seller.approve();
         given(currentMemberProvider.hasAuthority(Authorities.ROLE_ADMIN)).willReturn(true);
         given(sellerRepository.findById(1L)).willReturn(Optional.of(seller));
-        ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
+        ApplicationStatusUpdateCommand request = new ApplicationStatusUpdateCommand(ApplicationStatus.APPROVED, null);
 
         assertThatThrownBy(() -> sellerService.updateApplicationStatus(1L, request))
                 .isInstanceOf(InvalidApplicationStatusException.class);
@@ -346,7 +333,7 @@ class SellerServiceTest {
         given(currentMemberProvider.getId()).willReturn(1L);
         given(sellerRepository.findByMemberId(1L)).willReturn(Optional.of(seller));
 
-        MySellerResponse response = sellerService.getMySeller();
+        MySellerResult response = sellerService.getMySeller();
 
         assertThat(response.memberId()).isEqualTo(1L);
         assertThat(response.applicationStatus()).isEqualTo(ApplicationStatus.APPROVED);
@@ -370,7 +357,7 @@ class SellerServiceTest {
                 true, "088", "1101234567", "이세종", true);
         given(sellerRepository.findById(1L)).willReturn(Optional.of(seller));
 
-        SellerResponse response = sellerService.getSeller(1L);
+        SellerResult response = sellerService.getSeller(1L);
 
         assertThat(response.bakeryName()).isEqualTo("세종베이커리");
         assertThat(response.settlementAccountNumberMasked()).isEqualTo("110-***-4567");

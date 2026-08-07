@@ -1,5 +1,6 @@
 package com.openbake.seller.presentation.dto;
 
+import com.openbake.seller.application.ApplicationStatusUpdateResult;
 import com.openbake.seller.domain.ApplicationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -14,4 +15,8 @@ public record ApplicationStatusUpdateResponse(
         String rejectReason,
         @Schema(description = "처리 시각")
         LocalDateTime updatedAt
-) {}
+) {
+        public static ApplicationStatusUpdateResponse from(ApplicationStatusUpdateResult result) {
+                return new ApplicationStatusUpdateResponse(result.sellerId(), result.applicationStatus(), result.rejectReason(), result.updatedAt());
+        }
+}

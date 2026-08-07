@@ -71,7 +71,7 @@ class CartServiceTest {
         // given
         Long memberId = 1L;
         Long dropId = 7L;
-        Integer quantity = 2;
+        int quantity = 2;
 
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
 
@@ -80,7 +80,7 @@ class CartServiceTest {
         when(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .thenReturn(Optional.of(entry));
 
-        when(cartRepository.saveAndFlush(any(Cart.class)))
+        when(cartRepository.save(any(Cart.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -124,7 +124,7 @@ class CartServiceTest {
         entry.reserveEntry();
         when(dropEntryRepository.findByDropIdAndMemberId(newDropId, memberId))
                 .thenReturn(Optional.of(entry));
-        when(cartRepository.saveAndFlush(any(Cart.class)))
+        when(cartRepository.save(any(Cart.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -132,7 +132,7 @@ class CartServiceTest {
 
         // then
         verify(dropLockService).rollbackStock(oldDropId, memberId, 3);
-        verify(cartRepository).delete(existing);
+        verify(cartRepository).deleteImmediately(existing);
         assertThat(result.dropId()).isEqualTo(newDropId);
     }
 

@@ -38,7 +38,7 @@ public class CartController {
             description = "드롭 상세에서 담기(재고 선점)를 통과한 직후 호출합니다. 재고는 담기 시점에 drop이 이미 선점(DropEntry=RESERVED)했고, 여기서는 그 선점이 실제로 있는지 확인한 뒤 만료 시각이 붙은 장바구니를 만듭니다. 선점 없이 바로 호출하면 CA006으로 막힙니다. 장바구니는 회원당 1개이며 경로에 cartId가 없고 토큰의 회원으로 대상을 특정합니다. 유효한 장바구니가 이미 있으면 CA001이지만, 이전 장바구니가 만료 상태면 그 선점 재고를 drop에 복구시키고 치운 뒤 새로 만들어 줍니다."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "C001 잘못된 요청입니다. (dropId/quantity 누락, quantity < 1)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "C001 잘못된 요청입니다. (dropid 누락, quantity < 1)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "ME002 유효하지 않은 인증 토큰입니다."),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CA001 이미 장바구니에 담긴 상품이 있습니다. / CA006 재고 선점이 확인되지 않았습니다. (담기 흐름을 거치지 않았거나 선점이 이미 회수됨)")
     })

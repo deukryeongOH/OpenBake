@@ -15,7 +15,6 @@ import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,7 +48,7 @@ public class CartService {
      * 확인하고 장바구니를 기록한다.
      */
     @Transactional
-    public CartCreateResult create(Long memberId, Long dropId, Integer quantity) {
+    public CartCreateResult create(Long memberId, Long dropId, int quantity) {
         LocalDateTime now = LocalDateTime.now();
 
         //기존 장바구니 처리
@@ -67,9 +66,8 @@ public class CartService {
             //만료된 장바구니. 선점 재고를 drop 에 복구시키고 정리한다.
             //(삭제 전에 dropId/quantity 를 읽어야 하므로 먼저 복구 요청을 보낸다)
             rollbackStockIfPresent(existing);
-            cartRepository.delete(existing);
-            //flush 까지 해야 아래 INSERT 가 member_id UNIQUE 제약에 걸리지 않는다.
-            cartRepository.flush();
+            //삭제를 즉시 확정해야 아래 저장이 member_id UNIQUE 제약에 걸리지 않는다.
+            cartRepository.deleteImmediately(existing);
         }
 
         //재고 선점 확인 — drop 이 담기 시점에 선점(RESERVED)했는지 확인한다.
@@ -83,17 +81,8 @@ public class CartService {
         Cart cart = Cart.create(memberId, now.plus(cartTtl));
         cart.addItem(CartItem.create(dropId, quantity));
 
-        Cart saved;
-        try {
-            //saveAndFlush 로 즉시 INSERT 해야 UNIQUE 위반을 이 자리에서 잡을 수 있다.
-            //save 만 쓰면 커밋 시점에 flush 돼 try 밖에서 터진다.
-            saved = cartRepository.saveAndFlush(cart);
-        } catch (DataIntegrityViolationException e) {
-            //carts.member_id UNIQUE 위반.
-            //더블클릭 등으로 두 요청이 위 기존 장바구니 조회를 함께 통과한 경우다.
-            //선검사만으로는 동시 요청을 막을 수 없어 DB 제약이 최종 방어선이 된다.
-            throw new BusinessException(ErrorCode.CART_ALREADY_EXISTS);
-        }
+        //동시 요청으로 UNIQUE 제약에 걸리면 구현체가 CART_ALREADY_EXISTS 로 바꿔 던진다.
+        Cart saved = cartRepository.save(cart);
         return CartCreateResult.from(saved);
     }
 

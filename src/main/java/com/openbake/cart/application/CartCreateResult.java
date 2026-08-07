@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 public record CartCreateResult (
         Long cartId,
         Long dropId,
-        Integer quantity,
+        int quantity,
         LocalDateTime expiresAt,
         LocalDateTime createdAt
 ){

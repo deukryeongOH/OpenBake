@@ -40,7 +40,7 @@ public class CartController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "C001 잘못된 요청입니다. (dropid 누락, quantity < 1)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "ME002 유효하지 않은 인증 토큰입니다."),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CA001 이미 장바구니에 담긴 상품이 있습니다. / CA006 재고 선점이 확인되지 않았습니다. (담기 흐름을 거치지 않았거나 선점이 이미 회수됨)")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CA001 이미 장바구니에 담긴 상품이 있습니다. / CA006 재고 선점이 확인되지 않았습니다. (담기 흐름을 거치지 않았거나 선점이 이미 회수됨) / CA007 선점한 수량과 요청 수량이 다릅니다."),
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

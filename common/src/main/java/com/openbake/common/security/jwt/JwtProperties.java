@@ -1,4 +1,4 @@
-package com.openbake.member.infrastructure.jwt;
+package com.openbake.common.security.jwt;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

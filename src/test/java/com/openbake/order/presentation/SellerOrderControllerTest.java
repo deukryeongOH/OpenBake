@@ -1,7 +1,7 @@
 package com.openbake.order.presentation;
 
-import com.openbake.member.infrastructure.jwt.JwtAuthenticationFilter;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.common.security.jwt.JwtAuthenticationFilter;
+import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.order.application.OrderService;
 import com.openbake.order.domain.OrderState;
 import com.openbake.order.presentation.dto.SellerOrderPageResponse;

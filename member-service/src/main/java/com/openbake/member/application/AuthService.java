@@ -4,6 +4,8 @@ import com.openbake.common.exception.AuthenticationFailedException;
 import com.openbake.common.exception.DuplicateMemberException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.common.exception.InvalidRefreshTokenException;
+import com.openbake.common.security.jwt.AccessTokenRepository;
+import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.member.application.dto.auth.LocalLoginCommand;
 import com.openbake.member.application.dto.auth.LocalLoginResult;
 import com.openbake.member.application.dto.auth.LogoutCommand;
@@ -29,7 +31,7 @@ public class AuthService {
     private final AuthCredentialRepository authCredentialRepository;
     private final PasswordEncoder passwordEncoder;
     private final IdTokenVerifier oidcIdTokenVerifier;
-    private final TokenProvider jwtTokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessTokenRepository accessTokenRepository;
 
@@ -131,7 +133,7 @@ public class AuthService {
     }
 
     private TokenPair issueTokens(Long memberId, Role role) {
-        String accessToken = jwtTokenProvider.createAccessToken(memberId, role);
+        String accessToken = jwtTokenProvider.createAccessToken(memberId, role.name());
         String refreshToken = jwtTokenProvider.createRefreshToken(memberId);
 
         accessTokenRepository.save(memberId, accessToken);

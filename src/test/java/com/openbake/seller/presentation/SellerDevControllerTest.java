@@ -1,8 +1,8 @@
 package com.openbake.seller.presentation;
 
 import com.openbake.common.exception.EntityNotFoundException;
-import com.openbake.member.domain.AccessTokenRepository;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.common.security.jwt.AccessTokenRepository;
+import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.seller.application.AccountVerificationCodeResult;
 import com.openbake.seller.application.SellerService;
 import org.junit.jupiter.api.DisplayName;

@@ -52,8 +52,6 @@ public enum ErrorCode {
     DUPLICATE_DROP_DATE(HttpStatus.CONFLICT, "DR004", "해당 날짜에는 이미 등록된 드롭이 존재합니다."),
     INVALID_QUANTITY_LIMIT(HttpStatus.BAD_REQUEST, "DR005", "1인당 제한 수량은 총 수량보다 클 수 없습니다."),
     INVALID_QUANTITY_LIMIT_PER_PERSON(HttpStatus.BAD_REQUEST, "DR0013", "1인당 제한 수량보다 많이 선택했습니다."),
-
-    // Drop Entry Domain
     ALREADY_ENTERED(HttpStatus.CONFLICT, "DR006", "이미 응모 완료된 드롭입니다."),
     DROP_OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "DR007", "준비된 재고가 모두 소진되었습니다."),
     DROP_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "DR008", "현재 응모 가능한 드롭 기간이 아닙니다."),
@@ -65,6 +63,7 @@ public enum ErrorCode {
     INVALID_TOTAL_QUANTITY(HttpStatus.BAD_REQUEST, "DR015", "복구할 재고와 남아있는 재고의 합이 총 발매 수량보다 클 수 없습니다."),
     DROP_OWNER_MISMATCH(HttpStatus.FORBIDDEN, "DR016", "본인이 등록한 드롭이 아닙니다."),
     DROP_NOT_EDITABLE(HttpStatus.CONFLICT, "DR017", "이미 시작되었거나 종료된 드롭은 수정/삭제할 수 없습니다."),
+    INVALID_USER_SELECT_QUANTITY(HttpStatus.BAD_REQUEST, "DR018", "사용자가 선택한 수량이 남은 수량보다 많을 수 없습니다."),
 
     //cart - CA
     CART_ALREADY_EXISTS(HttpStatus.CONFLICT, "CA001", "이미 장바구니에 담긴 상품이 있습니다."),
@@ -73,7 +72,7 @@ public enum ErrorCode {
     CART_INVALID_PICKUP_DATE(HttpStatus.BAD_REQUEST, "CA004", "선택할 수 없는 픽업 날짜입니다."),
     CART_PICKUP_DATE_UNAVAILABLE(HttpStatus.CONFLICT, "CA005", "이미 지난 픽업 날짜입니다."),
     CART_STOCK_NOT_RESERVED(HttpStatus.CONFLICT, "CA006", "재고 선점이 확인되지 않았습니다. 다시 담아주세요."),
-
+    CART_STOCK_QUANTITY_MISMATCH(HttpStatus.CONFLICT, "CA007", "선점한 수량과 요청 수량이 다릅니다. 다시 담아주세요."),
 
     //order - OR
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "OR001", "존재하지 않는 주문입니다."),

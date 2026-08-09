@@ -27,7 +27,7 @@ public interface PaymentClient {
     record RefundRequest(String idempotencyKey, Long orderId) {}
     record ConfirmRequest(Long orderId) {}
     record PaymentResultResponse(String status, String message) {
-        boolean isSuccess() { return "SUCCESS".equals(status); }
+        public boolean isSuccess() { return "SUCCESS".equals(status); }
     }
     record BalanceResponse(Long memberId, BigDecimal balance) {}
 }

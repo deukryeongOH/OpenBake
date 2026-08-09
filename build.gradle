@@ -17,6 +17,12 @@ repositories {
 	mavenCentral()
 }
 
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.1.2"
+	}
+}
+
 dependencies {
 	implementation project(':common')
 	implementation project(':member-service')
@@ -37,6 +43,7 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
+	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
 	runtimeOnly 'org.postgresql:postgresql'
 

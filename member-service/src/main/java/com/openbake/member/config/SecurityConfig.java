@@ -1,4 +1,4 @@
-package com.openbake.common.config;
+package com.openbake.member.config;
 
 import com.openbake.common.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -28,11 +28,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/webhooks/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/sellers/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/sellers/*").permitAll()
-                        /** 2. 관리자 전용 내부 API: 현재는 정산만 사용중 */
-                        .requestMatchers("/internal/v1/**").hasRole("ADMIN")
+                        .requestMatchers("/internal/v1/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .anyRequest().authenticated()
@@ -41,4 +37,5 @@ public class SecurityConfig {
 
         return http.build();
     }
+
 }

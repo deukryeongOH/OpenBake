@@ -1,7 +1,5 @@
-package com.openbake.member.infrastructure.jwt;
+package com.openbake.common.security.jwt;
 
-import com.openbake.member.domain.AccessTokenRepository;
-import com.openbake.member.domain.Role;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,7 +47,7 @@ class JwtAuthenticationFilterTest {
         given(jwtTokenProvider.isValid("valid-access-token")).willReturn(true);
         given(accessTokenRepository.isBlacklisted("valid-access-token")).willReturn(false);
         given(jwtTokenProvider.getMemberId("valid-access-token")).willReturn(1L);
-        given(jwtTokenProvider.getRole("valid-access-token")).willReturn(Role.CUSTOMER);
+        given(jwtTokenProvider.getRole("valid-access-token")).willReturn("CUSTOMER");
 
         filter.doFilterInternal(request, response, filterChain);
 

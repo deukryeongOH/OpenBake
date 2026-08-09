@@ -4,8 +4,7 @@ import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.drop.application.DropLockService;
 import com.openbake.drop.domain.DropRepository;
-import com.openbake.member.domain.Member;
-import com.openbake.member.domain.MemberRepository;
+import com.openbake.order.application.port.MemberPort;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
@@ -49,7 +48,7 @@ class OrderServiceTest {
     @Mock
     private SellerRepository sellerRepository;
     @Mock
-    private MemberRepository memberRepository;
+    private MemberPort memberPort;
     @Mock
     private DropLockService dropLockService;
     @Mock
@@ -69,7 +68,7 @@ class OrderServiceTest {
                 paymentPort,
                 currentSellerProvider,
                 sellerRepository,
-                memberRepository,
+                memberPort,
                 dropLockService,
                 dropRepository,
                 reservationReleaser,
@@ -90,9 +89,6 @@ class OrderServiceTest {
                 10L,
                 PageRequest.of(0, 10)
         )).thenReturn(new PageImpl<>(List.of(order)));
-
-        when(memberRepository.findById(5L))
-                .thenReturn(Optional.of(Member.create("김구매", "010-0000-0000")));
 
         // when
         SellerOrderPageResult result =
@@ -123,9 +119,6 @@ class OrderServiceTest {
                 OrderState.CONFIRMED,
                 PageRequest.of(0, 10)
         )).thenReturn(new PageImpl<>(List.of(order)));
-
-        when(memberRepository.findById(5L))
-                .thenReturn(Optional.of(Member.create("김구매", "010-0000-0000")));
 
         // when
         SellerOrderPageResult result =
@@ -175,8 +168,6 @@ class OrderServiceTest {
                 .thenReturn(Optional.of(order));
         when(sellerRepository.findById(10L))
                 .thenReturn(Optional.of(seller));
-        when(memberRepository.findById(20L))
-                .thenReturn(Optional.of(Member.create("이세종", "010-1234-5678")));
 
         // when
         OrderDetailResult result =
@@ -221,6 +212,8 @@ class OrderServiceTest {
         Order order = Order.create(
                 memberId,
                 sellerId,
+                "김구매",
+                "010-1234-5678",
                 LocalDate.of(2026, 7, 17),
                 new BigDecimal("5000")
         );

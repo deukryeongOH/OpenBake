@@ -1,7 +1,5 @@
-package com.openbake.member.infrastructure.jwt;
+package com.openbake.common.security.jwt;
 
-import com.openbake.member.domain.AccessTokenRepository;
-import com.openbake.member.domain.Role;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,9 +32,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (token != null && jwtTokenProvider.isValid(token) && !accessTokenRepository.isBlacklisted(token)) {
             Long memberId = jwtTokenProvider.getMemberId(token);
-            Role role = jwtTokenProvider.getRole(token);
+            String role = jwtTokenProvider.getRole(token);
 
-            List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+            List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(memberId, null, authorities);
             SecurityContextHolder.getContext().setAuthentication(authentication);

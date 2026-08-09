@@ -4,7 +4,7 @@ import com.openbake.common.exception.AuthenticationFailedException;
 import com.openbake.common.exception.DuplicateMemberException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.common.exception.InvalidRefreshTokenException;
-import com.openbake.member.domain.AccessTokenRepository;
+import com.openbake.common.security.jwt.AccessTokenRepository;
 import com.openbake.member.domain.AuthCredential;
 import com.openbake.member.domain.AuthProvider;
 import com.openbake.member.domain.IdTokenVerifier;
@@ -14,7 +14,7 @@ import com.openbake.member.domain.RefreshTokenRepository;
 import com.openbake.member.domain.Role;
 import com.openbake.member.infrastructure.AuthCredentialRepositoryImpl;
 import com.openbake.member.infrastructure.MemberRepositoryImpl;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.member.application.dto.auth.LocalLoginCommand;
 import com.openbake.member.application.dto.auth.LocalLoginResult;
 import com.openbake.member.application.dto.auth.LogoutCommand;
@@ -138,7 +138,7 @@ class AuthServiceTest {
         given(authCredentialRepository.save(any(AuthCredential.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
-        given(jwtTokenProvider.createAccessToken(2L, Role.CUSTOMER)).willReturn("access-token");
+        given(jwtTokenProvider.createAccessToken(2L, "CUSTOMER")).willReturn("access-token");
         given(jwtTokenProvider.createRefreshToken(2L)).willReturn("refresh-token");
 
         OAuthLoginResult response = authService.loginOrSignupWithOAuth(request);
@@ -178,7 +178,7 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(existingMember, "id", 5L);
         given(memberRepository.findById(5L)).willReturn(Optional.of(existingMember));
 
-        given(jwtTokenProvider.createAccessToken(5L, Role.CUSTOMER)).willReturn("access-token");
+        given(jwtTokenProvider.createAccessToken(5L, "CUSTOMER")).willReturn("access-token");
         given(jwtTokenProvider.createRefreshToken(5L)).willReturn("refresh-token");
 
         OAuthLoginResult response = authService.loginOrSignupWithOAuth(request);
@@ -228,7 +228,7 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(member, "id", 1L);
         given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 
-        given(jwtTokenProvider.createAccessToken(1L, Role.CUSTOMER)).willReturn("access-token");
+        given(jwtTokenProvider.createAccessToken(1L, "CUSTOMER")).willReturn("access-token");
         given(jwtTokenProvider.createRefreshToken(1L)).willReturn("refresh-token");
 
         LocalLoginResult response = authService.localLogin(request);
@@ -300,7 +300,7 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(member, "id", 1L);
         given(memberRepository.findById(1L)).willReturn(Optional.of(member));
 
-        given(jwtTokenProvider.createAccessToken(1L, Role.CUSTOMER)).willReturn("new-access-token");
+        given(jwtTokenProvider.createAccessToken(1L, "CUSTOMER")).willReturn("new-access-token");
         given(jwtTokenProvider.createRefreshToken(1L)).willReturn("new-refresh-token");
 
         ReissueResult response = authService.reissue(request);

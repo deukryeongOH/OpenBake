@@ -1,7 +1,5 @@
-package com.openbake.member.infrastructure.jwt;
+package com.openbake.common.security.jwt;
 
-import com.openbake.member.domain.Role;
-import com.openbake.member.domain.TokenProvider;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.JwtException;
@@ -16,7 +14,7 @@ import java.util.Date;
 
 @Component
 @EnableConfigurationProperties(JwtProperties.class)
-public class JwtTokenProvider implements TokenProvider {
+public class JwtTokenProvider {
 
     private static final String ROLE_CLAIM = "role";
 
@@ -30,7 +28,7 @@ public class JwtTokenProvider implements TokenProvider {
         this.refreshTokenExpiration = properties.refreshTokenExpiration();
     }
 
-    public String createAccessToken(Long memberId, Role role) {
+    public String createAccessToken(Long memberId, String role) {
         return createToken(memberId, role, accessTokenExpiration);
     }
 
@@ -42,9 +40,9 @@ public class JwtTokenProvider implements TokenProvider {
         return Long.valueOf(parseClaims(token).getSubject());
     }
 
-    public Role getRole(String token) {
+    public String getRole(String token) {
         String role = parseClaims(token).get(ROLE_CLAIM, String.class);
-        return role != null ? Role.valueOf(role) : null;
+        return role != null ? String.valueOf(role) : null;
     }
 
     public boolean isValid(String token) {
@@ -56,7 +54,7 @@ public class JwtTokenProvider implements TokenProvider {
         }
     }
 
-    private String createToken(Long memberId, Role role, long expiration) {
+    private String createToken(Long memberId, String role, long expiration) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expiration);
 
@@ -66,7 +64,7 @@ public class JwtTokenProvider implements TokenProvider {
                 .expiration(expiry);
 
         if (role != null) {
-            builder.claim(ROLE_CLAIM, role.name());
+            builder.claim(ROLE_CLAIM, role);
         }
 
         return builder.signWith(secretKey).compact();

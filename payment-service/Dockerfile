@@ -22,6 +22,6 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 COPY --from=builder /app/payment-service/build/libs/*.jar app.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod
-EXPOSE 8081
+EXPOSE 8082
 
 ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-jar", "app.jar"]

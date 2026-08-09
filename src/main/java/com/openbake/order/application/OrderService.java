@@ -14,7 +14,8 @@ import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
 import com.openbake.member.domain.Member;
 import com.openbake.member.domain.MemberRepository;
-import com.openbake.order.infrastructure.PaymentClient;
+import com.openbake.order.application.port.PaymentPort;
+import com.openbake.order.application.port.dto.PaymentResult;
 import com.openbake.seller.application.CurrentSellerProvider;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
@@ -41,7 +42,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
-    private final PaymentClient paymentClient;
+    private final PaymentPort paymentPort;
     private final CurrentSellerProvider currentSellerProvider;
     private final SellerRepository sellerRepository;
     //판매자 판매내역 조회 시 구매자 표시 이름 조회용.
@@ -115,8 +116,7 @@ public class OrderService {
         //    그래서 별도 트랜잭션(REQUIRES_NEW)으로 복구·정리한 뒤 예외를 다시 던져 주문/결제는 롤백한다.
         try {
             String idempotencyKey = "order-" + saved.getOrderId() + "-pay";
-            PaymentClient.PaymentResultResponse payResult = paymentClient.pay(
-                    new PaymentClient.PayRequest(idempotencyKey, saved.getOrderId(), memberId, totalAmount));
+            PaymentResult payResult = paymentPort.pay(idempotencyKey, saved.getOrderId(), memberId, totalAmount);
             if (!payResult.isSuccess()) {
                 throw new BusinessException(ErrorCode.INSUFFICIENT_BALANCE);
             }
@@ -129,7 +129,7 @@ public class OrderService {
         cartRepository.delete(cart);
 
         // 9. 결제 후 잔액 조회
-        BigDecimal balanceAfter = paymentClient.getBalance(memberId).balance();
+        BigDecimal balanceAfter = paymentPort.getBalance(memberId).balance();
 
         return new OrderCreateResult(
                 saved.getOrderId(),
@@ -235,8 +235,7 @@ public class OrderService {
 
         // 예치금 전액 환불
         String idempotencyKey = "order-" + orderId + "-refund";
-        PaymentClient.PaymentResultResponse refundResult = paymentClient.refund(
-                new PaymentClient.RefundRequest(idempotencyKey, orderId));
+        PaymentResult refundResult = paymentPort.refund(idempotencyKey, orderId);
         if (!refundResult.isSuccess()) {
             throw new BusinessException(ErrorCode.PAYMENT_NOT_FOUND);
         }
@@ -246,7 +245,7 @@ public class OrderService {
         OrderItem item = order.getOrderItem();
         dropLockService.rollbackStock(item.getDropId(), memberId);
 
-        BigDecimal balanceAfter = paymentClient.getBalance(memberId).balance();
+        BigDecimal balanceAfter = paymentPort.getBalance(memberId).balance();
 
         return new OrderCancelResult(
                 order.getOrderId(),
@@ -315,8 +314,7 @@ public class OrderService {
         order.confirm();
 
         // 결제 상태도 CONFIRMED 로 전이한다.
-        PaymentClient.PaymentResultResponse confirmResult = paymentClient.confirm(
-                new PaymentClient.ConfirmRequest(order.getOrderId()));
+        PaymentResult confirmResult = paymentPort.confirm(order.getOrderId());
         if (!confirmResult.isSuccess()) {
             throw new BusinessException(ErrorCode.PAYMENT_NOT_FOUND);
         }

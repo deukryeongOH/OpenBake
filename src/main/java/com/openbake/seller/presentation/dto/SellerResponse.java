@@ -1,5 +1,6 @@
 package com.openbake.seller.presentation.dto;
 
+import com.openbake.seller.application.SellerResult;
 import com.openbake.seller.domain.ApplicationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -24,4 +25,18 @@ public record SellerResponse(
         boolean accountVerified,
         @Schema(description = "계좌 인증 완료 시각")
         LocalDateTime accountVerifiedAt
-) {}
+) {
+        public static SellerResponse from(SellerResult result) {
+                return new SellerResponse(
+                        result.sellerId(),
+                        result.memberId(),
+                        result.bakeryName(),
+                        result.businessNumber(),
+                        result.applicationStatus(),
+                        result.settlementBankCode(),
+                        result.settlementAccountNumberMasked(),
+                        result.accountVerified(),
+                        result.accountVerifiedAt()
+                );
+        }
+}

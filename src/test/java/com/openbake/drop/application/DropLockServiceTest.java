@@ -1,6 +1,5 @@
 package com.openbake.drop.application;
 
-import com.openbake.common.exception.BusinessException;
 import com.openbake.drop.application.queue.InMemoryQueueManager;
 import com.openbake.drop.domain.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -147,10 +146,12 @@ class DropLockServiceTest {
         given(dropInventoryRepository.findByDropId(dropId)).willReturn(soldOutInventory);
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
+
         given(dropRepository.findById(dropId)).willReturn(Optional.of(soldOutDrop));
+        ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
 
         // when
-        dropLockService.rollbackStock(dropId, memberId, 5);
+        dropLockService.rollbackStock(dropId, memberId);
 
         // then
         assertThat(soldOutInventory.getRemainQuantity()).isEqualTo(5);
@@ -187,9 +188,10 @@ class DropLockServiceTest {
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
         given(dropRepository.findById(dropId)).willReturn(Optional.of(endedDrop));
+        ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
 
         // when
-        dropLockService.rollbackStock(dropId, memberId, 5);
+        dropLockService.rollbackStock(dropId, memberId);
 
         // then
         verify(dropService, never()).changeDropStatusActive(any());
@@ -210,9 +212,10 @@ class DropLockServiceTest {
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop)); // status = ACTIVE
+        ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 3);
 
         // when
-        dropLockService.rollbackStock(dropId, memberId, 3);
+        dropLockService.rollbackStock(dropId, memberId);
 
         // then
         assertThat(partiallyReservedInventory.getRemainQuantity()).isEqualTo(100);

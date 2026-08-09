@@ -1,5 +1,6 @@
 package com.openbake.seller.presentation.dto;
 
+import com.openbake.seller.application.AccountVerificationStartCommand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -11,4 +12,8 @@ public record AccountVerificationStartRequest(
         @NotBlank @Pattern(regexp = "\\d{10,14}", message = "계좌번호 형식이 올바르지 않습니다.") String accountNumber,
         @Schema(description = "예금주명", example = "이세종")
         @NotBlank String accountHolder
-) {}
+) {
+        public AccountVerificationStartCommand toCommand() {
+                return new AccountVerificationStartCommand(bankCode, accountNumber, accountHolder);
+        }
+}

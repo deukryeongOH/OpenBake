@@ -25,7 +25,7 @@ import java.time.LocalDateTime;
         },indexes = {
         @Index(name = "idx_member_entry_time", columnList = "member_id, entry_time DESC")
         }
-) // drop_id와 member_id 복합 유니크 제약조건 (로직 중복 검증에서 뚫리면 최후의 보루)
+) // drop_id와 member_id 복합 유니크 제약조건 (confirm-entry 빠르게 2번 클릭 시 락이 걸리지 않으므로 유니크 제약으로 불필요한 상태 값 접근 제한)
 @EntityListeners(AuditingEntityListener.class) // JPA Auditing 적용
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DropEntry {
@@ -43,6 +43,9 @@ public class DropEntry {
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private EntryStatus entryStatus; // 진입 내역 (최초 실패 시각)
+
+    @Column(nullable = false)
+    private int selectQuantity; // 사용자가 선택한 수량
 
     @CreatedDate // JPA (엔티티 저장 시점에 JPA가 자동으로 시간 주입)
     @Column(nullable = false, updatable = false)
@@ -68,7 +71,10 @@ public class DropEntry {
     }
 
     // 주문/재고 선점 성공 시 상태 변경
-    public void reserveEntry() { this.entryStatus = EntryStatus.RESERVED;}
+    public void reserveEntryAndSaveSelectQuantity(int selectQuantity) {
+        this.entryStatus = EntryStatus.RESERVED;
+        this.selectQuantity = selectQuantity;
+    }
 
     // 주문 취소 or 장바구니 만료
     public void cancelEntry() {

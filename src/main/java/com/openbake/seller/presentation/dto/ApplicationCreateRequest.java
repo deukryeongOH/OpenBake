@@ -1,5 +1,6 @@
 package com.openbake.seller.presentation.dto;
 
+import com.openbake.seller.application.ApplicationCreateCommand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
@@ -12,4 +13,8 @@ public record ApplicationCreateRequest(
         @NotBlank String businessAddress,
         @Schema(description = "사업자등록증 상 대표자명", example = "이세종")
         @NotBlank String businessRepresentativeName
-) {}
+) {
+        public ApplicationCreateCommand toCommand() {
+                return new ApplicationCreateCommand(bakeryName, businessNumber, businessAddress, businessRepresentativeName);
+        }
+}

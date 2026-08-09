@@ -14,15 +14,12 @@ import java.math.BigDecimal;
 @FeignClient(name = "payment-service", url = "${payment-service.url}")
 public interface PaymentClient extends PaymentPort {
 
-    @Override
     @PostMapping("/internal/v1/payments/pay")
     PaymentResult pay(@RequestBody PayRequest request);
 
-    @Override
     @PostMapping("/internal/v1/payments/refund")
     PaymentResult refund(@RequestBody RefundRequest request);
 
-    @Override
     @PostMapping("/internal/v1/payments/confirm")
     PaymentResult confirm(@RequestBody ConfirmRequest request);
 

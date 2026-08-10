@@ -2,8 +2,8 @@ package com.openbake.cart.infrastructure.client;
 
 import com.openbake.cart.application.port.ReservationPort;
 import com.openbake.cart.application.port.dto.ReservationInfo;
-import com.openbake.drop.application.DropLockService;
-import com.openbake.drop.domain.DropEntryRepository;
+import com.openbake.drop.application.service.DropLockService;
+import com.openbake.drop.domain.repository.DropEntryRepository;
 import com.openbake.drop.domain.EntryStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

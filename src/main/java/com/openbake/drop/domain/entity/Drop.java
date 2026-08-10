@@ -1,12 +1,16 @@
-package com.openbake.drop.domain;
+package com.openbake.drop.domain.entity;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.domain.DropProduct;
+import com.openbake.drop.domain.DropStatus;
+import com.openbake.drop.domain.DropTimeSlot;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -80,6 +84,12 @@ public class Drop {
         }
         if (dropStart.isBefore(LocalDateTime.now())) {
             throw new BusinessException(ErrorCode.INVALID_DROP_TIME, "드롭 시작 시간은 과거일 수 없습니다.");
+        }
+        boolean isValidSlot = Arrays.stream(DropTimeSlot.values())
+                .anyMatch(dropTimeSlot -> dropTimeSlot.getStart().equals(dropStart.toLocalTime()));
+
+        if (!isValidSlot) {
+            throw new BusinessException(ErrorCode.TIMESLOT_NOT_CONTAINS);
         }
     }
 

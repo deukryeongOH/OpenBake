@@ -1,8 +1,8 @@
-package com.openbake.drop.presentation;
+package com.openbake.drop.presentation.controller;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
-import com.openbake.drop.application.DropEnterService;
+import com.openbake.drop.application.service.DropEnterService;
 import com.openbake.drop.application.dto.ConfirmEntryResult;
 import com.openbake.drop.application.dto.QueueRankResult;
 import com.openbake.drop.presentation.dto.ConfirmEntryResponse;
@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "Drop Entry", description = "드롭 대기열 진입/순번 조회/입장 확정")
 @RestController
@@ -71,16 +73,16 @@ public class DropEnterController {
     }
 
     @Operation(
-            summary = "오늘 진행하는 드롭 ID 조회",
-            description = "오늘 시작하는 드롭의 ID를 조회합니다. 대기열 진입 전 선행 작업으로 호출하며, 인증 없이 누구나 조회 가능한 공개 API입니다."
+            summary = "오늘 진행하는 드롭 ID List 조회",
+            description = "오늘 시작하는 드롭의 ID의 List를 조회합니다. 대기열 진입 전 선행 작업으로 호출하며, 인증 없이 누구나 조회 가능한 공개 API입니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "C003 대상을 찾을 수 없습니다.")
     })
     @SecurityRequirements
-    @GetMapping("/today/drop") // 오늘 진행하는 드롭ID 가져오기 (대기열 선행 작업, ID가 있어야 대기열 생성가능)
-    public ApiResponse<Long> getDropId(){
-        Long dropId = dropEnterService.getTodayDropId();
-        return ApiResponse.ok(dropId);
+    @GetMapping("/today/drops") // 오늘 진행하는 드롭ID 리스트 가져오기 (대기열 선행 작업, ID가 있어야 대기열 생성가능)
+    public ApiResponse<List<Long>> getDropIds(){
+        List<Long> dropIds = dropEnterService.getTodayDropIds();
+        return ApiResponse.ok(dropIds);
     }
 }

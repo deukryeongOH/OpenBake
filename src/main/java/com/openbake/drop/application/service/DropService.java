@@ -1,12 +1,18 @@
-package com.openbake.drop.application;
+package com.openbake.drop.application.service;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.application.dto.DropProductInfoCommand;
 import com.openbake.drop.application.dto.DropProductInfoResult;
-import com.openbake.drop.application.queue.TodayDropCache;
+import com.openbake.drop.application.dto.LocalDateCommand;
+import com.openbake.drop.application.dto.TimeSlotResult;
+import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.domain.*;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.entity.DropInventory;
+import com.openbake.drop.domain.repository.DropInventoryRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,8 +38,8 @@ public class DropService {
 
     @Transactional
     public DropProductInfoResult registerDropProduct(DropProductInfoCommand command, Long sellerId) {
-        // 하루 1개 제한 검증
-        validateOneDropPerDay(sellerId, command.dropStart());
+        // 하루 5개 제한 검증 & 시간대 검증
+        validateFiveDropPerDay(sellerId, command.dropStart());
         // 제한 수량, 총 수량 검증
         validateLimitQuantityWithTotalQuantity(command.LimitQuantity(), command.totalQuantity());
 
@@ -88,37 +97,54 @@ public class DropService {
         }
     }
 
-    private void validateOneDropPerDay(Long sellerId, @NotNull(message = "시작 시간을 입력해주세요.") LocalDateTime dropStart) {
+    private void validateFiveDropPerDay(Long sellerId, @NotNull(message = "시작 시간을 입력해주세요.") LocalDateTime dropStart) {
         LocalDate dropDate = dropStart.toLocalDate();
+        List<Drop> dropList = dropRepository.findListByDropDate(dropDate);
+
+        validateSlotCapacity(dropList, dropStart);
+
         LocalDateTime startOfDay = dropDate.atStartOfDay();
         LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
-
-        // 먼저 하루에 드롭은 한 번으로 제한되므로 먼저 검증
-        if (dropRepository.existsByDropStartBetween(startOfDay, endOfDay)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
-        }
-
-        // (확장성을 고려한 판매자 드롭 등록 제한 / 추후 하루에 드롭이 여러 개일 경우)
         if (dropRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay)) {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
 
-    // 수정 시 "하루 1개 제한" 재검증. 하루에 드롭이 하나뿐이라, 수정 대상 자기 자신을 빼지 않으면
-    // 날짜를 안 바꾸는 수정조차 "이미 그 날짜에 드롭이 있다"고 오판해서 막히므로 자신은 제외하고 확인한다.
-    private void validateOneDropPerDayExcludingSelf(Long dropId, Long sellerId, LocalDateTime dropStart) {
+
+    private void validateFiveDropPerDayExcludingSelf(Long dropId, Long sellerId, LocalDateTime dropStart) {
         LocalDate dropDate = dropStart.toLocalDate();
+
+        // 오늘 진행하는 드롭 중 현재 수정을 원하는 Drop의 Id와 같지 않은 것들의 드롭 리스트
+        List<Drop> dropList = dropRepository.findListByDropDate(dropDate).stream()
+                .filter(drop -> !drop.getId().equals(dropId))
+                .toList();
+
+        validateSlotCapacity(dropList, dropStart);
+
         LocalDateTime startOfDay = dropDate.atStartOfDay();
         LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
-
-        if (dropRepository.existsByDropStartBetweenAndIdNot(startOfDay, endOfDay, dropId)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
-        }
-
+        // 이미 판매자가 등록한 날짜로 수정하려고 하면 막아야함. (판매자는 하루에 1개의 드롭만 등록할 수 있다)
         if (dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(sellerId, startOfDay, endOfDay, dropId)) {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
+
+    // 하루 5개 Capacity + 같은 시각(슬롯) 중복 체크
+    private void validateSlotCapacity(List<Drop> dropList, LocalDateTime dropStart) {
+        if (dropList.size() >= 5) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
+        }
+
+        // 오늘 진행하는 드롭들의 시작 시간들을 뽑아서 등록하려는 dropStart와 맞는 것이 있는지 확인
+        boolean isNotAvailableSlot = dropList.stream()
+                .map(drop -> drop.getDropStart().toLocalTime())
+                .anyMatch(dropStart.toLocalTime()::equals);
+
+        if (isNotAvailableSlot) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
+        }
+    }
+
     @Transactional
     public void changeDropStatusActive(Long dropId) {
         Drop drop = findDrop(dropId);
@@ -131,7 +157,7 @@ public class DropService {
         drop.changeStatus(DropStatus.COMPLETED);
     }
 
-    private Drop findDrop(Long dropId){
+    private Drop findDrop(Long dropId) {
         return dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
     }
@@ -185,7 +211,7 @@ public class DropService {
         Drop drop = findDrop(dropId);
         validateOwner(drop, sellerId);
         validateEditable(drop);
-        validateOneDropPerDayExcludingSelf(dropId, sellerId, command.dropStart());
+        validateFiveDropPerDayExcludingSelf(dropId, sellerId, command.dropStart());
         validateLimitQuantityWithTotalQuantity(command.LimitQuantity(), command.totalQuantity());
 
         DropProduct dropProduct = createDropProduct(command);
@@ -224,5 +250,20 @@ public class DropService {
         if (!drop.isEditable()) {
             throw new BusinessException(ErrorCode.DROP_NOT_EDITABLE);
         }
+    }
+
+    // date를 받아서 해당 날짜에 등록된 드롭들의 시작 시간을 확인하고, 겹치지 않는 시간대를 반환
+    @Transactional(readOnly = true)
+    public List<TimeSlotResult> getAvailableSlots(LocalDateCommand command) {
+        List<Drop> drops = dropRepository.findListByDropDate(command.todayDate());
+
+        Set<LocalTime> occupiedStartTimes = drops.stream()
+                .map(drop -> drop.getDropStart().toLocalTime())
+                .collect(Collectors.toSet());
+
+        return Arrays.stream(DropTimeSlot.values())
+                .filter(slot -> !occupiedStartTimes.contains(slot.getStart()))
+                .map(TimeSlotResult::of)
+                .toList();
     }
 }

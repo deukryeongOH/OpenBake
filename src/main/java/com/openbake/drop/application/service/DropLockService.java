@@ -1,9 +1,16 @@
-package com.openbake.drop.application;
+package com.openbake.drop.application.service;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.application.dto.SelectQuantityInfoResult;
 import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.entity.DropEntry;
+import com.openbake.drop.domain.entity.DropInventory;
+import com.openbake.drop.domain.repository.DropEntryRepository;
+import com.openbake.drop.domain.repository.DropInventoryRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,11 +58,11 @@ public class DropLockService {
     }
 
     @Transactional(readOnly = true)
-    public int getSelectQuantity(Long dropId, Long memberId){
+    public SelectQuantityInfoResult getSelectQuantity(Long dropId, Long memberId){
         DropEntry dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NEVER_ENTERED));
 
-        return dropEntry.getSelectQuantity();
+        return SelectQuantityInfoResult.of(dropEntry.getSelectQuantity(), dropEntry.getEntryStatus());
     }
 
     private void reviveIfSoldOutCompleted(Long dropId, DropInventory dropInventory) {

@@ -1,4 +1,4 @@
-package com.openbake.drop.domain;
+package com.openbake.drop.domain.entity;
 
 
 import com.openbake.common.exception.BusinessException;

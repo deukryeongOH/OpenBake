@@ -1,12 +1,15 @@
-package com.openbake.drop.infrastructure;
+package com.openbake.drop.infrastructure.adapter;
 
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.drop.domain.DropStatus;
+import com.openbake.drop.infrastructure.jpa.DropJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,24 +28,16 @@ public class DropRepositoryAdapter implements DropRepository {
         return dropJpaRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay);
     }
 
-    @Override // 오늘 진행 할 드롭 확인
-    public Optional<Drop> findByDropStartBetween(LocalDateTime todayStart, LocalDateTime todayEnd) {
-        return dropJpaRepository.findByDropStartBetween(todayStart, todayEnd);
+    @Override // 해당 날짜에 등록된 드롭 리스트 반환
+    public List<Drop> findListByDropDate(LocalDate today) {
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
+        return dropJpaRepository.findAllByDropStartBetween(startOfDay, endOfDay);
     }
 
     @Override
     public Optional<Drop> findById(Long dropId) {
         return dropJpaRepository.findById(dropId);
-    }
-
-    @Override
-    public Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay) {
-        return dropJpaRepository.existsByDropStartBetween(startOfDay, endOfDay);
-    }
-
-    @Override
-    public boolean existsByDropStartBetweenAndIdNot(LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId) {
-        return dropJpaRepository.existsByDropStartBetweenAndIdNot(startOfDay, endOfDay, excludeDropId);
     }
 
     @Override

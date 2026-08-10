@@ -5,7 +5,9 @@ import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.application.dto.DropProductInfoCommand;
 import com.openbake.drop.application.dto.DropProductInfoResult;
-import com.openbake.drop.application.queue.TodayDropCache;
+import com.openbake.drop.application.dto.LocalDateCommand;
+import com.openbake.drop.application.dto.TimeSlotResult;
+import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.domain.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -16,8 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -119,6 +124,7 @@ public class DropService {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
+
     @Transactional
     public void changeDropStatusActive(Long dropId) {
         Drop drop = findDrop(dropId);
@@ -131,7 +137,7 @@ public class DropService {
         drop.changeStatus(DropStatus.COMPLETED);
     }
 
-    private Drop findDrop(Long dropId){
+    private Drop findDrop(Long dropId) {
         return dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
     }
@@ -224,5 +230,20 @@ public class DropService {
         if (!drop.isEditable()) {
             throw new BusinessException(ErrorCode.DROP_NOT_EDITABLE);
         }
+    }
+
+    // date를 받아서 해당 날짜에 등록된 드롭들의 시작 시간을 확인하고, 겹치지 않는 시간대를 반환
+    @Transactional(readOnly = true)
+    public List<TimeSlotResult> getAvailableSlots(LocalDateCommand command) {
+        List<Drop> drops = dropRepository.findListByDropDate(command.todayDate());
+
+        Set<LocalTime> occupiedStartTimes = drops.stream()
+                .map(drop -> drop.getDropStart().toLocalTime())
+                .collect(Collectors.toSet());
+
+        return Arrays.stream(DropTimeSlot.values())
+                .filter(slot -> !occupiedStartTimes.contains(slot.getStart()))
+                .map(TimeSlotResult::of)
+                .toList();
     }
 }

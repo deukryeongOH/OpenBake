@@ -6,7 +6,9 @@ import com.openbake.drop.domain.DropStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +25,13 @@ public class DropRepositoryAdapter implements DropRepository {
     @Override // 해당 판매자가 해당 날짜(00:00:00 ~ 23:59:59)에 이미 등록한 드롭이 있는지 확인
     public boolean existsBySellerIdAndDropStartBetween(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay) {
         return dropJpaRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay);
+    }
+
+    @Override // 해당 날짜에 등록된 드롭 리스트 반환
+    public List<Drop> findListByDropDate(LocalDate today) {
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
+        return dropJpaRepository.findAllByDropStartBetween(startOfDay, endOfDay);
     }
 
     @Override // 오늘 진행 할 드롭 확인

@@ -171,7 +171,7 @@ public class DropService {
         DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
         return DropInfoResult.of(findDrop.getDropProduct().getName(), findDrop.getDropProduct().getDescription(),
                 findDrop.getDropProduct().getImageUrl(), findDrop.getDropStart(), findDrop.getDropEnd(),
-                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), new HashSet<>(findDrop.getPickUpAvailableDate()), findDrop.getSellerId());
+                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), new HashSet<>(findDrop.getPickUpAvailableDate()));
     }
 
     // 판매자 본인이 등록한 드롭 목록 조회

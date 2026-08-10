@@ -22,16 +22,35 @@ set -a
 source "${ENV_FILE}"
 set +a
 
-if [[ -z "${OPENBAKE_TARGET:-}" ]]; then
-    echo "OPENBAKE_TARGET 환경변수가 필요합니다."
-    exit 1
-fi
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "openbake-core"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets:
+          - "${OPENBAKE_CORE_TARGET}"
+
+  - job_name: "openbake-member"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets:
+          - "${OPENBAKE_MEMBER_TARGET}"
+
+  - job_name: "openbake-payment"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets:
+          - "${OPENBAKE_PAYMENT_TARGET}"
 
 echo "Prometheus Target: ${OPENBAKE_TARGET}"
 
-envsubst '${OPENBAKE_TARGET}' \
-    < "${TEMPLATE_FILE}" \
-    > "${OUTPUT_FILE}"
+envsubst \
+'${OPENBAKE_CORE_TARGET} ${OPENBAKE_MEMBER_TARGET} ${OPENBAKE_PAYMENT_TARGET}' \
+< "${TEMPLATE_FILE}" \
+> "${OUTPUT_FILE}"
 
 echo "생성된 Prometheus 설정:"
 cat "${OUTPUT_FILE}"

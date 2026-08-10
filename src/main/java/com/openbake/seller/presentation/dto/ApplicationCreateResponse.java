@@ -1,5 +1,6 @@
 package com.openbake.seller.presentation.dto;
 
+import com.openbake.seller.application.ApplicationCreateResult;
 import com.openbake.seller.domain.ApplicationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -12,4 +13,8 @@ public record ApplicationCreateResponse(
         String bakeryName,
         @Schema(description = "입점 신청 상태", example = "PENDING")
         ApplicationStatus applicationStatus
-) {}
+) {
+        public static ApplicationCreateResponse from(ApplicationCreateResult result) {
+                return new ApplicationCreateResponse(result.sellerId(), result.memberId(), result.bakeryName(), result.applicationStatus());
+        }
+}

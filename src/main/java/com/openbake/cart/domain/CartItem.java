@@ -22,10 +22,10 @@ public class CartItem {
     private Long dropId;
 
     @Column(nullable = false)
-    private Integer quantity;
+    private int quantity;
 
     //정적 팩토리 메서드
-    public static CartItem create(Long dropId, Integer quantity) {
+    public static CartItem create(Long dropId, int quantity) {
         CartItem item = new CartItem();
         item.dropId = dropId;
         item.quantity = quantity;

@@ -2,7 +2,7 @@ package com.openbake.drop.infrastructure.scheduler;
 
 import com.openbake.drop.application.DropEnterService;
 import com.openbake.drop.application.DropService;
-import com.openbake.drop.application.queue.InMemoryQueueManager;
+import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.application.queue.TodayDropCache;
 import com.openbake.drop.application.queue.TodayDropCache.CachedDrop;
 import jakarta.annotation.PostConstruct;
@@ -19,7 +19,7 @@ public class QueueScheduler {
 
     private static final int ENTRIES_PER_TICK = 100;
 
-    private final InMemoryQueueManager queueManager;
+    private final QueueManager queueManager;
     private final DropService dropService;
     private final DropEnterService dropEnterService;
     private final TodayDropCache todayDropCache;

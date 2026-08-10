@@ -32,7 +32,7 @@ public class SellerController {
     })
     @PostMapping("/business-verifications")
     public ApiResponse<BusinessVerificationResponse> verifyBusiness(@Valid @RequestBody BusinessVerificationRequest request) {
-        return ApiResponse.ok(sellerService.verifyBusiness(request));
+        return ApiResponse.ok(BusinessVerificationResponse.from(sellerService.verifyBusiness(request.toCommand())));
     }
 
     @Operation(
@@ -45,7 +45,7 @@ public class SellerController {
     @PostMapping("/settlement-account/verification-requests")
     public ApiResponse<AccountVerificationStartResponse> requestAccountVerification(
             @Valid @RequestBody AccountVerificationStartRequest request) {
-        return ApiResponse.ok(sellerService.requestAccountVerification(request));
+        return ApiResponse.ok(AccountVerificationStartResponse.from(sellerService.requestAccountVerification(request.toCommand())));
     }
 
     @Operation(
@@ -61,7 +61,8 @@ public class SellerController {
     public ApiResponse<AccountVerificationConfirmResponse> verifyAccount(
             @Parameter(description = "계좌 인증 요청 ID", example = "vr_20260723_001") @PathVariable String verificationRequestId,
             @Valid @RequestBody AccountVerificationConfirmRequest request) {
-        return ApiResponse.ok(sellerService.verifyAccount(verificationRequestId, request));
+        return ApiResponse.ok(AccountVerificationConfirmResponse.from(
+                sellerService.verifyAccount(verificationRequestId, request.toCommand())));
     }
 
     @Operation(
@@ -74,7 +75,7 @@ public class SellerController {
     })
     @PostMapping("/apply")
     public ApiResponse<ApplicationCreateResponse> applySeller(@Valid @RequestBody ApplicationCreateRequest request) {
-        return ApiResponse.ok(sellerService.applySeller(request));
+        return ApiResponse.ok(ApplicationCreateResponse.from(sellerService.applySeller(request.toCommand())));
     }
 
     @Operation(
@@ -90,7 +91,8 @@ public class SellerController {
     public ApiResponse<ApplicationStatusUpdateResponse> updateApplicationStatus(
             @Parameter(description = "대상 판매자 ID", example = "1") @PathVariable Long id,
             @Valid @RequestBody ApplicationStatusUpdateRequest request) {
-        return ApiResponse.ok(sellerService.updateApplicationStatus(id, request));
+        return ApiResponse.ok(ApplicationStatusUpdateResponse.from(
+                sellerService.updateApplicationStatus(id, request.toCommand())));
     }
 
     @Operation(
@@ -102,7 +104,7 @@ public class SellerController {
     })
     @GetMapping("/me")
     public ApiResponse<MySellerResponse> getMySeller() {
-        return ApiResponse.ok(sellerService.getMySeller());
+        return ApiResponse.ok(MySellerResponse.from(sellerService.getMySeller()));
     }
 
     @Operation(
@@ -116,7 +118,7 @@ public class SellerController {
     @GetMapping("/{id}")
     public ApiResponse<SellerResponse> getSeller(
             @Parameter(description = "조회할 판매자 ID", example = "1") @PathVariable Long id) {
-        return ApiResponse.ok(sellerService.getSeller(id));
+        return ApiResponse.ok(SellerResponse.from(sellerService.getSeller(id)));
     }
 
     @Operation(
@@ -131,7 +133,9 @@ public class SellerController {
     public ApiResponse<List<MySellerResponse>> getPendingSellers(
             @Parameter(description = "필터링할 입점 신청 상태. 생략 시 PENDING", example = "PENDING")
             @RequestParam(required = false, defaultValue = "PENDING") ApplicationStatus applicationStatus) {
-        return ApiResponse.ok(sellerService.getPendingSellers(applicationStatus));
+        return ApiResponse.ok(sellerService.getPendingSellers(applicationStatus).stream()
+                .map(MySellerResponse::from)
+                .toList());
     }
 
 }

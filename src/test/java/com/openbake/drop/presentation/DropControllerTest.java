@@ -1,10 +1,10 @@
 package com.openbake.drop.presentation;
 
 import com.openbake.drop.application.DropService;
-import com.openbake.drop.application.dto.DropProductInfoResponse;
+import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.domain.DropStatus;
-import com.openbake.member.infrastructure.jwt.JwtAuthenticationFilter;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.common.security.jwt.JwtAuthenticationFilter;
+import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.seller.application.CurrentSellerProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,7 +49,7 @@ class DropControllerTest {
     @Test
     @DisplayName("예정된 드롭 목록을 조회한다")
     void getUpcomingDrops() throws Exception {
-        DropProductInfoResponse response = new DropProductInfoResponse(
+        DropProductInfoResult result = new DropProductInfoResult(
                 "버터떡",
                 "버터를 많이 써서 향이 좋아요.",
                 "https://cdn.openbake.com/drops/12.jpg",
@@ -65,7 +65,7 @@ class DropControllerTest {
         );
 
         when(dropService.getUpcomingDrops(7))
-                .thenReturn(List.of(response));
+                .thenReturn(List.of(result));
 
         mockMvc.perform(get("/api/v1/drops/upcoming"))
                 .andExpect(status().isOk())

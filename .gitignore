@@ -56,6 +56,8 @@ Thumbs.db
 
 ### local ###
 run-local.sh
+.gstack
+bmad-output
 
 # k6 테스트용 인증정보
 performance-test/users.json

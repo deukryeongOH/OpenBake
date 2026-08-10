@@ -2,12 +2,16 @@ package com.openbake.order.domain;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
-public interface OrderRepository extends JpaRepository<Order, Long> {
+public interface OrderRepository {
+    //결제에 넘길 orderId 가 필요하므로 저장 즉시 PK 를 확보한다.
+    Order save(Order order);
+
+    Optional<Order> findById(Long orderId);
 
     //본인 주문 목록(최신순). 상태 필터가 없는 경우.
     Page<Order> findByMemberIdOrderByOrderIdDesc(Long memberId, Pageable pageable);

@@ -5,9 +5,12 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.drop.application.DropService;
-import com.openbake.drop.application.dto.DropProductInfo;
+import com.openbake.drop.application.dto.DropInfoResult;
+import com.openbake.drop.application.dto.DropProductInfoCommand;
+import com.openbake.drop.application.dto.DropProductInfoResult;
+import com.openbake.drop.presentation.dto.DropInfoResponse;
 import com.openbake.drop.presentation.dto.DropProductInfoRequest;
-import com.openbake.drop.application.dto.DropProductInfoResponse;
+import com.openbake.drop.presentation.dto.DropProductInfoResponse;
 import com.openbake.seller.application.CurrentSellerProvider;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,8 +46,12 @@ public class DropController {
     ) {
         Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
 
-        DropProductInfoResponse response = dropService.registerDropProduct(dropProductInfoRequest, sellerId);
-        return ApiResponse.ok(response);
+        DropProductInfoCommand command = DropProductInfoCommand.create(dropProductInfoRequest.name(), dropProductInfoRequest.description(),
+                dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropEnd(), dropProductInfoRequest.totalQuantity(),
+                dropProductInfoRequest.limitQuantity(), dropProductInfoRequest.price(), dropProductInfoRequest.pickUpAvailableDates());
+
+        DropProductInfoResult response = dropService.registerDropProduct(command, sellerId);
+        return ApiResponse.ok(DropProductInfoResponse.of(response));
     }
 
 
@@ -57,10 +64,10 @@ public class DropController {
     })
     @SecurityRequirements
     @GetMapping("/{dropId}/info")
-    public ApiResponse<DropProductInfo> getDropProductInfo(
+    public ApiResponse<DropInfoResponse> getDropProductInfo(
             @Parameter(description = "조회할 드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
-        DropProductInfo info = dropService.getDropProductInfo(dropId);
-        return ApiResponse.ok(info);
+        DropInfoResult info = dropService.getDropProductInfo(dropId);
+        return ApiResponse.ok(DropInfoResponse.of(info));
     }
 
     @Operation(
@@ -72,8 +79,8 @@ public class DropController {
     public ApiResponse<List<DropProductInfoResponse>> getMyDrops() {
         Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
 
-        List<DropProductInfoResponse> response = dropService.getMyDrops(sellerId);
-        return ApiResponse.ok(response);
+        List<DropProductInfoResult> results = dropService.getMyDrops(sellerId);
+        return ApiResponse.ok(results.stream().map(DropProductInfoResponse::of).toList());
     }
 
     @Operation(
@@ -84,8 +91,8 @@ public class DropController {
     public ApiResponse<List<DropProductInfoResponse>> getUpcomingDrops(
             @Parameter(description = "오늘부터 조회할 일수", example = "7")
             @RequestParam(defaultValue = "7") int days) {
-        List<DropProductInfoResponse> response = dropService.getUpcomingDrops(days);
-        return ApiResponse.ok(response);
+        List<DropProductInfoResult> results = dropService.getUpcomingDrops(days);
+        return ApiResponse.ok(results.stream().map(DropProductInfoResponse::of).toList());
     }
 
     @Operation(
@@ -105,8 +112,12 @@ public class DropController {
             @Valid @RequestBody DropProductInfoRequest dropProductInfoRequest) {
         Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
 
-        DropProductInfoResponse response = dropService.updateDropProduct(dropId, sellerId, dropProductInfoRequest);
-        return ApiResponse.ok(response);
+        DropProductInfoCommand command = DropProductInfoCommand.create(dropProductInfoRequest.name(), dropProductInfoRequest.description(),
+                dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropEnd(), dropProductInfoRequest.totalQuantity(),
+                dropProductInfoRequest.limitQuantity(), dropProductInfoRequest.price(), dropProductInfoRequest.pickUpAvailableDates());
+
+        DropProductInfoResult result = dropService.updateDropProduct(dropId, sellerId, command);
+        return ApiResponse.ok(DropProductInfoResponse.of(result));
     }
 
     @Operation(

@@ -1,15 +1,13 @@
 package com.openbake.drop.application;
 
+import com.openbake.drop.application.dto.DropReserveCommand;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,7 +54,8 @@ class DropLockFacadeTest {
                     readyLatch.countDown();
                     try {
                         startLatch.await();
-                        dropLockFacade.reserveStock(dropId, memberId, 1);
+                        DropReserveCommand command = new DropReserveCommand(1);
+                        dropLockFacade.reserveStock(dropId, memberId, command);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     } finally {

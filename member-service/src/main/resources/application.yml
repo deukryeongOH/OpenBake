@@ -1,0 +1,40 @@
+server:
+  port: 8081   # 신규 지정 — root(8080)와 겹치지 않게
+
+spring:
+  application:
+    name: member-service
+  datasource:
+    url: ${DB_URL}          # 3단계에서 전용 DB URL로 교체
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+oauth:
+  providers:
+    google:
+      issuer: https://accounts.google.com
+      jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
+      client-id: ${GOOGLE_CLIENT_ID}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: 1800000
+  refresh-token-expiration: 1209600000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    org.springframework.security: DEBUG

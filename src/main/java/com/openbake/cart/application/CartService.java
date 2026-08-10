@@ -3,11 +3,6 @@ package com.openbake.cart.application;
 import com.openbake.cart.domain.Cart;
 import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
-import com.openbake.cart.presentation.CartCreateRequest;
-import com.openbake.cart.presentation.CartCreateResponse;
-import com.openbake.cart.presentation.CartDetailResponse;
-import com.openbake.cart.presentation.CartPickupDateRequest;
-import com.openbake.cart.presentation.CartPickupDateResponse;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.DropLockService;
@@ -20,7 +15,6 @@ import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,12 +45,11 @@ public class CartService {
      * 장바구니 생성.
      * 재고 차감은 cart 가 하지 않는다. 드롭 상세에서 "담기"를 누르면 drop 이 재고를 선점/차감하고,
      * 그 뒤 이 API 가 호출돼 장바구니를 만든다. cart 는 drop 이 실제로 선점했는지(DropEntry=RESERVED)만
-     * 확인하고 장바구니를 기록한다.
+     * 확인하고 장바구니를 기록한다. 요청 수량이 선점 수량과 다르면 CA007 로 막는다.
      */
     @Transactional
-    public CartCreateResponse create(Long memberId, CartCreateRequest request) {
+    public CartCreateResult create(Long memberId, Long dropId, int quantity) {
         LocalDateTime now = LocalDateTime.now();
-        Long dropId = request.getDropId();
 
         //기존 장바구니 처리
         // 유효한 장바구니가 있으면 CART_ALREADY_EXISTS
@@ -73,9 +66,8 @@ public class CartService {
             //만료된 장바구니. 선점 재고를 drop 에 복구시키고 정리한다.
             //(삭제 전에 dropId/quantity 를 읽어야 하므로 먼저 복구 요청을 보낸다)
             rollbackStockIfPresent(existing);
-            cartRepository.delete(existing);
-            //flush 까지 해야 아래 INSERT 가 member_id UNIQUE 제약에 걸리지 않는다.
-            cartRepository.flush();
+            //삭제를 즉시 확정해야 아래 저장이 member_id UNIQUE 제약에 걸리지 않는다.
+            cartRepository.deleteImmediately(existing);
         }
 
         //재고 선점 확인 — drop 이 담기 시점에 선점(RESERVED)했는지 확인한다.
@@ -86,28 +78,18 @@ public class CartService {
             throw new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED);
         }
 
-        Cart cart = Cart.create(memberId, now.plus(cartTtl));
-        cart.addItem(CartItem.create(dropId, request.getQuantity()));
-
-        Cart saved;
-        try {
-            //saveAndFlush 로 즉시 INSERT 해야 UNIQUE 위반을 이 자리에서 잡을 수 있다.
-            //save 만 쓰면 커밋 시점에 flush 돼 try 밖에서 터진다.
-            saved = cartRepository.saveAndFlush(cart);
-        } catch (DataIntegrityViolationException e) {
-            //carts.member_id UNIQUE 위반.
-            //더블클릭 등으로 두 요청이 위 기존 장바구니 조회를 함께 통과한 경우다.
-            //선검사만으로는 동시 요청을 막을 수 없어 DB 제약이 최종 방어선이 된다.
-            throw new BusinessException(ErrorCode.CART_ALREADY_EXISTS);
+        //선점 수량 대조 — 요청 수량이 drop 이 실제로 차감한 수량과 같아야 한다.
+        //다르면 이탈 시 drop 이 selectQuantity 로 복구하므로 재고가 어긋난다.
+        if (entry.getSelectQuantity() != quantity) {
+            throw new BusinessException(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
         }
 
-        return CartCreateResponse.builder()
-                .cartId(saved.getCartId())
-                .dropId(dropId)
-                .quantity(request.getQuantity())
-                .expiresAt(saved.getExpiresAt())
-                .createdAt(saved.getCreatedAt())
-                .build();
+        Cart cart = Cart.create(memberId, now.plus(cartTtl));
+        cart.addItem(CartItem.create(dropId, quantity));
+
+        //동시 요청으로 UNIQUE 제약에 걸리면 구현체가 CART_ALREADY_EXISTS 로 바꿔 던진다.
+        Cart saved = cartRepository.save(cart);
+        return CartCreateResult.from(saved);
     }
 
     /**
@@ -115,7 +97,7 @@ public class CartService {
      * 드롭/판매자 정보는 조회 시점에 drop/seller 에서 읽어 채운다(스냅샷 아님).
      */
     @Transactional(readOnly = true)
-    public CartDetailResponse getCart(Long memberId) {
+    public CartDetailResult getCart(Long memberId) {
         LocalDateTime now = LocalDateTime.now();
 
         // 1. memberId 로 장바구니 조회 → 없으면 CART_NOT_FOUND
@@ -153,25 +135,25 @@ public class CartService {
         long remainingSeconds = Duration.between(now, cart.getExpiresAt()).getSeconds();
 
         // 6. 응답 조립
-        return CartDetailResponse.builder()
-                .cartId(cart.getCartId())
-                .drop(CartDetailResponse.DropInfo.builder()
-                        .dropId(drop.getId())
-                        .dropName(drop.getDropProduct().getName())
-                        .price(price)
-                        .imageUrl(drop.getDropProduct().getImageUrl())
-                        .build())
-                .seller(CartDetailResponse.SellerInfo.builder()
-                        .sellerId(drop.getSellerId())
-                        .sellerName(sellerName)
-                        .build())
-                .quantity(quantity)
-                .estimatedAmount(estimatedAmount)
-                .pickupDates(pickupDates)
-                .selectedPickupDate(cart.getPickupDate())
-                .expiresAt(cart.getExpiresAt())
-                .remainingSeconds((int) remainingSeconds)
-                .build();
+        return new CartDetailResult(
+                cart.getCartId(),
+                new CartDetailResult.DropInfo(
+                        drop.getId(),
+                        drop.getDropProduct().getName(),
+                        price,
+                        drop.getDropProduct().getImageUrl()
+                ),
+                new CartDetailResult.SellerInfo(
+                        drop.getSellerId(),
+                        sellerName
+                ),
+                quantity,
+                estimatedAmount,
+                pickupDates,
+                cart.getPickupDate(),
+                cart.getExpiresAt(),
+                (int) remainingSeconds
+        );
     }
 
     /**
@@ -187,9 +169,8 @@ public class CartService {
      * 픽업 날짜 선택. 재선택 시 덮어쓴다.
      */
     @Transactional
-    public CartPickupDateResponse updatePickupDate(Long memberId, CartPickupDateRequest request) {
+    public CartPickupDateResult updatePickupDate(Long memberId, LocalDate pickupDate) {
         LocalDateTime now = LocalDateTime.now();
-        LocalDate pickupDate = request.getPickupDate();
 
         // 1. 조회 → 없으면 CART_NOT_FOUND
         Cart cart = cartRepository.findByMemberId(memberId)
@@ -216,10 +197,7 @@ public class CartService {
         // 5. 저장. 관리 상태 엔티티라 변경 감지로 커밋 시 자동 반영(별도 save 불필요).
         cart.updatePickupDate(pickupDate);
 
-        return CartPickupDateResponse.builder()
-                .cartId(cart.getCartId())
-                .pickupDate(pickupDate)
-                .build();
+        return CartPickupDateResult.from(cart);
     }
 
     /**
@@ -270,7 +248,7 @@ public class CartService {
     private void rollbackStockIfPresent(Cart cart) {
         CartItem item = cart.getItems();
         if (item != null) {
-            dropLockService.rollbackStock(item.getDropId(), cart.getMemberId(), item.getQuantity());
+            dropLockService.rollbackStock(item.getDropId(), cart.getMemberId());
         }
     }
 }

@@ -1,11 +1,11 @@
 package com.openbake.order.presentation;
 
-import com.openbake.member.infrastructure.jwt.JwtAuthenticationFilter;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.common.security.jwt.JwtAuthenticationFilter;
+import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.order.application.OrderService;
+import com.openbake.order.application.SellerOrderPageResult;
+import com.openbake.order.application.SellerOrderSummaryResult;
 import com.openbake.order.domain.OrderState;
-import com.openbake.order.presentation.dto.SellerOrderPageResponse;
-import com.openbake.order.presentation.dto.SellerOrderSummaryResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,30 +49,30 @@ class SellerOrderControllerTest {
     @Test
     @DisplayName("판매자 본인 판매내역 목록을 조회한다")
     void getSellerOrders() throws Exception {
-        SellerOrderSummaryResponse summary = SellerOrderSummaryResponse.builder()
-                .orderId(101L)
-                .dropId(7L)
-                .dropName("시그니처 소금빵")
-                .buyerName("김구매")
-                .quantity(2)
-                .totalAmount(new BigDecimal("5000"))
-                .orderState(OrderState.PAID)
-                .pickupDate(LocalDate.of(2026, 7, 17))
-                .paidAt(LocalDateTime.of(2026, 7, 16, 11, 0))
-                .confirmedAt(null)
-                .canceledAt(null)
-                .build();
+        SellerOrderSummaryResult summary = new SellerOrderSummaryResult(
+                101L,
+                7L,
+                "시그니처 소금빵",
+                "김구매",
+                2,
+                new BigDecimal("5000"),
+                OrderState.PAID,
+                LocalDate.of(2026, 7, 17),
+                LocalDateTime.of(2026, 7, 16, 11, 0),
+                null,
+                null
+        );
 
-        SellerOrderPageResponse response = SellerOrderPageResponse.builder()
-                .content(List.of(summary))
-                .page(0)
-                .size(10)
-                .totalElements(1)
-                .totalPages(1)
-                .build();
+        SellerOrderPageResult result = new SellerOrderPageResult(
+                List.of(summary),
+                0,
+                10,
+                1,
+                1
+        );
 
         when(orderService.getSellerOrders(isNull(), eq(0), eq(10)))
-                .thenReturn(response);
+                .thenReturn(result);
 
         mockMvc.perform(get("/api/v1/sellers/me/orders"))
                 .andExpect(status().isOk())

@@ -1,0 +1,99 @@
+package com.openbake.payment.application;
+
+import com.openbake.common.exception.BusinessException;
+import com.openbake.common.exception.ErrorCode;
+import com.openbake.payment.domain.ChargeStatus;
+import com.openbake.payment.domain.DepositAccount;
+import com.openbake.payment.domain.TransactionType;
+import com.openbake.payment.domain.WalletTransaction;
+import com.openbake.payment.domain.ChargeRequestRepository;
+import com.openbake.payment.domain.DepositAccountRepository;
+import com.openbake.payment.domain.WalletTransactionRepository;
+import com.openbake.payment.application.dto.DepositResult;
+import com.openbake.payment.application.dto.GetTransactionsQuery;
+import com.openbake.payment.application.dto.TransactionResult;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class DepositService {
+
+    private static final int MAX_PAGE_SIZE = 50;
+
+    private final DepositAccountRepository depositAccountRepository;
+    private final ChargeRequestRepository chargeRequestRepository;
+    private final WalletTransactionRepository walletTransactionRepository;
+
+    /**
+     * 예치금 잔액 조회.
+     * 계좌가 없으면 자동 생성(잔액 0원)해서 반환한다.
+     * → 아직 충전한 적 없는 신규 회원도 조회 가능.
+     */
+    @Transactional
+    public DepositResult getBalance(Long memberId) {
+        DepositAccount account = depositAccountRepository.findByMemberId(memberId)
+                .orElseGet(() -> depositAccountRepository.save(
+                        DepositAccount.createMemberAccount(memberId)
+                ));
+
+        boolean hasChargeInProgress = chargeRequestRepository.existsByMemberIdAndStatusIn(
+                memberId, List.of(ChargeStatus.READY, ChargeStatus.IN_PROGRESS)
+        );
+
+        return new DepositResult(memberId, account.getBalance(), hasChargeInProgress);
+    }
+
+    /**
+     * 거래 내역 조회 (5-2).
+     * 회원의 WalletTransaction을 페이징 조회한다.
+     * transactionType이 지정되면 해당 유형만 필터링.
+     */
+    @Transactional(readOnly = true)
+    public Page<TransactionResult> getTransactions(GetTransactionsQuery query) {
+        int clampedSize = Math.min(query.size(), MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(query.page(), clampedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        DepositAccount account = depositAccountRepository.findByMemberId(query.memberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPOSIT_ACCOUNT_NOT_FOUND));
+
+        Page<WalletTransaction> transactions;
+        if (query.transactionType() != null) {
+            transactions = walletTransactionRepository.findByDepositAccountIdAndTransactionType(
+                    account.getId(), query.transactionType(), pageable);
+        } else {
+            transactions = walletTransactionRepository.findByDepositAccountId(account.getId(), pageable);
+        }
+
+        return transactions.map(this::toResult);
+    }
+
+    private TransactionResult toResult(WalletTransaction tx) {
+        String description = generateDescription(tx);
+        return new TransactionResult(
+                tx.getId(),
+                tx.getTransactionType().name(),
+                tx.getAmount(),
+                tx.getBalanceAfter(),
+                description,
+                tx.getReferenceType().name(),
+                tx.getReferenceId(),
+                tx.getCreatedAt()
+        );
+    }
+
+    private String generateDescription(WalletTransaction tx) {
+        return switch (tx.getTransactionType()) {
+            case CHARGE -> "예치금 충전";
+            case PAYMENT -> "주문 결제";
+            case REFUND -> "주문 환불";
+        };
+    }
+}

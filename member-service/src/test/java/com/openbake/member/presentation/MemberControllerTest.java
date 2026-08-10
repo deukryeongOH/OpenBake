@@ -4,13 +4,13 @@ import com.openbake.common.exception.AccessDeniedException;
 import com.openbake.common.exception.AuthenticationFailedException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.member.application.MemberService;
-import com.openbake.member.domain.AccessTokenRepository;
+import com.openbake.common.security.jwt.AccessTokenRepository;
 import com.openbake.member.domain.MemberStatus;
 import com.openbake.member.domain.Role;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
-import com.openbake.member.presentation.dto.member.MemberResponse;
+import com.openbake.common.security.jwt.JwtTokenProvider;
+import com.openbake.member.application.dto.member.MemberResult;
+import com.openbake.member.application.dto.member.MemberUpdateResult;
 import com.openbake.member.presentation.dto.member.MemberUpdateRequest;
-import com.openbake.member.presentation.dto.member.MemberUpdateResponse;
 import com.openbake.member.presentation.dto.member.PasswordChangeRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,7 +55,7 @@ class MemberControllerTest {
     @DisplayName("회원 조회 성공 시 200과 회원 정보를 반환한다")
     void getMember_success() throws Exception {
         given(memberService.getMemberById(1L)).willReturn(
-                new MemberResponse(1L, "홍길동", "test@example.com", "010-1234-5678", Role.CUSTOMER, MemberStatus.ACTIVE));
+                new MemberResult(1L, "홍길동", "test@example.com", "010-1234-5678", Role.CUSTOMER, MemberStatus.ACTIVE));
 
         mockMvc.perform(get("/api/v1/members/1"))
                 .andExpect(status().isOk())
@@ -95,7 +95,7 @@ class MemberControllerTest {
     void updateMember_success() throws Exception {
         MemberUpdateRequest request = new MemberUpdateRequest("김철수", "010-9999-8888");
         given(memberService.updateMember(eq(1L), any()))
-                .willReturn(new MemberUpdateResponse(1L, "김철수", "010-9999-8888"));
+                .willReturn(new MemberUpdateResult(1L, "김철수", "010-9999-8888"));
 
         mockMvc.perform(patch("/api/v1/members/1")
                         .contentType(MediaType.APPLICATION_JSON)

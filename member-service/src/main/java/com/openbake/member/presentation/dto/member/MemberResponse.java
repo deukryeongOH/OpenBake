@@ -1,6 +1,6 @@
 package com.openbake.member.presentation.dto.member;
 
-import com.openbake.member.domain.Member;
+import com.openbake.member.application.dto.member.MemberResult;
 import com.openbake.member.domain.MemberStatus;
 import com.openbake.member.domain.Role;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,8 +19,8 @@ public record MemberResponse (
     @Schema(description = "회원 상태", example = "ACTIVE")
     MemberStatus status
 ) {
-    public MemberResponse(Member member, String email) {
-        this(member.getId(), member.getName(), email, member.getPhoneNumber(),
-                member.getRole(), member.getStatus());
+    public static MemberResponse from(MemberResult result) {
+        return new MemberResponse(result.id(), result.name(), result.email(), result.phoneNumber(),
+                result.role(), result.status());
     }
 }

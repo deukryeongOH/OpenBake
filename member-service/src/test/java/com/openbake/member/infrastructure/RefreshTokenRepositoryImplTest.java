@@ -1,6 +1,6 @@
 package com.openbake.member.infrastructure;
 
-import com.openbake.member.infrastructure.jwt.JwtProperties;
+import com.openbake.common.security.jwt.JwtProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

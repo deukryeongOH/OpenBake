@@ -2,3 +2,4 @@ rootProject.name = 'openbake'
 
 include 'common'
 include 'member-service'
+include 'payment-service'

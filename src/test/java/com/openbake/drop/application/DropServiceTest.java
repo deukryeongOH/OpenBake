@@ -1,10 +1,10 @@
 package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
+import com.openbake.drop.application.dto.DropProductInfoCommand;
+import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.application.queue.TodayDropCache;
 import com.openbake.drop.domain.*;
-import com.openbake.drop.presentation.dto.DropProductInfoRequest;
-import com.openbake.drop.application.dto.DropProductInfoResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,7 +46,7 @@ class DropServiceTest {
     @InjectMocks
     private DropService dropService;
 
-    private DropProductInfoRequest request;
+    private DropProductInfoCommand command;
 
     @BeforeEach
     void setUp() {
@@ -56,16 +56,16 @@ class DropServiceTest {
                 LocalDate.parse("2028-08-03")
         );
 
-        request = new DropProductInfoRequest(
+        command = DropProductInfoCommand.create(
                 "두쫀쿠",
                 "원물 맛이 많이 나요.",
                 "C:\\Users\\deukr\\OneDrive\\바탕 화면\\두쫀쿠.jpg",
-                pickUpDates,
                 LocalDateTime.parse("2028-07-25T13:00:00"),
                 LocalDateTime.parse("2028-07-25T14:00:00"),
+                200,
                 5,
                 8000,
-                200
+                pickUpDates
         );
     }
 
@@ -77,19 +77,19 @@ class DropServiceTest {
 
         // 1. Mock Drop 엔티티 준비 (DB 저장 후 ID가 할당된 상태 모킹)
         DropProduct dropProduct = DropProduct.builder()
-                .name(request.name())
-                .description(request.description())
-                .imageUrl(request.imageUrl())
-                .price(request.price())
+                .name(command.name())
+                .description(command.description())
+                .imageUrl(command.image())
+                .price(command.price())
                 .build();
 
         Drop savedDrop = Drop.builder()
                 .dropStatus(UPCOMING)
-                .pickUpAvailableDates(request.pickUpAvailableDates())
+                .pickUpAvailableDates(command.pickupDates())
                 .dropProduct(dropProduct)
-                .limitQuantity(request.limitQuantity())
-                .dropStart(request.dropStart())
-                .dropEnd(request.dropEnd())
+                .limitQuantity(command.LimitQuantity())
+                .dropStart(command.dropStart())
+                .dropEnd(command.dropEnd())
                 .sellerId(sellerId)
                 .build();
 
@@ -98,8 +98,8 @@ class DropServiceTest {
         // 2. Mock DropInventory 엔티티 준비
         DropInventory savedDropInventory = DropInventory.builder()
                 .dropId(100L)
-                .totalQuantity(request.totalQuantity())
-                .remainQuantity(request.totalQuantity())
+                .totalQuantity(command.totalQuantity())
+                .remainQuantity(command.totalQuantity())
                 .build();
 
         // 3. Repository 스터빙 (Stubbing)
@@ -107,21 +107,21 @@ class DropServiceTest {
         given(dropInventoryRepository.save(any(DropInventory.class))).willReturn(savedDropInventory);
 
         // when
-        DropProductInfoResponse response = dropService.registerDropProduct(request, sellerId);
+        DropProductInfoResult response = dropService.registerDropProduct(command, sellerId);
 
         // then
         assertThat(response).isNotNull();
-        assertThat(response.name()).isEqualTo(request.name());
-        assertThat(response.description()).isEqualTo(request.description());
-        assertThat(response.dropStart()).isEqualTo(request.dropStart());
-        assertThat(response.dropEnd()).isEqualTo(request.dropEnd());
-        assertThat(response.limitQuantity()).isEqualTo(request.limitQuantity());
-        assertThat(response.price()).isEqualTo(request.price());
-        assertThat(response.totalQuantity()).isEqualTo(request.totalQuantity());
-        assertThat(response.imageUrl()).isEqualTo(request.imageUrl());
+        assertThat(response.name()).isEqualTo(command.name());
+        assertThat(response.description()).isEqualTo(command.description());
+        assertThat(response.dropStart()).isEqualTo(command.dropStart());
+        assertThat(response.dropEnd()).isEqualTo(command.dropEnd());
+        assertThat(response.limitQuantity()).isEqualTo(command.LimitQuantity());
+        assertThat(response.price()).isEqualTo(command.price());
+        assertThat(response.totalQuantity()).isEqualTo(command.totalQuantity());
+        assertThat(response.imageUrl()).isEqualTo(command.image());
         assertThat(response.dropStatus()).isEqualTo(UPCOMING);
         assertThat(response.dropId()).isEqualTo(100L);
-        assertThat(response.remainQuantity()).isEqualTo(request.totalQuantity());
+        assertThat(response.remainQuantity()).isEqualTo(command.totalQuantity());
 
         // 4. 실제 DB 저장 메소드가 호출되었는지 검증
         verify(dropRepository).save(any(Drop.class));
@@ -137,7 +137,7 @@ class DropServiceTest {
         given(dropRepository.existsByDropStartBetween(any(), any())).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> dropService.registerDropProduct(request, 1L))
+        assertThatThrownBy(() -> dropService.registerDropProduct(command, 1L))
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
@@ -180,14 +180,14 @@ class DropServiceTest {
         given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
 
         // when
-        DropProductInfoResponse response = dropService.updateDropProduct(dropId, sellerId, request);
+        DropProductInfoResult response = dropService.updateDropProduct(dropId, sellerId, command);
 
         // then
-        assertThat(response.name()).isEqualTo(request.name());
-        assertThat(response.dropStart()).isEqualTo(request.dropStart());
-        assertThat(response.dropEnd()).isEqualTo(request.dropEnd());
-        assertThat(response.totalQuantity()).isEqualTo(request.totalQuantity());
-        assertThat(dropInventory.getRemainQuantity()).isEqualTo(request.totalQuantity());
+        assertThat(response.name()).isEqualTo(command.name());
+        assertThat(response.dropStart()).isEqualTo(command.dropStart());
+        assertThat(response.dropEnd()).isEqualTo(command.dropEnd());
+        assertThat(response.totalQuantity()).isEqualTo(command.totalQuantity());
+        assertThat(dropInventory.getRemainQuantity()).isEqualTo(command.totalQuantity());
 
         // 시작/종료 시각이 바뀌었을 수 있으므로 캐시가 즉시 갱신되어야 한다
         verify(todayDropCache).refresh();
@@ -217,7 +217,7 @@ class DropServiceTest {
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
 
         // when & then
-        assertThatThrownBy(() -> dropService.updateDropProduct(dropId, requesterId, request))
+        assertThatThrownBy(() -> dropService.updateDropProduct(dropId, requesterId, command))
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();

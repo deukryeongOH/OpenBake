@@ -4,18 +4,18 @@ import com.openbake.common.exception.AuthenticationFailedException;
 import com.openbake.common.exception.DuplicateMemberException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.common.exception.InvalidRefreshTokenException;
-import com.openbake.member.domain.AccessTokenRepository;
-import com.openbake.member.domain.AuthCredential;
-import com.openbake.member.domain.AuthProvider;
-import com.openbake.member.domain.Member;
-import com.openbake.member.domain.RefreshTokenRepository;
-import com.openbake.member.domain.Role;
-import com.openbake.member.infrastructure.AuthCredentialRepositoryImpl;
-import com.openbake.member.infrastructure.MemberRepositoryImpl;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
-import com.openbake.member.infrastructure.oauth.OidcIdTokenVerifier;
-import com.openbake.member.infrastructure.oauth.OidcIdentity;
-import com.openbake.member.presentation.dto.auth.*;
+import com.openbake.common.security.jwt.AccessTokenRepository;
+import com.openbake.common.security.jwt.JwtTokenProvider;
+import com.openbake.member.application.dto.auth.LocalLoginCommand;
+import com.openbake.member.application.dto.auth.LocalLoginResult;
+import com.openbake.member.application.dto.auth.LogoutCommand;
+import com.openbake.member.application.dto.auth.OAuthLoginCommand;
+import com.openbake.member.application.dto.auth.OAuthLoginResult;
+import com.openbake.member.application.dto.auth.ReissueCommand;
+import com.openbake.member.application.dto.auth.ReissueResult;
+import com.openbake.member.application.dto.auth.SignupCommand;
+import com.openbake.member.application.dto.auth.SignupResult;
+import com.openbake.member.domain.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,16 +27,16 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final MemberRepositoryImpl memberRepository;
-    private final AuthCredentialRepositoryImpl authCredentialRepository;
+    private final MemberRepository memberRepository;
+    private final AuthCredentialRepository authCredentialRepository;
     private final PasswordEncoder passwordEncoder;
-    private final OidcIdTokenVerifier oidcIdTokenVerifier;
+    private final IdTokenVerifier oidcIdTokenVerifier;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessTokenRepository accessTokenRepository;
 
     @Transactional
-    public SignupResponse signup(SignupRequest request) {
+    public SignupResult signup(SignupCommand request) {
         if (authCredentialRepository.existsByProviderAndEmail(AuthProvider.LOCAL, request.email())) {
             throw new DuplicateMemberException();
         }
@@ -49,15 +49,15 @@ public class AuthService {
                 savedMember.getId(), request.email(), encodedPassword);
         authCredentialRepository.save(authCredential);
 
-        return new SignupResponse(savedMember.getId(), request.email());
+        return new SignupResult(savedMember.getId(), request.email());
     }
 
     @Transactional
-    public OAuthLoginResponse loginOrSignupWithOAuth(AuthProvider provider, OAuthLoginRequest request) {
-        OidcIdentity identity = oidcIdTokenVerifier.verify(provider, request.idToken());
+    public OAuthLoginResult loginOrSignupWithOAuth(OAuthLoginCommand command) {
+        OidcIdentity identity = oidcIdTokenVerifier.verify(command.provider(), command.idToken());
 
         Optional<AuthCredential> existing = authCredentialRepository
-                .findByProviderAndProviderId(provider, identity.providerId());
+                .findByProviderAndProviderId(command.provider(), identity.providerId());
 
         if (existing.isPresent()) {
             Member member = memberRepository.findById(existing.get().getMemberId())
@@ -65,7 +65,7 @@ public class AuthService {
 
             TokenPair tokens = issueTokens(member.getId(), member.getRole());
 
-            return new OAuthLoginResponse(member.getId(), tokens.accessToken(), tokens.refreshToken(), identity.email(), member.getName(), false);
+            return new OAuthLoginResult(member.getId(), tokens.accessToken(), tokens.refreshToken(), identity.email(), member.getName(), false);
         }
 
         if (authCredentialRepository.existsByProviderAndEmail(AuthProvider.LOCAL, identity.email())) {
@@ -74,19 +74,19 @@ public class AuthService {
 
         Member savedMember = memberRepository.save(Member.createFromGoogle(identity.name()));
         authCredentialRepository.save(AuthCredential.createGoogle(
-                savedMember.getId(), provider, identity.providerId(), identity.email()));
+                savedMember.getId(), command.provider(), identity.providerId(), identity.email()));
 
         TokenPair tokens = issueTokens(savedMember.getId(), savedMember.getRole());
 
-        return new OAuthLoginResponse(savedMember.getId(), tokens.accessToken(), tokens.refreshToken(), identity.email(), savedMember.getName(), true);
+        return new OAuthLoginResult(savedMember.getId(), tokens.accessToken(), tokens.refreshToken(), identity.email(), savedMember.getName(), true);
     }
 
     @Transactional
-    public LocalLoginResponse localLogin(LocalLoginRequest request) {
-        AuthCredential authCredential = authCredentialRepository.findByProviderAndEmail(AuthProvider.LOCAL, request.email())
+    public LocalLoginResult localLogin(LocalLoginCommand command) {
+        AuthCredential authCredential = authCredentialRepository.findByProviderAndEmail(AuthProvider.LOCAL, command.email())
                 .orElseThrow(() -> new AuthenticationFailedException("이메일 또는 비밀번호가 올바르지 않습니다."));
 
-        if (!passwordEncoder.matches(request.password(), authCredential.getPasswordHash())) {
+        if (!passwordEncoder.matches(command.password(), authCredential.getPasswordHash())) {
             throw new AuthenticationFailedException("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
@@ -95,20 +95,20 @@ public class AuthService {
 
         TokenPair tokens = issueTokens(member.getId(), member.getRole());
 
-        return new LocalLoginResponse(member.getId(), tokens.accessToken(), tokens.refreshToken(), member.getRole());
+        return new LocalLoginResult(member.getId(), tokens.accessToken(), tokens.refreshToken(), member.getRole());
     }
 
-    public ReissueResponse reissue(ReissueRequest request) {
-        if (!jwtTokenProvider.isValid(request.refreshToken())) {
+    public ReissueResult reissue(ReissueCommand command) {
+        if (!jwtTokenProvider.isValid(command.refreshToken())) {
             throw new InvalidRefreshTokenException("유효하지 않은 리프레시 토큰입니다.");
         }
 
-        Long memberId = jwtTokenProvider.getMemberId(request.refreshToken());
+        Long memberId = jwtTokenProvider.getMemberId(command.refreshToken());
 
         String storedRefreshToken = refreshTokenRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new InvalidRefreshTokenException("유효하지 않은 리프레시 토큰입니다."));
 
-        if (!storedRefreshToken.equals(request.refreshToken())) {
+        if (!storedRefreshToken.equals(command.refreshToken())) {
             refreshTokenRepository.deleteByMemberId(memberId);
             throw new InvalidRefreshTokenException("이미 사용된 리프레시 토큰입니다. 다시 로그인해주세요.");
         }
@@ -118,22 +118,22 @@ public class AuthService {
 
         TokenPair tokens = issueTokens(member.getId(), member.getRole());
 
-        return new ReissueResponse(tokens.accessToken(), tokens.refreshToken());
+        return new ReissueResult(tokens.accessToken(), tokens.refreshToken());
     }
 
-    public void logout(LogoutRequest request) {
-        if (!jwtTokenProvider.isValid(request.refreshToken())) {
+    public void logout(LogoutCommand command) {
+        if (!jwtTokenProvider.isValid(command.refreshToken())) {
             throw new InvalidRefreshTokenException("유효하지 않은 리프레시 토큰입니다.");
         }
 
-        Long memberId = jwtTokenProvider.getMemberId(request.refreshToken());
+        Long memberId = jwtTokenProvider.getMemberId(command.refreshToken());
 
         refreshTokenRepository.deleteByMemberId(memberId);
         accessTokenRepository.blacklistByMemberId(memberId);
     }
 
     private TokenPair issueTokens(Long memberId, Role role) {
-        String accessToken = jwtTokenProvider.createAccessToken(memberId, role);
+        String accessToken = jwtTokenProvider.createAccessToken(memberId, role.name());
         String refreshToken = jwtTokenProvider.createRefreshToken(memberId);
 
         accessTokenRepository.save(memberId, accessToken);

@@ -9,22 +9,22 @@ import com.openbake.common.exception.DuplicateSellerApplicationException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.common.exception.InvalidApplicationStatusException;
 import com.openbake.common.exception.InvalidSettlementAccountException;
-import com.openbake.member.domain.AccessTokenRepository;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.common.security.jwt.AccessTokenRepository;
+import com.openbake.common.security.jwt.JwtTokenProvider;
+import com.openbake.seller.application.AccountVerificationConfirmResult;
+import com.openbake.seller.application.AccountVerificationStartResult;
+import com.openbake.seller.application.ApplicationCreateResult;
+import com.openbake.seller.application.ApplicationStatusUpdateResult;
+import com.openbake.seller.application.BusinessVerificationResult;
+import com.openbake.seller.application.MySellerResult;
+import com.openbake.seller.application.SellerResult;
 import com.openbake.seller.application.SellerService;
 import com.openbake.seller.domain.ApplicationStatus;
 import com.openbake.seller.presentation.dto.AccountVerificationConfirmRequest;
-import com.openbake.seller.presentation.dto.AccountVerificationConfirmResponse;
 import com.openbake.seller.presentation.dto.AccountVerificationStartRequest;
-import com.openbake.seller.presentation.dto.AccountVerificationStartResponse;
-import com.openbake.seller.presentation.dto.ApplicationStatusUpdateRequest;
-import com.openbake.seller.presentation.dto.ApplicationStatusUpdateResponse;
 import com.openbake.seller.presentation.dto.ApplicationCreateRequest;
-import com.openbake.seller.presentation.dto.ApplicationCreateResponse;
+import com.openbake.seller.presentation.dto.ApplicationStatusUpdateRequest;
 import com.openbake.seller.presentation.dto.BusinessVerificationRequest;
-import com.openbake.seller.presentation.dto.BusinessVerificationResponse;
-import com.openbake.seller.presentation.dto.MySellerResponse;
-import com.openbake.seller.presentation.dto.SellerResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,7 +72,7 @@ class SellerControllerTest {
         BusinessVerificationRequest request =
                 new BusinessVerificationRequest("123-45-67890", "서울시", "이세종");
         given(sellerService.verifyBusiness(any()))
-                .willReturn(new BusinessVerificationResponse(true, "123-45-67890", LocalDateTime.now()));
+                .willReturn(new BusinessVerificationResult(true, "123-45-67890", LocalDateTime.now()));
 
         mockMvc.perform(post("/api/v1/sellers/business-verifications")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -115,7 +115,7 @@ class SellerControllerTest {
         AccountVerificationStartRequest request =
                 new AccountVerificationStartRequest("088", "1101234567", "이세종");
         given(sellerService.requestAccountVerification(any()))
-                .willReturn(new AccountVerificationStartResponse("vr_1", LocalDateTime.now().plusMinutes(3)));
+                .willReturn(new AccountVerificationStartResult("vr_1", LocalDateTime.now().plusMinutes(3)));
 
         mockMvc.perform(post("/api/v1/sellers/settlement-account/verification-requests")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -157,7 +157,7 @@ class SellerControllerTest {
     void verifyAccount_success() throws Exception {
         AccountVerificationConfirmRequest request = new AccountVerificationConfirmRequest("1234");
         given(sellerService.verifyAccount(eq("vr_1"), any()))
-                .willReturn(new AccountVerificationConfirmResponse(true, LocalDateTime.now()));
+                .willReturn(new AccountVerificationConfirmResult(true, LocalDateTime.now()));
 
         mockMvc.perform(post("/api/v1/sellers/settlement-account/verification-requests/vr_1/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -213,7 +213,7 @@ class SellerControllerTest {
     void applySeller_success() throws Exception {
         ApplicationCreateRequest request = new ApplicationCreateRequest("세종베이커리", "123-45-67890", "서울시", "이세종");
         given(sellerService.applySeller(any()))
-                .willReturn(new ApplicationCreateResponse(1L, 1L, "세종베이커리", ApplicationStatus.PENDING));
+                .willReturn(new ApplicationCreateResult(1L, 1L, "세종베이커리", ApplicationStatus.PENDING));
 
         mockMvc.perform(post("/api/v1/sellers/apply")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -278,7 +278,7 @@ class SellerControllerTest {
     void updateApplicationStatus_approve_success() throws Exception {
         ApplicationStatusUpdateRequest request = new ApplicationStatusUpdateRequest(ApplicationStatus.APPROVED, null);
         given(sellerService.updateApplicationStatus(eq(1L), any()))
-                .willReturn(new ApplicationStatusUpdateResponse(1L, ApplicationStatus.APPROVED, null, LocalDateTime.now()));
+                .willReturn(new ApplicationStatusUpdateResult(1L, ApplicationStatus.APPROVED, null, LocalDateTime.now()));
 
         mockMvc.perform(patch("/api/v1/sellers/1/status")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -330,7 +330,7 @@ class SellerControllerTest {
     @Test
     @DisplayName("내 판매자 신청 조회 성공 시 200과 반려 사유 필드를 포함해 반환한다")
     void getMySeller_success() throws Exception {
-        given(sellerService.getMySeller()).willReturn(new MySellerResponse(
+        given(sellerService.getMySeller()).willReturn(new MySellerResult(
                 1L, 1L, "세종베이커리", "123-45-67890", ApplicationStatus.REJECTED,
                 "사업장 주소 불일치", "088", "110-***-4567", true, LocalDateTime.now()));
 
@@ -353,7 +353,7 @@ class SellerControllerTest {
     @Test
     @DisplayName("판매자 조회 성공 시 200과 마스킹된 계좌번호를 반환한다")
     void getSeller_success() throws Exception {
-        given(sellerService.getSeller(1L)).willReturn(new SellerResponse(
+        given(sellerService.getSeller(1L)).willReturn(new SellerResult(
                 1L, 1L, "세종베이커리", "123-45-67890", ApplicationStatus.APPROVED,
                 "088", "110-***-4567", true, LocalDateTime.now()));
 

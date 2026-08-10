@@ -78,11 +78,13 @@ services:
     env_file:
       - .env
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/openbake
+      DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
+      DB_USERNAME: openbake
+      DB_PASSWORD: openbake
       REDIS_HOST: redis
       REDIS_PORT: 6379
     depends_on:
-      postgres:
+      payment-postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -132,6 +134,21 @@ services:
     networks:
       - openbake-net
 
+  payment-postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: openbake_payment
+      POSTGRES_USER: openbake
+      POSTGRES_PASSWORD: openbake
+    volumes:
+      - openbake-payment-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U openbake" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [ openbake-net ]
+
   member-postgres:
     image: postgres:17
     environment:
@@ -174,4 +191,5 @@ volumes:
   openbake-pg-data:
   certbot-webroot:
   certbot-etc:
+  openbake-payment-pg-data:
   openbake-member-pg-data:

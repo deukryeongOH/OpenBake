@@ -5,6 +5,7 @@ WORKDIR /app
 COPY gradlew settings.gradle ./
 COPY gradle ./gradle
 COPY common/build.gradle common/build.gradle
+COPY member-service/build.gradle member-service/build.gradle
 COPY payment-service/build.gradle payment-service/build.gradle
 RUN chmod +x gradlew && ./gradlew --version
 

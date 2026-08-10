@@ -1,15 +1,11 @@
-package com.openbake.drop.application.queue;
+package com.openbake.drop.application.cache;
 
-import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 // 오늘 진행되는 드롭 정보를 캐싱한다. QueueScheduler가 매초 DB를 조회하지 않도록
@@ -21,42 +17,18 @@ public class TodayDropCache {
 
     private final DropRepository dropRepository;
 
-    private final AtomicReference<CachedDrop> cachedDrop = new AtomicReference<>(CachedDrop.empty(LocalDate.now()));
-    private final AtomicBoolean checkStart = new AtomicBoolean(false);
-    private final AtomicBoolean checkEnd = new AtomicBoolean(false);
+    private final AtomicReference<List<CachedDrop>> cachedDrop = new AtomicReference<>(List.of());
 
     public void refresh() {
         LocalDate today = LocalDate.now();
-        LocalDateTime todayStart = today.atStartOfDay();
-        LocalDateTime todayEnd = today.atTime(LocalTime.MAX);
+        List<CachedDrop> dropList = dropRepository.findListByDropDate(today).stream()
+                .map(CachedDrop::of).toList();
 
-        checkStart.set(false);
-        checkEnd.set(false);
-
-        Optional<Drop> findDrop = dropRepository.findByDropStartBetween(todayStart, todayEnd); // 하루에 드롭 하나라 가능
-
-        cachedDrop.set(findDrop
-                .map(drop -> new CachedDrop(today, drop.getId(), drop.getDropStart(), drop.getDropEnd()))
-                .orElseGet(() -> CachedDrop.empty(today)));
+        cachedDrop.set(dropList);
     }
 
-    public CachedDrop get() {
+    public List<CachedDrop> get() {
         return cachedDrop.get();
     }
 
-    // true를 반환하는 최초 1회에만 Active 전환을 수행
-    public boolean tryMarkStarted() {
-        return checkStart.compareAndSet(false, true);
-    }
-
-    // true를 반환하는 최초 1회에만 Completed 전환을 수행
-    public boolean tryMarkEnded() {
-        return checkEnd.compareAndSet(false, true);
-    }
-
-    public record CachedDrop(LocalDate cachedDate, Long dropId, LocalDateTime dropStart, LocalDateTime dropEnd) {
-        static CachedDrop empty(LocalDate date) {
-            return new CachedDrop(date, null, null, null);
-        }
-    }
 }

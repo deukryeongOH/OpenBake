@@ -1,18 +1,16 @@
 package com.openbake.cart.application;
 
+import com.openbake.cart.application.port.DropPort;
+import com.openbake.cart.application.port.ReservationPort;
+import com.openbake.cart.application.port.SellerPort;
+import com.openbake.cart.application.port.dto.DropInfo;
+import com.openbake.cart.application.port.dto.ReservationInfo;
+import com.openbake.cart.application.port.dto.SellerInfo;
 import com.openbake.cart.domain.Cart;
 import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.application.DropLockService;
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropEntry;
-import com.openbake.drop.domain.DropEntryRepository;
-import com.openbake.drop.domain.DropRepository;
-import com.openbake.drop.domain.EntryStatus;
-import com.openbake.seller.domain.Seller;
-import com.openbake.seller.domain.SellerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -30,12 +28,10 @@ import java.util.Optional;
 public class CartService {
 
     private final CartRepository cartRepository;
-    private final DropRepository dropRepository;
-    private final SellerRepository sellerRepository;
-    //재고 선점 여부 확인용(담기 시 drop 이 만든 응모 상태를 조회).
-    private final DropEntryRepository dropEntryRepository;
-    //재고 복구 요청용(이탈 시 동기 호출). 차감은 cart 가 하지 않는다.
-    private final DropLockService dropLockService;
+    private final DropPort dropPort;
+    private final SellerPort sellerPort;
+    //재고 선점 확인·복구 요청용. 차감은 cart 가 하지 않는다.
+    private final ReservationPort reservationPort;
 
     //만료 시간은 정책값이라 코드에 박지 않고 설정에서 받는다.
     @Value("${openbake.cart.ttl}")
@@ -45,7 +41,7 @@ public class CartService {
      * 장바구니 생성.
      * 재고 차감은 cart 가 하지 않는다. 드롭 상세에서 "담기"를 누르면 drop 이 재고를 선점/차감하고,
      * 그 뒤 이 API 가 호출돼 장바구니를 만든다. cart 는 drop 이 실제로 선점했는지(DropEntry=RESERVED)만
-     * 확인하고 장바구니를 기록한다.
+     * 확인하고 장바구니를 기록한다. 요청 수량이 선점 수량과 다르면 CA007 로 막는다.
      */
     @Transactional
     public CartCreateResult create(Long memberId, Long dropId, int quantity) {
@@ -70,12 +66,18 @@ public class CartService {
             cartRepository.deleteImmediately(existing);
         }
 
-        //재고 선점 확인 — drop 이 담기 시점에 선점(RESERVED)했는지 확인한다.
-        //응모가 없거나 RESERVED 가 아니면 정상적인 담기 흐름을 거치지 않은 것이므로 막는다.
-        DropEntry entry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
+        //재고 선점 확인 — drop 이 담기 시점에 선점했는지 확인한다.
+        //응모가 없거나 선점 상태가 아니면 정상적인 담기 흐름을 거치지 않은 것이므로 막는다.
+        ReservationInfo reservation = reservationPort.findReservation(dropId, memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED));
-        if (entry.getEntryStatus() != EntryStatus.RESERVED) {
+        if (!reservation.reserved()) {
             throw new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED);
+        }
+
+        //선점 수량 대조 — 요청 수량이 drop 이 실제로 차감한 수량과 같아야 한다.
+        //다르면 이탈 시 drop 이 선점 수량으로 복구하므로 재고가 어긋난다.
+        if (reservation.selectQuantity() != quantity) {
+            throw new BusinessException(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
         }
 
         Cart cart = Cart.create(memberId, now.plus(cartTtl));
@@ -107,22 +109,21 @@ public class CartService {
         int quantity = item.getQuantity();
 
         // 3. 드롭 조회 — 상품명/가격/이미지/픽업일. 없으면 DROP_NOT_FOUND
-        Drop drop = dropRepository.findById(item.getDropId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
+        DropInfo drop = dropPort.getDrop(item.getDropId());
 
         //가격은 int → BigDecimal 변환. 조회 시점 최신값이며 스냅샷이 아니다.
-        BigDecimal price = BigDecimal.valueOf(drop.getDropProduct().getPrice());
+        BigDecimal price = BigDecimal.valueOf(drop.price());
         BigDecimal estimatedAmount = price.multiply(BigDecimal.valueOf(quantity));
 
         //픽업 가능일 — 지난 날짜는 제외하고 오름차순으로 내려준다.
-        List<LocalDate> pickupDates = drop.getPickUpAvailableDate().stream()
+        List<LocalDate> pickupDates = drop.pickupDates().stream()
                 .filter(d -> !d.isBefore(now.toLocalDate()))
                 .sorted()
                 .toList();
 
         // 4. 판매자 상호명 조회. 없으면 null(방어).
-        String sellerName = sellerRepository.findById(drop.getSellerId())
-                .map(Seller::getBakeryName)
+        String sellerName = sellerPort.findSeller(drop.sellerId())
+                .map(SellerInfo::bakeryName)
                 .orElse(null);
 
         // 5. 만료까지 남은 초
@@ -132,13 +133,13 @@ public class CartService {
         return new CartDetailResult(
                 cart.getCartId(),
                 new CartDetailResult.DropInfo(
-                        drop.getId(),
-                        drop.getDropProduct().getName(),
+                        drop.dropId(),
+                        drop.name(),
                         price,
-                        drop.getDropProduct().getImageUrl()
+                        drop.imageUrl()
                 ),
                 new CartDetailResult.SellerInfo(
-                        drop.getSellerId(),
+                        drop.sellerId(),
                         sellerName
                 ),
                 quantity,
@@ -182,9 +183,8 @@ public class CartService {
 
         // 4. 위조/stale 방어 — 요청된 날짜가 드롭의 픽업 가능일에 실제로 포함되는지 확인.
         //    화면 목록은 drop 에서 내려주지만, 요청 본문은 클라이언트가 만든 값이라 서버가 다시 확인한다.
-        Drop drop = dropRepository.findById(cart.getItems().getDropId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
-        if (!drop.getPickUpAvailableDate().contains(pickupDate)) {
+        DropInfo drop = dropPort.getDrop(cart.getItems().getDropId());
+        if (!drop.pickupDates().contains(pickupDate)) {
             throw new BusinessException(ErrorCode.CART_INVALID_PICKUP_DATE);
         }
 
@@ -236,13 +236,13 @@ public class CartService {
     }
 
     /**
-     * 장바구니 이탈(삭제/만료/기존 정리) 시, 선점했던 재고를 drop 에 복구 요청한다(동기 호출).
-     * drop 의 rollbackStock 이 entry 상태 변경 + 재고 복구를 수행한다. 재고 소유는 drop.
+     * 장바구니 이탈(삭제/만료/기존 정리) 시, 선점했던 재고를 drop 에 복구 요청한다.
+     * 상태 변경과 재고 복구는 drop 이 수행한다. 재고 소유는 drop.
      */
     private void rollbackStockIfPresent(Cart cart) {
         CartItem item = cart.getItems();
         if (item != null) {
-            dropLockService.rollbackStock(item.getDropId(), cart.getMemberId());
+            reservationPort.rollbackStock(item.getDropId(), cart.getMemberId());
         }
     }
 }

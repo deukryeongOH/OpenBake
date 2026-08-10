@@ -35,6 +35,14 @@ public class Order {
     @Column(nullable = false)
     private Long sellerId;
 
+    // 구매자 이름 스냅샷
+    @Column(nullable = false)
+    private String buyerName;
+
+    // 판매자 전화번호 스냅샷
+    @Column(nullable = false)
+    private String sellerPhoneNumber;
+
     @Column(nullable = false)
     private LocalDate pickupDate;
 
@@ -56,10 +64,13 @@ public class Order {
     private LocalDateTime cancelAt;
 
     //정적 팩토리. 생성 시 결제완료(PAID) 상태로 시작한다.
-    public static Order create(Long memberId, Long sellerId, LocalDate pickupDate, BigDecimal totalAmount) {
+    public static Order create(Long memberId, Long sellerId, String buyerName, String sellerPhoneNumber,
+            LocalDate pickupDate, BigDecimal totalAmount) {
         Order order = new Order();
         order.memberId = memberId;
         order.sellerId = sellerId;
+        order.buyerName = buyerName;
+        order.sellerPhoneNumber = sellerPhoneNumber;
         order.pickupDate = pickupDate;
         order.totalAmount = totalAmount;
         order.orderState = OrderState.PAID;

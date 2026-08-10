@@ -47,13 +47,49 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/openbake
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      PAYMENT_SERVICE_URL: http://payment-service:8082
+      MEMBER_SERVICE_URL: http://member-service:8081
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      member-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - openbake-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: openbake-payment
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    env_file:
+      - .env
+    environment:
+      DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
+      DB_USERNAME: openbake
+      DB_PASSWORD: openbake
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -74,6 +110,8 @@ services:
       - certbot-etc:/etc/letsencrypt:ro
     depends_on:
       backend:
+        condition: service_healthy
+      member-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
@@ -96,6 +134,55 @@ services:
     networks:
       - openbake-net
 
+  payment-postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: openbake_payment
+      POSTGRES_USER: openbake
+      POSTGRES_PASSWORD: openbake
+    volumes:
+      - openbake-payment-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U openbake" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [ openbake-net ]
+
+  member-postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: openbake_member
+      POSTGRES_USER: openbake
+      POSTGRES_PASSWORD: openbake
+    volumes:
+      - openbake-member-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U openbake" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [ openbake-net ]
+
+  member-service:
+    build:
+      context: .
+      dockerfile: member-service/Dockerfile
+    container_name: openbake-member-service
+    ports:
+      - "8081:8081"
+    env_file: [ .env ]      # JWT_SECRET, GOOGLE_CLIENT_ID 등 기존 값 재사용
+    environment:
+      DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
+      REDIS_HOST: redis    # 기존 Redis 컨테이너 재사용 (블랙리스트/토큰 저장, 키 네임스페이스로 구분됨)
+      REDIS_PORT: 6379
+    depends_on:
+      member-postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+    networks: [ openbake-net ]
+
 networks:
   openbake-net:
     driver: bridge
@@ -104,3 +191,5 @@ volumes:
   openbake-pg-data:
   certbot-webroot:
   certbot-etc:
+  openbake-payment-pg-data:
+  openbake-member-pg-data:

@@ -1,19 +1,16 @@
 package com.openbake.cart.application;
 
+import com.openbake.cart.application.port.DropPort;
+import com.openbake.cart.application.port.ReservationPort;
+import com.openbake.cart.application.port.SellerPort;
+import com.openbake.cart.application.port.dto.DropInfo;
+import com.openbake.cart.application.port.dto.ReservationInfo;
+import com.openbake.cart.application.port.dto.SellerInfo;
 import com.openbake.cart.domain.Cart;
 import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.application.DropLockService;
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropEntry;
-import com.openbake.drop.domain.DropEntryRepository;
-import com.openbake.drop.domain.DropProduct;
-import com.openbake.drop.domain.DropRepository;
-import com.openbake.drop.domain.DropStatus;
-import com.openbake.seller.domain.Seller;
-import com.openbake.seller.domain.SellerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +29,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,13 +40,11 @@ class CartServiceTest {
     @Mock
     private CartRepository cartRepository;
     @Mock
-    private DropRepository dropRepository;
+    private DropPort dropPort;
     @Mock
-    private SellerRepository sellerRepository;
+    private SellerPort sellerPort;
     @Mock
-    private DropEntryRepository dropEntryRepository;
-    @Mock
-    private DropLockService dropLockService;
+    private ReservationPort reservationPort;
 
     private CartService cartService;
 
@@ -56,12 +52,11 @@ class CartServiceTest {
     void setUp() {
         cartService = new CartService(
                 cartRepository,
-                dropRepository,
-                sellerRepository,
-                dropEntryRepository,
-                dropLockService
+                dropPort,
+                sellerPort,
+                reservationPort
         );
-        //재고 선점 여부 확인용(담기 시 drop 이 만든 응모 상태를 조회).
+        //만료 시간은 설정값이라 테스트에서 직접 주입한다.
         ReflectionTestUtils.setField(cartService, "cartTtl", Duration.ofMinutes(15));
     }
 
@@ -74,11 +69,8 @@ class CartServiceTest {
         int quantity = 2;
 
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
-
-        DropEntry entry = DropEntry.createInitialEntry(dropId, memberId);
-        entry.reserveEntryAndSaveSelectQuantity(quantity);
-        when(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
-                .thenReturn(Optional.of(entry));
+        when(reservationPort.findReservation(dropId, memberId))
+                .thenReturn(Optional.of(new ReservationInfo(true, quantity)));
 
         when(cartRepository.save(any(Cart.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -106,7 +98,7 @@ class CartServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.CART_ALREADY_EXISTS);
 
-        verifyNoInteractions(dropEntryRepository);
+        verifyNoInteractions(reservationPort);
     }
 
     @Test
@@ -120,10 +112,8 @@ class CartServiceTest {
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.of(existing));
 
         Long newDropId = 7L;
-        DropEntry entry = DropEntry.createInitialEntry(newDropId, memberId);
-        entry.reserveEntryAndSaveSelectQuantity(2);
-        when(dropEntryRepository.findByDropIdAndMemberId(newDropId, memberId))
-                .thenReturn(Optional.of(entry));
+        when(reservationPort.findReservation(newDropId, memberId))
+                .thenReturn(Optional.of(new ReservationInfo(true, 2)));
         when(cartRepository.save(any(Cart.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -131,7 +121,7 @@ class CartServiceTest {
         CartCreateResult result = cartService.create(memberId, newDropId, 2);
 
         // then
-        verify(dropLockService).rollbackStock(oldDropId, memberId);
+        verify(reservationPort).rollbackStock(oldDropId, memberId);
         verify(cartRepository).deleteImmediately(existing);
 
         assertThat(result.dropId()).isEqualTo(newDropId);
@@ -144,8 +134,7 @@ class CartServiceTest {
         Long memberId = 1L;
         Long dropId = 7L;
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
-        when(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
-                .thenReturn(Optional.empty());
+        when(reservationPort.findReservation(dropId, memberId)).thenReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> cartService.create(memberId, dropId, 2))
@@ -162,15 +151,57 @@ class CartServiceTest {
         Long dropId = 7L;
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
 
-        DropEntry entry = DropEntry.createInitialEntry(dropId, memberId); // ENTERED, RESERVED 아님
-        when(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
-                .thenReturn(Optional.of(entry));
+        //입장은 했지만 선점 전 상태
+        when(reservationPort.findReservation(dropId, memberId))
+                .thenReturn(Optional.of(new ReservationInfo(false, 0)));
 
         // when & then
         assertThatThrownBy(() -> cartService.create(memberId, dropId, 2))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.CART_STOCK_NOT_RESERVED);
+    }
+
+    @Test
+    @DisplayName("요청 수량이 선점 수량보다 많으면 예외가 발생한다")
+    void create_quantityMismatch_moreThanReserved() {
+        // given
+        Long memberId = 1L;
+        Long dropId = 7L;
+        when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
+
+        // drop 이 실제로 선점한 수량은 2
+        when(reservationPort.findReservation(dropId, memberId))
+                .thenReturn(Optional.of(new ReservationInfo(true, 2)));
+
+        // when & then — 프론트가 선점량보다 많은 3 을 보냈다
+        assertThatThrownBy(() -> cartService.create(memberId, dropId, 3))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
+
+        //장바구니가 만들어지면 안 된다.
+        verify(cartRepository, never()).save(any(Cart.class));
+    }
+
+    @Test
+    @DisplayName("요청 수량이 선점 수량보다 적어도 예외가 발생한다")
+    void create_quantityMismatch_lessThanReserved() {
+        // given
+        Long memberId = 1L;
+        Long dropId = 7L;
+        when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.empty());
+
+        when(reservationPort.findReservation(dropId, memberId))
+                .thenReturn(Optional.of(new ReservationInfo(true, 3)));
+
+        // when & then — 적게 보내도 복구 수량이 어긋나므로 똑같이 막는다
+        assertThatThrownBy(() -> cartService.create(memberId, dropId, 2))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
+
+        verify(cartRepository, never()).save(any(Cart.class));
     }
 
     @Test
@@ -184,11 +215,10 @@ class CartServiceTest {
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.of(cart));
 
         LocalDate pickupDate = LocalDate.now().plusDays(3);
-        Drop drop = createDrop(dropId, 3L, "말차 크루아상", 12000, Set.of(pickupDate));
-        when(dropRepository.findById(dropId)).thenReturn(Optional.of(drop));
-
-        Seller seller = createSeller("오픈베이크 연남");
-        when(sellerRepository.findById(3L)).thenReturn(Optional.of(seller));
+        when(dropPort.getDrop(dropId))
+                .thenReturn(dropInfo(dropId, 3L, "말차 크루아상", 12000, Set.of(pickupDate)));
+        when(sellerPort.findSeller(3L))
+                .thenReturn(Optional.of(new SellerInfo(3L, "오픈베이크 연남")));
 
         // when
         CartDetailResult result = cartService.getCart(memberId);
@@ -240,8 +270,8 @@ class CartServiceTest {
         when(cartRepository.findByMemberId(memberId)).thenReturn(Optional.of(cart));
 
         LocalDate pickupDate = LocalDate.now().plusDays(3);
-        Drop drop = createDrop(dropId, 3L, "말차 크루아상", 12000, Set.of(pickupDate));
-        when(dropRepository.findById(dropId)).thenReturn(Optional.of(drop));
+        when(dropPort.getDrop(dropId))
+                .thenReturn(dropInfo(dropId, 3L, "말차 크루아상", 12000, Set.of(pickupDate)));
 
         // when
         CartPickupDateResult result = cartService.updatePickupDate(memberId, pickupDate);
@@ -268,7 +298,7 @@ class CartServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.CART_PICKUP_DATE_UNAVAILABLE);
 
-        verifyNoInteractions(dropRepository);
+        verifyNoInteractions(dropPort);
     }
 
     @Test
@@ -283,8 +313,8 @@ class CartServiceTest {
 
         LocalDate availableDate = LocalDate.now().plusDays(3);
         LocalDate requestedDate = LocalDate.now().plusDays(5); // 드롭의 픽업 가능일에 없음
-        Drop drop = createDrop(dropId, 3L, "말차 크루아상", 12000, Set.of(availableDate));
-        when(dropRepository.findById(dropId)).thenReturn(Optional.of(drop));
+        when(dropPort.getDrop(dropId))
+                .thenReturn(dropInfo(dropId, 3L, "말차 크루아상", 12000, Set.of(availableDate)));
 
         // when & then
         assertThatThrownBy(() -> cartService.updatePickupDate(memberId, requestedDate))
@@ -307,7 +337,7 @@ class CartServiceTest {
         cartService.deleteCart(memberId);
 
         // then
-        verify(dropLockService).rollbackStock(dropId, memberId);
+        verify(reservationPort).rollbackStock(dropId, memberId);
         verify(cartRepository).delete(cart);
     }
 
@@ -329,8 +359,8 @@ class CartServiceTest {
 
         // then
         assertThat(count).isEqualTo(2);
-        verify(dropLockService).rollbackStock(7L, 1L);
-        verify(dropLockService).rollbackStock(8L, 2L);
+        verify(reservationPort).rollbackStock(7L, 1L);
+        verify(reservationPort).rollbackStock(8L, 2L);
         verify(cartRepository).deleteAll(List.of(cart1, cart2));
     }
 
@@ -344,40 +374,14 @@ class CartServiceTest {
         assertThat(cartService.hasCart(1L)).isTrue();
     }
 
-    private Drop createDrop(Long dropId, Long sellerId, String name, int price, Set<LocalDate> pickupDates) {
-        // dropStart는 TimeSlot(9/11/13/15/17시)에 맞아야 하고, dropEnd 날짜는 픽업 가능일(now+3~5일)보다
-        // 이전이어야 하므로 내일 09~10시로 고정한다.
-        LocalDate dropDate = LocalDate.now().plusDays(1);
-        Drop drop = Drop.builder()
-                .dropStatus(DropStatus.UPCOMING)
-                .dropProduct(DropProduct.builder()
-                        .name(name)
-                        .description("설명")
-                        .imageUrl("https://cdn.openbake.com/drops/" + dropId + ".jpg")
-                        .price(price)
-                        .build())
-                .pickUpAvailableDates(pickupDates)
-                .limitQuantity(5)
-                .dropStart(dropDate.atTime(9, 0))
-                .dropEnd(dropDate.atTime(10, 0))
-                .sellerId(sellerId)
-                .build();
-        ReflectionTestUtils.setField(drop, "id", dropId);
-        return drop;
-    }
-
-    private Seller createSeller(String bakeryName) {
-        return new Seller(
-                99L,
-                bakeryName,
-                "123-45-67890",
-                "서울시 마포구",
-                "박준영",
-                true,
-                "088",
-                "110-1234-5678",
-                "박준영",
-                true
+    private DropInfo dropInfo(Long dropId, Long sellerId, String name, int price, Set<LocalDate> pickupDates) {
+        return new DropInfo(
+                dropId,
+                sellerId,
+                name,
+                price,
+                "https://cdn.openbake.com/drops/" + dropId + ".jpg",
+                pickupDates
         );
     }
 }

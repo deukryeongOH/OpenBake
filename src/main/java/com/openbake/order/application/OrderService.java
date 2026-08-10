@@ -14,8 +14,8 @@ import com.openbake.order.domain.OrderState;
 import com.openbake.drop.application.DropLockService;
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
-import com.openbake.payment.application.DepositService;
-import com.openbake.payment.application.PaymentService;
+import com.openbake.order.application.port.PaymentPort;
+import com.openbake.order.application.port.dto.PaymentResult;
 import com.openbake.seller.application.CurrentSellerProvider;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
@@ -42,8 +42,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
-    private final PaymentService paymentService;
-    private final DepositService depositService;
+    private final PaymentPort paymentPort;
     private final CurrentSellerProvider currentSellerProvider;
     private final SellerRepository sellerRepository;
     //판매자 판매내역 조회 시 구매자 표시 이름 + 판매자 전화번호 조회용
@@ -122,8 +121,12 @@ public class OrderService {
         //    재고 차감은 담기 시점에 drop 이 이미 커밋했으므로, 여기 트랜잭션 롤백만으로는 안 돌아온다.
         //    그래서 별도 트랜잭션(REQUIRES_NEW)으로 복구·정리한 뒤 예외를 다시 던져 주문/결제는 롤백한다.
         try {
-            paymentService.pay(saved.getOrderId(), memberId, totalAmount);
-        } catch (RuntimeException e) {
+            String idempotencyKey = "order-" + saved.getOrderId() + "-pay";
+            PaymentResult payResult = paymentPort.pay(idempotencyKey, saved.getOrderId(), memberId, totalAmount);
+            if (!payResult.isSuccess()) {
+                throw new BusinessException(ErrorCode.INSUFFICIENT_BALANCE);
+            }
+        } catch (BusinessException e) {
             reservationReleaser.releaseOnPaymentFailure(memberId);
             throw e;
         }
@@ -132,7 +135,7 @@ public class OrderService {
         cartRepository.delete(cart);
 
         // 9. 결제 후 잔액 조회
-        BigDecimal balanceAfter = depositService.getBalance(memberId).balance();
+        BigDecimal balanceAfter = paymentPort.getBalance(memberId).balance();
 
         return new OrderCreateResult(
                 saved.getOrderId(),
@@ -238,14 +241,18 @@ public class OrderService {
         order.cancel();
 
         // 예치금 전액 환불
-        paymentService.refund(orderId);
+        String idempotencyKey = "order-" + orderId + "-refund";
+        PaymentResult refundResult = paymentPort.refund(idempotencyKey, orderId);
+        if (!refundResult.isSuccess()) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_FOUND);
+        }
 
         // 재고 복구 — 선점했던 수량을 drop 에 되돌린다(동기 호출). 재고 소유는 drop 이다.
         // 차감은 order 가 하지 않았고(담기 시점에 drop 이 함), 복구만 예외 상황에서 요청한다.
         OrderItem item = order.getOrderItem();
         dropLockService.rollbackStock(item.getDropId(), memberId);
 
-        BigDecimal balanceAfter = depositService.getBalance(memberId).balance();
+        BigDecimal balanceAfter = paymentPort.getBalance(memberId).balance();
 
         return new OrderCancelResult(
                 order.getOrderId(),
@@ -314,7 +321,10 @@ public class OrderService {
         order.confirm();
 
         // 결제 상태도 CONFIRMED 로 전이한다.
-        paymentService.confirmPayment(order.getOrderId());
+        PaymentResult confirmResult = paymentPort.confirm(order.getOrderId());
+        if (!confirmResult.isSuccess()) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_FOUND);
+        }
 
         // 정산으로 구매확정 이벤트를 발행한다.
         publishPurchaseConfirmed(order);

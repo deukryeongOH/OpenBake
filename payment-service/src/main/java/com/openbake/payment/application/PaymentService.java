@@ -8,6 +8,9 @@ import com.openbake.payment.domain.OrderPayment;
 import com.openbake.payment.domain.ReferenceType;
 import com.openbake.payment.domain.TransactionType;
 import com.openbake.payment.domain.WalletTransaction;
+import com.openbake.payment.application.dto.PaymentIdempotentResult;
+import com.openbake.payment.domain.PaymentRecord;
+import com.openbake.payment.domain.PaymentRecordRepository;
 import com.openbake.payment.domain.DepositAccountRepository;
 import com.openbake.payment.domain.OrderPaymentRepository;
 import com.openbake.payment.domain.WalletTransactionRepository;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +28,50 @@ public class PaymentService {
     private final DepositAccountRepository depositAccountRepository;
     private final OrderPaymentRepository orderPaymentRepository;
     private final WalletTransactionRepository walletTransactionRepository;
+    private final PaymentRecordRepository paymentRecordRepository;
+
+    /**
+     * 멱등키 기반 결제 — Internal API에서 호출한다.
+     * 동일 멱등키로 재요청 시 기존 결과를 반환하여 이중 결제를 방지한다.
+     */
+    @Transactional
+    public PaymentIdempotentResult payIdempotent(String idempotencyKey, Long orderId, Long memberId, BigDecimal amount) {
+        Optional<PaymentRecord> existing = paymentRecordRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return PaymentIdempotentResult.from(existing.get());
+        }
+
+        try {
+            pay(orderId, memberId, amount);
+            PaymentRecord record = PaymentRecord.success(idempotencyKey, orderId, memberId, amount);
+            return PaymentIdempotentResult.from(paymentRecordRepository.save(record));
+        } catch (BusinessException e) {
+            PaymentRecord record = PaymentRecord.fail(idempotencyKey, orderId, memberId, amount, e.getMessage());
+            return PaymentIdempotentResult.from(paymentRecordRepository.save(record));
+        }
+    }
+
+    /**
+     * 멱등키 기반 환불 — Internal API에서 호출한다.
+     */
+    @Transactional
+    public PaymentIdempotentResult refundIdempotent(String idempotencyKey, Long orderId) {
+        Optional<PaymentRecord> existing = paymentRecordRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return PaymentIdempotentResult.from(existing.get());
+        }
+
+        try {
+            refund(orderId);
+            OrderPayment payment = orderPaymentRepository.findByOrderId(orderId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+            PaymentRecord record = PaymentRecord.success(idempotencyKey, orderId, payment.getMemberId(), payment.getAmount());
+            return PaymentIdempotentResult.from(paymentRecordRepository.save(record));
+        } catch (BusinessException e) {
+            PaymentRecord record = PaymentRecord.fail(idempotencyKey, orderId, null, null, e.getMessage());
+            return PaymentIdempotentResult.from(paymentRecordRepository.save(record));
+        }
+    }
 
     /**
      * 주문 결제 — 주문 서비스가 같은 트랜잭션 안에서 직접 호출한다.

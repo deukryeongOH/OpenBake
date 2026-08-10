@@ -61,6 +61,9 @@ payment:
     connect-timeout: 3000
     read-timeout: 15000
 
+payment-service:
+  url: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+
 # 매월 1일 오후 3시 "0 0 15 1 * *"
 settlement:
   batch:

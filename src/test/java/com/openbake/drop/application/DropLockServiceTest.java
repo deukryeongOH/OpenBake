@@ -2,6 +2,12 @@ package com.openbake.drop.application;
 
 import com.openbake.drop.application.queue.InMemoryQueueManager;
 import com.openbake.drop.domain.*;
+import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.DropEntry;
+import com.openbake.drop.domain.DropInventory;
+import com.openbake.drop.domain.DropEntryRepository;
+import com.openbake.drop.domain.DropInventoryRepository;
+import com.openbake.drop.domain.DropRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
@@ -70,14 +77,13 @@ class DropLockServiceTest {
                 .price(8000)
                 .build();
 
-        LocalDateTime now = LocalDateTime.now();
         drop = Drop.builder()
                 .dropStatus(DropStatus.ACTIVE)
                 .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(now.toLocalDate().plusDays(3)))
+                .pickUpAvailableDates(Set.of(LocalDate.of(2028, 7, 28)))
                 .limitQuantity(5)
-                .dropStart(now.plusMinutes(1))
-                .dropEnd(now.plusMinutes(30))
+                .dropStart(LocalDateTime.of(2028, 7, 25, 9, 0))
+                .dropEnd(LocalDateTime.of(2028, 7, 25, 10, 0))
                 .sellerId(1L)
                 .build();
     }
@@ -123,16 +129,17 @@ class DropLockServiceTest {
     @DisplayName("품절로 COMPLETED된 드롭이 마감 전에 재고가 복구되면 ACTIVE로 되돌리고 soldOut을 해제한다")
     void rollbackStock_Revives_CompletedDropWhenWithinWindowAndStockAvailable() {
         // given
-        LocalDateTime now = LocalDateTime.now();
         DropProduct dropProduct = DropProduct.builder()
                 .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
         Drop soldOutDrop = Drop.builder()
                 .dropStatus(DropStatus.ACTIVE) // COMPLETED로 강제 변경 후 사용
                 .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(now.toLocalDate().plusDays(3)))
+                .pickUpAvailableDates(Set.of(LocalDate.of(2028, 7, 28)))
                 .limitQuantity(5)
-                .dropStart(now.plusMinutes(1)) // 빌더는 과거 시작 시각을 허용하지 않으므로 미래로 생성
-                .dropEnd(now.plusMinutes(30)) // 아직 마감 전
+                // 빌더는 과거 시작 시각/TimeSlot 외 시각을 허용하지 않으므로 미래의 슬롯 시각으로 생성.
+                // 아직 마감 전임을 보장하기 위해 dropEnd도 충분히 먼 미래로 둔다.
+                .dropStart(LocalDateTime.of(2028, 7, 25, 9, 0))
+                .dropEnd(LocalDateTime.of(2028, 7, 25, 10, 0))
                 .sellerId(1L)
                 .build();
         soldOutDrop.changeStatus(DropStatus.COMPLETED); // 품절로 인해 COMPLETED된 상태 재현
@@ -169,12 +176,15 @@ class DropLockServiceTest {
         Drop endedDrop = Drop.builder()
                 .dropStatus(DropStatus.ACTIVE)
                 .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(now.toLocalDate().plusDays(3)))
+                .pickUpAvailableDates(Set.of(LocalDate.of(2028, 7, 28)))
                 .limitQuantity(5)
-                .dropStart(now.plusSeconds(1)) // builder 검증(과거 불가) 통과용, 아래서 과거로 되돌림
-                .dropEnd(now.plusSeconds(2))
+                // builder 검증(과거 불가, TimeSlot 정렬) 통과용, 아래서 시작/종료 시각을 과거로 되돌림
+                .dropStart(LocalDateTime.of(2028, 7, 25, 9, 0))
+                .dropEnd(LocalDateTime.of(2028, 7, 25, 10, 0))
                 .sellerId(1L)
                 .build();
+        // 드롭 진행 시간은 항상 1시간이므로 dropStart/dropEnd를 함께 과거로 되돌린다
+        ReflectionTestUtils.setField(endedDrop, "dropStart", now.minusHours(1).minusMinutes(1));
         ReflectionTestUtils.setField(endedDrop, "dropEnd", now.minusMinutes(1)); // 마감 시각을 과거로 조정
         endedDrop.changeStatus(DropStatus.COMPLETED);
 

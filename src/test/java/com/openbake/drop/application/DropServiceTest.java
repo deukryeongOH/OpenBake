@@ -3,8 +3,12 @@ package com.openbake.drop.application;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.drop.application.dto.DropProductInfoCommand;
 import com.openbake.drop.application.dto.DropProductInfoResult;
-import com.openbake.drop.application.queue.TodayDropCache;
+import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.domain.*;
+import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.DropInventory;
+import com.openbake.drop.domain.DropInventoryRepository;
+import com.openbake.drop.domain.DropRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -131,10 +135,23 @@ class DropServiceTest {
     }
 
     @Test
-    @DisplayName("같은 날짜에 이미 등록된 드롭이 있으면 등록에 실패하고, 오늘 드롭 캐시는 갱신하지 않는다")
+    @DisplayName("같은 날짜/시간대에 이미 등록된 드롭이 있으면 등록에 실패하고, 오늘 드롭 캐시는 갱신하지 않는다")
     void registerDropProduct_Fail_DuplicateDate_DoesNotRefreshCache() {
         // given
-        given(dropRepository.existsByDropStartBetween(any(), any())).willReturn(true);
+        DropProduct existingProduct = DropProduct.builder()
+                .name("기존쿠키").description("d").imageUrl("i.jpg").price(1000).build();
+        Drop existingDrop = Drop.builder()
+                .dropStatus(UPCOMING)
+                .dropProduct(existingProduct)
+                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-26")))
+                .limitQuantity(1)
+                .dropStart(command.dropStart())
+                .dropEnd(command.dropEnd())
+                .sellerId(2L)
+                .build();
+        ReflectionTestUtils.setField(existingDrop, "id", 999L);
+
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of(existingDrop));
 
         // when & then
         assertThatThrownBy(() -> dropService.registerDropProduct(command, 1L))
@@ -162,8 +179,8 @@ class DropServiceTest {
                 .dropProduct(existingProduct)
                 .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
                 .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
                 .sellerId(sellerId)
                 .build();
         ReflectionTestUtils.setField(existingDrop, "id", dropId);
@@ -175,7 +192,7 @@ class DropServiceTest {
                 .build();
 
         given(dropRepository.findById(dropId)).willReturn(Optional.of(existingDrop));
-        given(dropRepository.existsByDropStartBetweenAndIdNot(any(), any(), eq(dropId))).willReturn(false);
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of());
         given(dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(eq(sellerId), any(), any(), eq(dropId))).willReturn(false);
         given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
 
@@ -208,8 +225,8 @@ class DropServiceTest {
                 .dropProduct(dropProduct)
                 .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
                 .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
                 .sellerId(ownerId)
                 .build();
         ReflectionTestUtils.setField(drop, "id", dropId);
@@ -237,8 +254,8 @@ class DropServiceTest {
                 .dropProduct(dropProduct)
                 .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
                 .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
                 .sellerId(sellerId)
                 .build();
         ReflectionTestUtils.setField(drop, "id", dropId);
@@ -276,8 +293,8 @@ class DropServiceTest {
                 .dropProduct(dropProduct)
                 .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
                 .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T11:00:00"))
+                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
                 .sellerId(sellerId)
                 .build();
         ReflectionTestUtils.setField(drop, "id", dropId);
@@ -307,8 +324,8 @@ class DropServiceTest {
                 .pickUpAvailableDates(Set.of(LocalDate.parse("2028-08-02")))
                 .dropProduct(dropProduct)
                 .limitQuantity(5)
-                .dropStart(LocalDateTime.parse("2028-08-01T14:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-08-01T18:00:00"))
+                .dropStart(LocalDateTime.parse("2028-08-01T13:00:00"))
+                .dropEnd(LocalDateTime.parse("2028-08-01T14:00:00"))
                 .sellerId(1L)
                 .build();
 

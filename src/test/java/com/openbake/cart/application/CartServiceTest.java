@@ -345,6 +345,9 @@ class CartServiceTest {
     }
 
     private Drop createDrop(Long dropId, Long sellerId, String name, int price, Set<LocalDate> pickupDates) {
+        // dropStart는 TimeSlot(9/11/13/15/17시)에 맞아야 하고, dropEnd 날짜는 픽업 가능일(now+3~5일)보다
+        // 이전이어야 하므로 내일 09~10시로 고정한다.
+        LocalDate dropDate = LocalDate.now().plusDays(1);
         Drop drop = Drop.builder()
                 .dropStatus(DropStatus.UPCOMING)
                 .dropProduct(DropProduct.builder()
@@ -355,8 +358,8 @@ class CartServiceTest {
                         .build())
                 .pickUpAvailableDates(pickupDates)
                 .limitQuantity(5)
-                .dropStart(LocalDateTime.now().plusHours(1))
-                .dropEnd(LocalDateTime.now().plusHours(2))
+                .dropStart(dropDate.atTime(9, 0))
+                .dropEnd(dropDate.atTime(10, 0))
                 .sellerId(sellerId)
                 .build();
         ReflectionTestUtils.setField(drop, "id", dropId);

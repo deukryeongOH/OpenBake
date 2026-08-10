@@ -8,9 +8,13 @@ import com.openbake.drop.application.DropService;
 import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.application.dto.DropProductInfoCommand;
 import com.openbake.drop.application.dto.DropProductInfoResult;
+import com.openbake.drop.application.dto.LocalDateCommand;
+import com.openbake.drop.application.dto.TimeSlotResult;
 import com.openbake.drop.presentation.dto.DropInfoResponse;
 import com.openbake.drop.presentation.dto.DropProductInfoRequest;
 import com.openbake.drop.presentation.dto.DropProductInfoResponse;
+import com.openbake.drop.presentation.dto.LocalDateRequest;
+import com.openbake.drop.presentation.dto.TimeSlotResponse;
 import com.openbake.seller.application.CurrentSellerProvider;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,7 +39,7 @@ public class DropController {
 
     @Operation(
             summary = "드롭 등록",
-            description = "판매자가 신규 드롭(상품)을 등록합니다. 판매자는 하루에 하나의 드롭만 등록할 수 있으며, 1인당 제한 수량은 총 수량을 초과할 수 없습니다."
+            description = "판매자가 신규 드롭(상품)을 등록합니다. 판매자는 하루에 하나의 드롭만 등록할 수 있으며 시스템 전체 하루 5개 등록 가능합니다. 1인당 제한 수량은 총 수량을 초과할 수 없습니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "C001 잘못된 요청입니다. / DR002 드롭 시작 시간 또는 마감 시간이 유효하지 않습니다. / DR003 픽업 가능 날짜는 드롭 마감일 이후여야 합니다. / DR005 1인당 제한 수량은 총 수량보다 클 수 없습니다."),
@@ -137,6 +141,19 @@ public class DropController {
         Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
 
         dropService.deleteDropProduct(dropId, sellerId);
+    }
+
+    @Operation(
+            summary = "예약 가능 시간대 조회",
+            description = "지정한 날짜에 아직 다른 드롭이 등록되지 않은 예약 가능한 시간대 목록을 조회합니다."
+    )
+    @SecurityRequirements
+    @GetMapping("/available-slots")
+    public ApiResponse<List<TimeSlotResponse>> getAvailableSlots(@Valid @RequestBody LocalDateRequest request){
+        LocalDateCommand command = LocalDateCommand.of(request.date());
+        List<TimeSlotResult> availableList = dropService.getAvailableSlots(command);
+
+        return ApiResponse.ok(TimeSlotResponse.of(availableList));
     }
 
 }

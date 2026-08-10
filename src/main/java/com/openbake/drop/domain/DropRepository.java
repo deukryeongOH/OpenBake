@@ -15,16 +15,8 @@ public interface DropRepository {
     // 오늘 진행하는 드롭 리스트 반환
     List<Drop> findListByDropDate(LocalDate today);
 
-    // 오늘 진행하는 드롭 반환
-    Optional<Drop> findByDropStartBetween(LocalDateTime todayStart, LocalDateTime todayEnd);
-
     // dropId에 해당하는 드롭 반환
     Optional<Drop> findById(Long dropId);
-
-    Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay);
-
-    // 수정 시 "하루 1개 제한" 재검증용. 수정 대상 드롭 자신은 제외하고 확인한다.
-    boolean existsByDropStartBetweenAndIdNot(LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
 
     boolean existsBySellerIdAndDropStartBetweenAndIdNot(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
 

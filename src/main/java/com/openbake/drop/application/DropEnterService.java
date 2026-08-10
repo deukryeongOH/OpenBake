@@ -6,15 +6,19 @@ import com.openbake.drop.application.dto.ConfirmEntryResult;
 import com.openbake.drop.application.dto.QueueRankResult;
 import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
+import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.DropEntry;
+import com.openbake.drop.domain.DropInventory;
+import com.openbake.drop.domain.DropEntryRepository;
+import com.openbake.drop.domain.DropInventoryRepository;
+import com.openbake.drop.domain.DropRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 
@@ -28,19 +32,16 @@ public class DropEnterService {
     private final DropRepository dropRepository;
 
     @Transactional(readOnly = true)
-    public Long getTodayDropId() {
+    public List<Long> getTodayDropIds() {
         LocalDate today = LocalDate.now();
 
-        LocalDateTime todayStart = today.atStartOfDay();
-        LocalDateTime todayEnd = today.atTime(LocalTime.MAX);
-
-        Optional<Drop> findDrop = dropRepository.findByDropStartBetween(todayStart, todayEnd);
+        List<Drop> findDrop = dropRepository.findListByDropDate(today);
 
         if (findDrop.isEmpty()) {
-            throw new BusinessException(ErrorCode.ENTITY_NOT_FOUND);
+            return List.of();
         }
 
-        return findDrop.get().getId();
+        return findDrop.stream().map(Drop::getId).toList();
     }
 
     @Transactional(readOnly = true)

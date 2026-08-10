@@ -34,24 +34,9 @@ public class DropRepositoryAdapter implements DropRepository {
         return dropJpaRepository.findAllByDropStartBetween(startOfDay, endOfDay);
     }
 
-    @Override // 오늘 진행 할 드롭 확인
-    public Optional<Drop> findByDropStartBetween(LocalDateTime todayStart, LocalDateTime todayEnd) {
-        return dropJpaRepository.findByDropStartBetween(todayStart, todayEnd);
-    }
-
     @Override
     public Optional<Drop> findById(Long dropId) {
         return dropJpaRepository.findById(dropId);
-    }
-
-    @Override
-    public Boolean existsByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay) {
-        return dropJpaRepository.existsByDropStartBetween(startOfDay, endOfDay);
-    }
-
-    @Override
-    public boolean existsByDropStartBetweenAndIdNot(LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId) {
-        return dropJpaRepository.existsByDropStartBetweenAndIdNot(startOfDay, endOfDay, excludeDropId);
     }
 
     @Override

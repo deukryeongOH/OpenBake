@@ -9,6 +9,10 @@ import com.openbake.drop.application.dto.LocalDateCommand;
 import com.openbake.drop.application.dto.TimeSlotResult;
 import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.domain.*;
+import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.DropInventory;
+import com.openbake.drop.domain.DropInventoryRepository;
+import com.openbake.drop.domain.DropRepository;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +38,8 @@ public class DropService {
 
     @Transactional
     public DropProductInfoResult registerDropProduct(DropProductInfoCommand command, Long sellerId) {
-        // 하루 1개 제한 검증
-        validateOneDropPerDay(sellerId, command.dropStart());
+        // 하루 5개 제한 검증 & 시간대 검증
+        validateFiveDropPerDay(sellerId, command.dropStart());
         // 제한 수량, 총 수량 검증
         validateLimitQuantityWithTotalQuantity(command.LimitQuantity(), command.totalQuantity());
 
@@ -93,34 +97,50 @@ public class DropService {
         }
     }
 
-    private void validateOneDropPerDay(Long sellerId, @NotNull(message = "시작 시간을 입력해주세요.") LocalDateTime dropStart) {
+    private void validateFiveDropPerDay(Long sellerId, @NotNull(message = "시작 시간을 입력해주세요.") LocalDateTime dropStart) {
         LocalDate dropDate = dropStart.toLocalDate();
+        List<Drop> dropList = dropRepository.findListByDropDate(dropDate);
+
+        validateSlotCapacity(dropList, dropStart);
+
         LocalDateTime startOfDay = dropDate.atStartOfDay();
         LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
-
-        // 먼저 하루에 드롭은 한 번으로 제한되므로 먼저 검증
-        if (dropRepository.existsByDropStartBetween(startOfDay, endOfDay)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
-        }
-
-        // (확장성을 고려한 판매자 드롭 등록 제한 / 추후 하루에 드롭이 여러 개일 경우)
         if (dropRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay)) {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
 
-    // 수정 시 "하루 1개 제한" 재검증. 하루에 드롭이 하나뿐이라, 수정 대상 자기 자신을 빼지 않으면
-    // 날짜를 안 바꾸는 수정조차 "이미 그 날짜에 드롭이 있다"고 오판해서 막히므로 자신은 제외하고 확인한다.
-    private void validateOneDropPerDayExcludingSelf(Long dropId, Long sellerId, LocalDateTime dropStart) {
+
+    private void validateFiveDropPerDayExcludingSelf(Long dropId, Long sellerId, LocalDateTime dropStart) {
         LocalDate dropDate = dropStart.toLocalDate();
+
+        // 오늘 진행하는 드롭 중 현재 수정을 원하는 Drop의 Id와 같지 않은 것들의 드롭 리스트
+        List<Drop> dropList = dropRepository.findListByDropDate(dropDate).stream()
+                .filter(drop -> !drop.getId().equals(dropId))
+                .toList();
+
+        validateSlotCapacity(dropList, dropStart);
+
         LocalDateTime startOfDay = dropDate.atStartOfDay();
         LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
+        // 이미 판매자가 등록한 날짜로 수정하려고 하면 막아야함. (판매자는 하루에 1개의 드롭만 등록할 수 있다)
+        if (dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(sellerId, startOfDay, endOfDay, dropId)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
+        }
+    }
 
-        if (dropRepository.existsByDropStartBetweenAndIdNot(startOfDay, endOfDay, dropId)) {
+    // 하루 5개 Capacity + 같은 시각(슬롯) 중복 체크
+    private void validateSlotCapacity(List<Drop> dropList, LocalDateTime dropStart) {
+        if (dropList.size() >= 5) {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
 
-        if (dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(sellerId, startOfDay, endOfDay, dropId)) {
+        // 오늘 진행하는 드롭들의 시작 시간들을 뽑아서 등록하려는 dropStart와 맞는 것이 있는지 확인
+        boolean isNotAvailableSlot = dropList.stream()
+                .map(drop -> drop.getDropStart().toLocalTime())
+                .anyMatch(dropStart.toLocalTime()::equals);
+
+        if (isNotAvailableSlot) {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
@@ -151,7 +171,7 @@ public class DropService {
         DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
         return DropInfoResult.of(findDrop.getDropProduct().getName(), findDrop.getDropProduct().getDescription(),
                 findDrop.getDropProduct().getImageUrl(), findDrop.getDropStart(), findDrop.getDropEnd(),
-                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), new HashSet<>(findDrop.getPickUpAvailableDate()));
+                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), new HashSet<>(findDrop.getPickUpAvailableDate()), findDrop.getSellerId());
     }
 
     // 판매자 본인이 등록한 드롭 목록 조회
@@ -191,7 +211,7 @@ public class DropService {
         Drop drop = findDrop(dropId);
         validateOwner(drop, sellerId);
         validateEditable(drop);
-        validateOneDropPerDayExcludingSelf(dropId, sellerId, command.dropStart());
+        validateFiveDropPerDayExcludingSelf(dropId, sellerId, command.dropStart());
         validateLimitQuantityWithTotalQuantity(command.LimitQuantity(), command.totalQuantity());
 
         DropProduct dropProduct = createDropProduct(command);

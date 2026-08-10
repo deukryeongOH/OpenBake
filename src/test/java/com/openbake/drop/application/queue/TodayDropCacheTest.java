@@ -51,8 +51,8 @@ class TodayDropCacheTest {
     @DisplayName("오늘 진행되는 드롭이 있으면 캐시에 dropId/시작/종료 시각을 채운다")
     void refresh_WithDropToday_CachesDropInfo() {
         // given
-        LocalDateTime start = LocalDateTime.now().plusHours(1);
-        LocalDateTime end = LocalDateTime.now().plusHours(2);
+        LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
+        LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
 
         given(dropRepository.findListByDropDate(any())).willReturn(List.of(drop(100L, start, end, 1L)));
 
@@ -71,12 +71,12 @@ class TodayDropCacheTest {
     @DisplayName("오늘 진행되는 드롭이 여러 개면 캐시에도 전부 담긴다")
     void refresh_WithMultipleDropsToday_CachesAll() {
         // given
-        LocalDateTime start = LocalDateTime.now().plusHours(1);
-        LocalDateTime end = LocalDateTime.now().plusHours(2);
+        LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
+        LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
 
         given(dropRepository.findListByDropDate(any())).willReturn(List.of(
                 drop(100L, start, end, 1L),
-                drop(200L, start.plusHours(3), end.plusHours(3), 2L)
+                drop(200L, start.plusHours(2), end.plusHours(2), 2L)
         ));
 
         // when
@@ -105,9 +105,10 @@ class TodayDropCacheTest {
     @DisplayName("refresh를 다시 호출하면 새 CachedDrop이 만들어져 이전 tryMarkStarted 마킹이 초기화된다")
     void refresh_ResetsMarkFlags() {
         // given: 드롭이 이미 시작 처리(tryMarkStarted 마킹)된 상태였다가
-        // (Drop 생성자가 과거 dropStart를 거부하므로 미래 시각을 쓰고, "시작됨" 상태는 마킹으로만 시뮬레이션한다)
-        LocalDateTime start = LocalDateTime.now().plusMinutes(10);
-        LocalDateTime end = LocalDateTime.now().plusHours(1);
+        // (Drop 생성자가 과거 dropStart를 거부하고 TimeSlot에 맞아야 하므로, 미래의 슬롯 시각을 쓰고
+        // "시작됨" 상태는 마킹으로만 시뮬레이션한다)
+        LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
+        LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
         given(dropRepository.findListByDropDate(any())).willReturn(List.of(drop(100L, start, end, 1L)));
 
         todayDropCache.refresh();

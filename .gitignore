@@ -25,6 +25,7 @@ out/
 .env
 .env.*
 !.env.example
+!.env.*.example
 application-local.yml
 
 ### Claude Code ###
@@ -57,3 +58,11 @@ Thumbs.db
 run-local.sh
 .gstack
 bmad-output
+
+# k6 테스트용 인증정보
+performance-test/users.json
+performance-test/member-map.json
+# k6 테스트용 환경변수
+performance-test/.env.k6
+# k6 실행 결과
+performance-test/results/*.txt

@@ -35,6 +35,11 @@ public class SecurityConfig {
                         .requestMatchers("/internal/v1/**").hasRole("ADMIN")
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
+                        /** Actuator와 Prometheus */
+                        .requestMatchers( "/actuator/health",
+                                "/actuator/prometheus",
+                                "/actuator/metrics",
+                                "/actuator/metrics/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

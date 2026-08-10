@@ -51,7 +51,7 @@ public class DropController {
         Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
 
         DropProductInfoCommand command = DropProductInfoCommand.create(dropProductInfoRequest.name(), dropProductInfoRequest.description(),
-                dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropEnd(), dropProductInfoRequest.totalQuantity(),
+                dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropStart().plusMinutes(60), dropProductInfoRequest.totalQuantity(),
                 dropProductInfoRequest.limitQuantity(), dropProductInfoRequest.price(), dropProductInfoRequest.pickUpAvailableDates());
 
         DropProductInfoResult response = dropService.registerDropProduct(command, sellerId);
@@ -117,7 +117,7 @@ public class DropController {
         Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
 
         DropProductInfoCommand command = DropProductInfoCommand.create(dropProductInfoRequest.name(), dropProductInfoRequest.description(),
-                dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropEnd(), dropProductInfoRequest.totalQuantity(),
+                dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropStart().plusMinutes(60), dropProductInfoRequest.totalQuantity(),
                 dropProductInfoRequest.limitQuantity(), dropProductInfoRequest.price(), dropProductInfoRequest.pickUpAvailableDates());
 
         DropProductInfoResult result = dropService.updateDropProduct(dropId, sellerId, command);

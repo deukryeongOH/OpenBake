@@ -1,7 +1,7 @@
 package com.openbake.settlement.presentation;
 
-import com.openbake.member.infrastructure.jwt.JwtAuthenticationFilter;
-import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
+import com.openbake.common.security.jwt.JwtAuthenticationFilter;
+import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.settlement.application.SettlementListResult;
 import com.openbake.settlement.application.SettlementQueryService;
 import com.openbake.settlement.application.SettlementResult;

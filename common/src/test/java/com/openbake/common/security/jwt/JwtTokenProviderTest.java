@@ -1,6 +1,5 @@
-package com.openbake.member.infrastructure.jwt;
+package com.openbake.common.security.jwt;
 
-import com.openbake.member.domain.Role;
 import io.jsonwebtoken.security.SignatureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,10 +24,10 @@ class JwtTokenProviderTest {
     @Test
     @DisplayName("Access Token은 memberId와 role 클레임을 담아 발급된다")
     void createAccessToken_containsMemberIdAndRole() {
-        String token = jwtTokenProvider.createAccessToken(1L, Role.CUSTOMER);
+        String token = jwtTokenProvider.createAccessToken(1L, "CUSTOMER");
 
         assertThat(jwtTokenProvider.getMemberId(token)).isEqualTo(1L);
-        assertThat(jwtTokenProvider.getRole(token)).isEqualTo(Role.CUSTOMER);
+        assertThat(jwtTokenProvider.getRole(token)).isEqualTo("CUSTOMER");
         assertThat(jwtTokenProvider.isValid(token)).isTrue();
     }
 
@@ -50,7 +49,7 @@ class JwtTokenProviderTest {
                 1_800_000L,
                 1_209_600_000L);
         JwtTokenProvider otherProvider = new JwtTokenProvider(otherProperties);
-        String token = otherProvider.createAccessToken(1L, Role.CUSTOMER);
+        String token = otherProvider.createAccessToken(1L, "CUSTOMER");
 
         assertThat(jwtTokenProvider.isValid(token)).isFalse();
         assertThatThrownBy(() -> jwtTokenProvider.getMemberId(token))

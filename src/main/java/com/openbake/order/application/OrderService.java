@@ -5,6 +5,8 @@ import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+// member-service 모듈이 분리됨에 따라 member-service 내에 Repository를 직접 참조하던 것을 FeignClient 사용
+import com.openbake.order.application.port.MemberPort;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
@@ -12,8 +14,6 @@ import com.openbake.order.domain.OrderState;
 import com.openbake.drop.application.DropLockService;
 import com.openbake.drop.domain.Drop;
 import com.openbake.drop.domain.DropRepository;
-import com.openbake.member.domain.Member;
-import com.openbake.member.domain.MemberRepository;
 import com.openbake.payment.application.DepositService;
 import com.openbake.payment.application.PaymentService;
 import com.openbake.seller.application.CurrentSellerProvider;
@@ -46,8 +46,8 @@ public class OrderService {
     private final DepositService depositService;
     private final CurrentSellerProvider currentSellerProvider;
     private final SellerRepository sellerRepository;
-    //판매자 판매내역 조회 시 구매자 표시 이름 조회용.
-    private final MemberRepository memberRepository;
+    //판매자 판매내역 조회 시 구매자 표시 이름 + 판매자 전화번호 조회용
+    private final MemberPort memberPort;
     //재고 복구 요청(취소 시). 차감은 order 가 하지 않고 복구만 drop 에 동기 호출한다.
     private final DropLockService dropLockService;
     //주문 생성 스냅샷 소스(판매자/가격/상품명) 조회용.
@@ -107,8 +107,14 @@ public class OrderService {
         String dropNameSnapshot = drop.getDropProduct().getName();
         BigDecimal totalAmount = priceSnapshot.multiply(BigDecimal.valueOf(quantity));
 
+        // 구매자 이름 스냅샷
+        String buyerName = memberPort.getMember(memberId).data().name();
+
+        // 판매자 전화번호 스냅샷
+        String sellerPhoneNumber = memberPort.getMember(sellerId).data().phoneNumber();
+
         // 6. 주문 생성 — 결제에 넘길 orderId 가 필요하므로 즉시 flush 해 PK 를 확보한다.
-        Order order = Order.create(memberId, sellerId, pickupDate, totalAmount);
+        Order order = Order.create(memberId, sellerId, buyerName, sellerPhoneNumber, pickupDate, totalAmount);
         order.addItem(OrderItem.create(dropId, quantity, priceSnapshot, dropNameSnapshot));
         Order saved = orderRepository.save(order);
 
@@ -206,7 +212,8 @@ public class OrderService {
                 item.getQuantity()
         );
 
-        OrderDetailResult.SellerInfo sellerInfo = resolveSellerInfo(order.getSellerId());
+        // order.sellerId()를 넘기던 것을 order에 스냅샷한 phoneNumber도 같이 넘기기 위해 order 전체를 넘김
+        OrderDetailResult.SellerInfo sellerInfo = resolveSellerInfo(order);
 
         return new OrderDetailResult(
                 order.getOrderId(),
@@ -380,21 +387,14 @@ public class OrderService {
 
     //주문 상세용 판매자 정보 조립. 지도 보기/전화하기 버튼을 위해 사업장 주소·연락처를 포함한다.
     //연락처는 seller 가 직접 갖지 않고 연결된 member 의 phoneNumber 를 사용한다.
-    private OrderDetailResult.SellerInfo resolveSellerInfo(Long sellerId) {
-        return sellerRepository.findById(sellerId)
+    private OrderDetailResult.SellerInfo resolveSellerInfo(Order order) {
+        return sellerRepository.findById(order.getSellerId())
                 .map(seller -> new OrderDetailResult.SellerInfo(
-                        sellerId,
+                        order.getSellerId(),
                         seller.getBakeryName(),
                         seller.getBusinessAddress(),
-                        resolveMemberPhoneNumber(seller.getMemberId())))
-                .orElse(new OrderDetailResult.SellerInfo(sellerId, null, null, null));
-    }
-
-    //판매자 연락처 조회. 회원이 없으면 null.
-    private String resolveMemberPhoneNumber(Long memberId) {
-        return memberRepository.findById(memberId)
-                .map(Member::getPhoneNumber)
-                .orElse(null);
+                        order.getSellerPhoneNumber()))
+                .orElse(new OrderDetailResult.SellerInfo(order.getSellerId(), null, null, null));
     }
 
     //판매자 판매내역 목록 항목 조립. dropId/dropName 은 스냅샷, buyerName 은 member 조회.
@@ -404,7 +404,7 @@ public class OrderService {
                 order.getOrderId(),
                 item.getDropId(),
                 item.getDropNameSnapshot(),
-                resolveMemberName(order.getMemberId()),
+                order.getBuyerName(),
                 item.getQuantity(),
                 order.getTotalAmount(),
                 order.getOrderState(),
@@ -413,12 +413,5 @@ public class OrderService {
                 order.getConfirmAt(),
                 order.getCancelAt()
         );
-    }
-
-    //구매자 표시 이름 조회. 회원이 없으면 null.
-    private String resolveMemberName(Long memberId) {
-        return memberRepository.findById(memberId)
-                .map(Member::getName)
-                .orElse(null);
     }
 }

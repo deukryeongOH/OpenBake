@@ -2,8 +2,6 @@ package com.openbake.common.exception;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.response.ApiResponse.ApiError;
-import com.openbake.payment.application.port.PgApproveException;
-import com.openbake.payment.application.port.PgUnknownResultException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -47,18 +45,6 @@ public class GlobalExceptionHandler {
             MissingServletRequestParameterException.class})
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(Exception e) {
         return build(ErrorCode.INVALID_INPUT.getStatus(), ErrorCode.INVALID_INPUT.getCode(), "요청 형식이 올바르지 않습니다.");
-    }
-
-    @ExceptionHandler(PgApproveException.class)
-    public ResponseEntity<ApiResponse<Void>> handlePgApproveException(PgApproveException e) {
-        ErrorCode errorCode = ErrorCode.PG_APPROVE_FAILED;
-        return build(errorCode.getStatus(), errorCode.getCode(), errorCode.getMessage());
-    }
-
-    @ExceptionHandler(PgUnknownResultException.class)
-    public ResponseEntity<ApiResponse<Void>> handlePgUnknownResultException(PgUnknownResultException e) {
-        ErrorCode errorCode = ErrorCode.PG_TIMEOUT;
-        return build(errorCode.getStatus(), errorCode.getCode(), errorCode.getMessage());
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

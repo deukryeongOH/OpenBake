@@ -1,4 +1,4 @@
-package com.openbake.drop.application;
+package com.openbake.drop.application.service;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
@@ -9,10 +9,10 @@ import com.openbake.drop.application.dto.LocalDateCommand;
 import com.openbake.drop.application.dto.TimeSlotResult;
 import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.domain.*;
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropInventory;
-import com.openbake.drop.domain.DropInventoryRepository;
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.entity.DropInventory;
+import com.openbake.drop.domain.repository.DropInventoryRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;

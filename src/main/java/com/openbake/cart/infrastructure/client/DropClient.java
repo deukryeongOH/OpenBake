@@ -4,8 +4,8 @@ import com.openbake.cart.application.port.DropPort;
 import com.openbake.cart.application.port.dto.DropInfo;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.repository.DropRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

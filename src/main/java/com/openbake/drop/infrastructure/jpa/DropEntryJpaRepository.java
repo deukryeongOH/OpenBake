@@ -1,6 +1,6 @@
-package com.openbake.drop.infrastructure;
+package com.openbake.drop.infrastructure.jpa;
 
-import com.openbake.drop.domain.DropEntry;
+import com.openbake.drop.domain.entity.DropEntry;
 import com.openbake.drop.domain.EntryStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 

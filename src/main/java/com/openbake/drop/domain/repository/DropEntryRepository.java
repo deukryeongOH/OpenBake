@@ -1,4 +1,7 @@
-package com.openbake.drop.domain;
+package com.openbake.drop.domain.repository;
+
+import com.openbake.drop.domain.EntryStatus;
+import com.openbake.drop.domain.entity.DropEntry;
 
 import java.util.List;
 import java.util.Optional;

@@ -1,8 +1,8 @@
-package com.openbake.drop.presentation;
+package com.openbake.drop.presentation.controller;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.security.CurrentMemberProvider;
-import com.openbake.drop.application.DropEnterService;
+import com.openbake.drop.application.service.DropEnterService;
 import com.openbake.drop.application.dto.ConfirmEntryResult;
 import com.openbake.drop.application.dto.QueueRankResult;
 import com.openbake.drop.presentation.dto.ConfirmEntryResponse;

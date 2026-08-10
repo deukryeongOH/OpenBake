@@ -1,6 +1,6 @@
 package com.openbake.drop.application.cache;
 
-import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.entity.Drop;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

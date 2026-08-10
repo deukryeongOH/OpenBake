@@ -1,4 +1,4 @@
-package com.openbake.drop.application;
+package com.openbake.drop.application.service;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
@@ -6,12 +6,12 @@ import com.openbake.drop.application.dto.ConfirmEntryResult;
 import com.openbake.drop.application.dto.QueueRankResult;
 import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropEntry;
-import com.openbake.drop.domain.DropInventory;
-import com.openbake.drop.domain.DropEntryRepository;
-import com.openbake.drop.domain.DropInventoryRepository;
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.entity.DropEntry;
+import com.openbake.drop.domain.entity.DropInventory;
+import com.openbake.drop.domain.repository.DropEntryRepository;
+import com.openbake.drop.domain.repository.DropInventoryRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

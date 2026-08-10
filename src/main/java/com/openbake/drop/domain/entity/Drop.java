@@ -1,7 +1,10 @@
-package com.openbake.drop.domain;
+package com.openbake.drop.domain.entity;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.domain.DropProduct;
+import com.openbake.drop.domain.DropStatus;
+import com.openbake.drop.domain.DropTimeSlot;
 import jakarta.persistence.*;
 import lombok.*;
 

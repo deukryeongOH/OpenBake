@@ -2,9 +2,9 @@ package com.openbake.drop.application.queue;
 
 import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.cache.TodayDropCache;
-import com.openbake.drop.domain.Drop;
+import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.DropProduct;
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.drop.domain.DropStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

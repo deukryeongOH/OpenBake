@@ -1,8 +1,9 @@
-package com.openbake.drop.domain;
+package com.openbake.drop.domain.entity;
 
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.domain.EntryStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;

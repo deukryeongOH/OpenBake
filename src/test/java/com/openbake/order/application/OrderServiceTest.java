@@ -2,8 +2,8 @@ package com.openbake.order.application;
 
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
-import com.openbake.drop.application.DropLockService;
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.application.service.DropLockService;
+import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.order.application.port.MemberPort;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;

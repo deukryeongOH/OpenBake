@@ -1,7 +1,8 @@
-package com.openbake.drop.infrastructure;
+package com.openbake.drop.infrastructure.adapter;
 
-import com.openbake.drop.domain.DropInventory;
-import com.openbake.drop.domain.DropInventoryRepository;
+import com.openbake.drop.domain.entity.DropInventory;
+import com.openbake.drop.domain.repository.DropInventoryRepository;
+import com.openbake.drop.infrastructure.jpa.DropInventoryJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 

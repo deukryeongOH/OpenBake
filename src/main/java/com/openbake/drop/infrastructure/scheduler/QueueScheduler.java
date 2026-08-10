@@ -1,8 +1,8 @@
 package com.openbake.drop.infrastructure.scheduler;
 
 import com.openbake.drop.application.cache.CachedDrop;
-import com.openbake.drop.application.DropEnterService;
-import com.openbake.drop.application.DropService;
+import com.openbake.drop.application.service.DropEnterService;
+import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.application.cache.TodayDropCache;
 import jakarta.annotation.PostConstruct;

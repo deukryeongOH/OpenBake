@@ -1,6 +1,7 @@
 package com.openbake.drop.application;
 
 import com.openbake.drop.application.dto.DropReserveCommand;
+import com.openbake.drop.application.service.DropLockService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

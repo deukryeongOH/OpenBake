@@ -1,6 +1,6 @@
 package com.openbake.drop.application.cache;
 
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

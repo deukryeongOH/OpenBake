@@ -1,4 +1,6 @@
-package com.openbake.drop.domain;
+package com.openbake.drop.domain.repository;
+
+import com.openbake.drop.domain.entity.DropInventory;
 
 public interface DropInventoryRepository {
     DropInventory save(DropInventory dropInventory);

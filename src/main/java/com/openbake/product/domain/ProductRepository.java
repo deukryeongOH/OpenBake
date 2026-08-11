@@ -18,4 +18,6 @@ public interface ProductRepository {
     int decreaseStock(Long productId, int quantity);
 
     int rollbackStock(Long productId, int quantity);
+
+    int adjustTotalQuantity(Long productId, int newTotal);
 }

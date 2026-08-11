@@ -47,4 +47,9 @@ public class ProductRepositoryAdapter implements ProductRepository {
     public int rollbackStock(Long productId, int quantity) {
         return productJpaRepository.rollbackStock(productId, quantity);
     }
+
+    @Override
+    public int adjustTotalQuantity(Long productId, int adjustTotalQuantity) {
+        return productJpaRepository.adjustTotalQuantity(productId, adjustTotalQuantity);
+    }
 }

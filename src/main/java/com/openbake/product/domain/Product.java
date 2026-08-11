@@ -80,8 +80,6 @@ public class Product {
         this.description = command.description();
         this.imageUrl = command.imageUrl();
         this.price = command.price();
-        this.totalQuantity = command.totalQuantity();
-        this.remainQuantity = command.totalQuantity();
         this.pickUpAvailableDate.clear();
         this.pickUpAvailableDate.addAll(command.pickupDates());
         this.category = command.category();

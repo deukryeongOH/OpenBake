@@ -19,5 +19,9 @@ public interface ProductJpaRepository extends JpaRepository<Product, Long> {
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Product p SET p.remainQuantity = p.remainQuantity + :quantity WHERE p.id = :productId AND p.totalQuantity >= p.remainQuantity + :quantity")
     int rollbackStock(@Param("productId") Long productId, @Param("quantity") int quantity);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Product p SET p.remainQuantity = p.remainQuantity + (:newTotal - p.totalQuantity), p.totalQuantity = :newTotal " + "WHERE p.id = :productId AND p.remainQuantity + (:newTotal - p.totalQuantity) >= 0")
+    int adjustTotalQuantity(@Param("productId") Long productId, @Param("newTotal") int newTotal);
 }
 

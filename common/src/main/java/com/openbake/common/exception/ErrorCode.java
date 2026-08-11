@@ -69,6 +69,7 @@ public enum ErrorCode {
     // product - PR
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PR001", "존재하지 않는 일반 상품입니다."),
     THIS_IS_NOT_YOURS(HttpStatus.BAD_REQUEST, "PR002", "판매자 본인의 상품이 아닙니다."),
+    QUANTITY_CAN_NOT_BE_MINUS(HttpStatus.BAD_REQUEST, "PR003", "선택 수량은 음수가 될 수 없습니다."),
 
     //cart - CA
     CART_ALREADY_EXISTS(HttpStatus.CONFLICT, "CA001", "이미 장바구니에 담긴 상품이 있습니다."),

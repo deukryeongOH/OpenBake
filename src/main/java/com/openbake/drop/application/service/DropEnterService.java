@@ -12,6 +12,7 @@ import com.openbake.drop.domain.entity.DropInventory;
 import com.openbake.drop.domain.repository.DropEntryRepository;
 import com.openbake.drop.domain.repository.DropInventoryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
+import com.openbake.drop.infrastructure.port.CurrentMemberPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ public class DropEnterService {
     private final QueueManager queueManager;
     private final DropInventoryRepository dropInventoryRepository;
     private final DropRepository dropRepository;
+    private final CurrentMemberPort currentMemberPort;
 
     @Transactional(readOnly = true)
     public List<Long> getTodayDropIds() {
@@ -45,7 +47,9 @@ public class DropEnterService {
     }
 
     @Transactional(readOnly = true)
-    public QueueRankResult enterQueue(Long dropId, Long memberId) {
+    public QueueRankResult enterQueue(Long dropId) {
+        Long memberId = currentMemberPort.getCurrentMemberId();
+
         LocalDateTime now = LocalDateTime.now();
 
         Drop findDrop = dropRepository.findById(dropId)
@@ -72,7 +76,9 @@ public class DropEnterService {
 
 
     @Transactional
-    public ConfirmEntryResult confirmEntry(Long dropId, Long memberId) {
+    public ConfirmEntryResult confirmEntry(Long dropId) {
+        Long memberId = currentMemberPort.getCurrentMemberId();
+
         if(!queueManager.isActive(dropId, memberId)){
             throw new BusinessException(ErrorCode.UNAUTHORIZED_QUEUE_ACCESS);
         }
@@ -99,7 +105,8 @@ public class DropEnterService {
     }
 
 
-    public QueueRankResult getRank(Long dropId, Long memberId){ // DB 조회가 일어나지 않기에 @Transaction X
+    public QueueRankResult getRank(Long dropId){ // DB 조회가 일어나지 않기에 @Transaction X
+        Long memberId = currentMemberPort.getCurrentMemberId();
         Long rank = queueManager.getRank(dropId, memberId);
         return QueueRankResult.of(rank);
     }

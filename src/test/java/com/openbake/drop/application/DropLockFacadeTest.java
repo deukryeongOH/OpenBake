@@ -2,6 +2,7 @@ package com.openbake.drop.application;
 
 import com.openbake.drop.application.dto.DropReserveCommand;
 import com.openbake.drop.application.service.DropLockService;
+import com.openbake.drop.infrastructure.port.CurrentMemberPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -23,11 +25,15 @@ class DropLockFacadeTest {
     @Mock
     private DropLockService dropLockService;
 
+    @Mock
+    private CurrentMemberPort currentMemberPort;
+
     @Test
     @DisplayName("같은 dropId에 대한 동시 요청은 락으로 직렬화되어 순차 처리된다")
     void reserveStock_ConcurrentRequests_SerializedByLock() throws InterruptedException {
         // given
-        DropLockFacade dropLockFacade = new DropLockFacade(dropLockService);
+        given(currentMemberPort.getCurrentMemberId()).willReturn(1L);
+        DropLockFacade dropLockFacade = new DropLockFacade(dropLockService, currentMemberPort);
 
         Long dropId = 1L;
         int threadCount = 10;
@@ -50,13 +56,12 @@ class DropLockFacadeTest {
         // when
         try (ExecutorService executorService = Executors.newFixedThreadPool(threadCount)) {
             for (int i = 0; i < threadCount; i++) {
-                long memberId = i + 1L;
                 executorService.submit(() -> {
                     readyLatch.countDown();
                     try {
                         startLatch.await();
                         DropReserveCommand command = new DropReserveCommand(1);
-                        dropLockFacade.reserveStock(dropId, memberId, command);
+                        dropLockFacade.reserveStock(dropId, command);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     } finally {

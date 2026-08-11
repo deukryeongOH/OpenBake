@@ -10,6 +10,7 @@ import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.entity.DropInventory;
 import com.openbake.drop.domain.repository.DropInventoryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
+import com.openbake.drop.infrastructure.adapter.SellerAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,9 @@ class DropServiceTest {
 
     @Mock
     private TodayDropCache todayDropCache;
+
+    @Mock
+    private SellerAdapter sellerAdapter;
 
     @InjectMocks
     private DropService dropService;
@@ -108,11 +112,12 @@ class DropServiceTest {
                 .build();
 
         // 3. Repository 스터빙 (Stubbing)
+        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
         given(dropRepository.save(any())).willReturn(savedDrop);
         given(dropInventoryRepository.save(any(DropInventory.class))).willReturn(savedDropInventory);
 
         // when
-        DropProductInfoResult response = dropService.registerDropProduct(command, sellerId);
+        DropProductInfoResult response = dropService.registerDropProduct(command);
 
         // then
         assertThat(response).isNotNull();
@@ -152,10 +157,11 @@ class DropServiceTest {
                 .build();
         ReflectionTestUtils.setField(existingDrop, "id", 999L);
 
+        given(sellerAdapter.getCurrentSellerId()).willReturn(1L);
         given(dropRepository.findListByDropDate(any())).willReturn(List.of(existingDrop));
 
         // when & then
-        assertThatThrownBy(() -> dropService.registerDropProduct(command, 1L))
+        assertThatThrownBy(() -> dropService.registerDropProduct(command))
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
@@ -192,13 +198,14 @@ class DropServiceTest {
                 .remainQuantity(60)
                 .build();
 
+        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(existingDrop));
         given(dropRepository.findListByDropDate(any())).willReturn(List.of());
         given(dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(eq(sellerId), any(), any(), eq(dropId))).willReturn(false);
         given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
 
         // when
-        DropProductInfoResult response = dropService.updateDropProduct(dropId, sellerId, command);
+        DropProductInfoResult response = dropService.updateDropProduct(dropId, command);
 
         // then
         assertThat(response.name()).isEqualTo(command.name());
@@ -232,10 +239,11 @@ class DropServiceTest {
                 .build();
         ReflectionTestUtils.setField(drop, "id", dropId);
 
+        given(sellerAdapter.getCurrentSellerId()).willReturn(requesterId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
 
         // when & then
-        assertThatThrownBy(() -> dropService.updateDropProduct(dropId, requesterId, command))
+        assertThatThrownBy(() -> dropService.updateDropProduct(dropId, command))
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
@@ -267,11 +275,12 @@ class DropServiceTest {
                 .remainQuantity(100)
                 .build();
 
+        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
 
         // when
-        dropService.deleteDropProduct(dropId, sellerId);
+        dropService.deleteDropProduct(dropId);
 
         // then
         verify(dropInventoryRepository).delete(dropInventory);
@@ -300,10 +309,11 @@ class DropServiceTest {
                 .build();
         ReflectionTestUtils.setField(drop, "id", dropId);
 
+        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
 
         // when & then
-        assertThatThrownBy(() -> dropService.deleteDropProduct(dropId, sellerId))
+        assertThatThrownBy(() -> dropService.deleteDropProduct(dropId))
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();

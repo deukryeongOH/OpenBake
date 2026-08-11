@@ -11,6 +11,7 @@ import com.openbake.drop.domain.entity.DropInventory;
 import com.openbake.drop.domain.repository.DropEntryRepository;
 import com.openbake.drop.domain.repository.DropInventoryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
+import com.openbake.drop.infrastructure.port.CurrentMemberPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,9 @@ class DropEnterServiceTest {
 
     @Mock
     private DropInventoryRepository dropInventoryRepository;
+
+    @Mock
+    private CurrentMemberPort currentMemberPort;
 
     @InjectMocks
     private DropEnterService dropEnterService;
@@ -111,13 +115,14 @@ class DropEnterServiceTest {
     @DisplayName("대기열 진입 성공 - 대기 순번을 반환한다")
     void enterQueue_Success() {
         // given
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
         given(dropEntryRepository.existsByDropIdAndMemberIdAndEntryStatusIn(
                 eq(dropId), eq(memberId), any(List.class))).willReturn(false);
         given(queueManager.enqueue(dropId, memberId)).willReturn(3L);
 
         // when
-        QueueRankResult result = dropEnterService.enterQueue(dropId, memberId);
+        QueueRankResult result = dropEnterService.enterQueue(dropId);
 
         // then
         assertThat(result.rank()).isEqualTo(3L);
@@ -129,10 +134,11 @@ class DropEnterServiceTest {
     @DisplayName("대기열 순번 조회 성공")
     void getRank_Success() {
         // given
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
         given(queueManager.getRank(dropId, memberId)).willReturn(0L);
 
         // when
-        QueueRankResult result = dropEnterService.getRank(dropId, memberId);
+        QueueRankResult result = dropEnterService.getRank(dropId);
 
         // then
         assertThat(result.rank()).isEqualTo(0L);
@@ -143,6 +149,7 @@ class DropEnterServiceTest {
     @DisplayName("입장 확정 성공 - 대기열 권한을 검증하고 진입 내역을 저장한다")
     void confirmEntry_Success() {
         // given
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
         given(queueManager.isActive(dropId, memberId)).willReturn(true);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
         given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
@@ -150,7 +157,7 @@ class DropEnterServiceTest {
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId, memberId);
+        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId);
 
         // then
         assertThat(result.name()).isEqualTo(activeDrop.getDropProduct().getName());

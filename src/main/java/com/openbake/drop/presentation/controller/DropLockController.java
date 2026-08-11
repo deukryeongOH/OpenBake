@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 public class DropLockController {
 
     private final DropLockFacade dropLockFacade;
-    private final CurrentMemberProvider provider;
 
     @Operation(
             summary = "드롭 재고 선점",
@@ -36,9 +35,8 @@ public class DropLockController {
     public ApiResponse<String> reserveStock(
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId,
             @Valid @RequestBody DropReserveRequest request){
-        Long memberId = provider.getId();
         DropReserveCommand command = DropReserveCommand.create(request.quantity());
-        dropLockFacade.reserveStock(dropId, memberId, command);
+        dropLockFacade.reserveStock(dropId, command);
 
         return ApiResponse.ok("재고 선점 및 장바구니 담기 완료");
     }

@@ -13,6 +13,7 @@ import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.entity.DropInventory;
 import com.openbake.drop.domain.repository.DropInventoryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
+import com.openbake.drop.infrastructure.adapter.SellerAdapter;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -35,9 +36,12 @@ public class DropService {
     private final DropRepository dropRepository;
     private final DropInventoryRepository dropInventoryRepository;
     private final TodayDropCache todayDropCache;
+    private final SellerAdapter sellerAdapter;
 
     @Transactional
-    public DropProductInfoResult registerDropProduct(DropProductInfoCommand command, Long sellerId) {
+    public DropProductInfoResult registerDropProduct(DropProductInfoCommand command) {
+        Long sellerId = sellerAdapter.getCurrentSellerId();
+
         // 하루 5개 제한 검증 & 시간대 검증
         validateFiveDropPerDay(sellerId, command.dropStart());
         // 제한 수량, 총 수량 검증
@@ -176,7 +180,9 @@ public class DropService {
 
     // 판매자 본인이 등록한 드롭 목록 조회
     @Transactional(readOnly = true)
-    public List<DropProductInfoResult> getMyDrops(Long sellerId) {
+    public List<DropProductInfoResult> getMyDrops() {
+        Long sellerId = sellerAdapter.getCurrentSellerId();
+
         return dropRepository.findAllBySellerId(sellerId).stream()
                 .map(drop -> DropProductInfoResult.of(drop, dropInventoryRepository.findByDropId(drop.getId())))
                 .toList();
@@ -207,7 +213,9 @@ public class DropService {
 
     // 판매자 본인의 드롭 수정 (시작 전인 드롭만 가능)
     @Transactional
-    public DropProductInfoResult updateDropProduct(Long dropId, Long sellerId, DropProductInfoCommand command) {
+    public DropProductInfoResult updateDropProduct(Long dropId, DropProductInfoCommand command) {
+        Long sellerId = sellerAdapter.getCurrentSellerId();
+
         Drop drop = findDrop(dropId);
         validateOwner(drop, sellerId);
         validateEditable(drop);
@@ -228,7 +236,9 @@ public class DropService {
 
     // 판매자 본인의 드롭 삭제 (시작 전인 드롭만 가능)
     @Transactional
-    public void deleteDropProduct(Long dropId, Long sellerId) {
+    public void deleteDropProduct(Long dropId) {
+        Long sellerId = sellerAdapter.getCurrentSellerId();
+
         Drop drop = findDrop(dropId);
         validateOwner(drop, sellerId);
         validateEditable(drop);

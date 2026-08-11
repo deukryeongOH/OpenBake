@@ -4,6 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.DropReserveCommand;
 import com.openbake.drop.application.service.DropLockService;
+import com.openbake.drop.infrastructure.port.CurrentMemberPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,9 +19,11 @@ import java.util.concurrent.locks.ReentrantLock;
 public class DropLockFacade {
 
     private final DropLockService dropLockService;
+    private final CurrentMemberPort currentMemberPort;
     private final ConcurrentHashMap<Long, ReentrantLock> lockConcurrentHashMap = new ConcurrentHashMap<>();
 
-    public void reserveStock(Long dropId, Long memberId, DropReserveCommand command) {
+    public void reserveStock(Long dropId, DropReserveCommand command) {
+        Long memberId = currentMemberPort.getCurrentMemberId();
         // 1인당 제한 수량과 선택 수량 검증
         dropLockService.checkLimitQuantityPerPerson(dropId, command.quantity());
         // 남은 수량과 선택 수량 검증

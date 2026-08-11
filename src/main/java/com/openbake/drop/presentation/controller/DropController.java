@@ -35,7 +35,6 @@ import java.util.List;
 public class DropController {
 
     private final DropService dropService;
-    private final CurrentSellerProvider currentSellerProvider;
 
     @Operation(
             summary = "드롭 등록",
@@ -48,13 +47,11 @@ public class DropController {
     @PostMapping("/register") // 등록은 seller 만 되므로 이걸 호출한 사람이 seller인지 확인 필요 -> SpringSecurity @Authentication을 통해 현재 유저의 ID를 받고 그 ID가 seller에 존재하면 접근 허용
     public ApiResponse<DropProductInfoResponse> registerDropProduct(@Valid @RequestBody DropProductInfoRequest dropProductInfoRequest
     ) {
-        Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
-
         DropProductInfoCommand command = DropProductInfoCommand.create(dropProductInfoRequest.name(), dropProductInfoRequest.description(),
                 dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropStart().plusMinutes(60), dropProductInfoRequest.totalQuantity(),
                 dropProductInfoRequest.limitQuantity(), dropProductInfoRequest.price(), dropProductInfoRequest.pickUpAvailableDates());
 
-        DropProductInfoResult response = dropService.registerDropProduct(command, sellerId);
+        DropProductInfoResult response = dropService.registerDropProduct(command);
         return ApiResponse.ok(DropProductInfoResponse.of(response));
     }
 
@@ -81,9 +78,7 @@ public class DropController {
     // 판매자 본인이 등록한 드롭 목록 조회
     @GetMapping("/mine")
     public ApiResponse<List<DropProductInfoResponse>> getMyDrops() {
-        Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
-
-        List<DropProductInfoResult> results = dropService.getMyDrops(sellerId);
+        List<DropProductInfoResult> results = dropService.getMyDrops();
         return ApiResponse.ok(results.stream().map(DropProductInfoResponse::of).toList());
     }
 
@@ -114,13 +109,11 @@ public class DropController {
     public ApiResponse<DropProductInfoResponse> updateDropProduct(
             @Parameter(description = "수정할 드롭 ID", example = "1") @PathVariable("dropId") Long dropId,
             @Valid @RequestBody DropProductInfoRequest dropProductInfoRequest) {
-        Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
-
         DropProductInfoCommand command = DropProductInfoCommand.create(dropProductInfoRequest.name(), dropProductInfoRequest.description(),
                 dropProductInfoRequest.imageUrl(), dropProductInfoRequest.dropStart(), dropProductInfoRequest.dropStart().plusMinutes(60), dropProductInfoRequest.totalQuantity(),
                 dropProductInfoRequest.limitQuantity(), dropProductInfoRequest.price(), dropProductInfoRequest.pickUpAvailableDates());
 
-        DropProductInfoResult result = dropService.updateDropProduct(dropId, sellerId, command);
+        DropProductInfoResult result = dropService.updateDropProduct(dropId, command);
         return ApiResponse.ok(DropProductInfoResponse.of(result));
     }
 
@@ -138,9 +131,7 @@ public class DropController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteDropProduct(
             @Parameter(description = "삭제할 드롭 ID", example = "1") @PathVariable("dropId") Long dropId) {
-        Long sellerId = currentSellerProvider.getSellerId().orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE));
-
-        dropService.deleteDropProduct(dropId, sellerId);
+        dropService.deleteDropProduct(dropId);
     }
 
     @Operation(

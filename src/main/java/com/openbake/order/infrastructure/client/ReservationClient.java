@@ -1,6 +1,6 @@
 package com.openbake.order.infrastructure.client;
 
-import com.openbake.drop.application.DropLockService;
+import com.openbake.drop.application.service.DropLockService;
 import com.openbake.order.application.port.ReservationPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

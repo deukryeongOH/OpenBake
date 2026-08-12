@@ -4,6 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.product.application.dto.GeneralProductInfoCommand;
 import com.openbake.product.application.dto.GeneralProductInfoResult;
+import com.openbake.product.domain.Category;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.ProductInventory;
 import com.openbake.product.domain.ProductInventoryRepository;
@@ -96,8 +97,8 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Page<GeneralProductInfoResult> getGeneralProductList(Pageable pageable) {
-        return productRepository.findAll(pageable).map(this::toResult);
+    public Page<GeneralProductInfoResult> getGeneralProductList(String keyword, Category category, Pageable pageable) {
+        return productRepository.searchByKeywordAndCategory(keyword, category, pageable).map(this::toResult);
     }
 
     @Transactional // 일반 상품 재고 차감

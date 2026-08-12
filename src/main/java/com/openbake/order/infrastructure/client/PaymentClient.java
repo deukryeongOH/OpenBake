@@ -1,4 +1,4 @@
-package com.openbake.order.infrastructure;
+package com.openbake.order.infrastructure.client;
 
 import com.openbake.order.application.port.PaymentPort;
 import com.openbake.order.application.port.dto.BalanceInfo;

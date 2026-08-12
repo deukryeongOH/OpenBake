@@ -1,7 +1,7 @@
 package com.openbake.drop.application.dto;
 
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropInventory;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.entity.DropInventory;
 import com.openbake.drop.domain.DropStatus;
 
 import java.time.LocalDate;

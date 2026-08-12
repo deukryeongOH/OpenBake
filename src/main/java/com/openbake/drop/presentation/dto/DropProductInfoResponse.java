@@ -1,13 +1,10 @@
 package com.openbake.drop.presentation.dto;
 
 import com.openbake.drop.application.dto.DropProductInfoResult;
-import com.openbake.drop.domain.Drop;
-import com.openbake.drop.domain.DropInventory;
 import com.openbake.drop.domain.DropStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.Set;
 
 public record DropProductInfoResponse(

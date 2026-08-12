@@ -3,6 +3,7 @@ package com.openbake.drop.application;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.DropReserveCommand;
+import com.openbake.drop.application.service.DropLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

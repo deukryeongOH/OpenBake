@@ -64,6 +64,13 @@ public enum ErrorCode {
     DROP_OWNER_MISMATCH(HttpStatus.FORBIDDEN, "DR016", "본인이 등록한 드롭이 아닙니다."),
     DROP_NOT_EDITABLE(HttpStatus.CONFLICT, "DR017", "이미 시작되었거나 종료된 드롭은 수정/삭제할 수 없습니다."),
     INVALID_USER_SELECT_QUANTITY(HttpStatus.BAD_REQUEST, "DR018", "사용자가 선택한 수량이 남은 수량보다 많을 수 없습니다."),
+    TIMESLOT_NOT_CONTAINS(HttpStatus.BAD_REQUEST, "DR019", "선택한 시간은 타임 슬롯에 없는 시간입니다."),
+
+    // product - PR
+    PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PR001", "존재하지 않는 일반 상품입니다."),
+    THIS_IS_NOT_YOURS(HttpStatus.BAD_REQUEST, "PR002", "판매자 본인의 상품이 아닙니다."),
+    QUANTITY_CAN_NOT_BE_MINUS(HttpStatus.BAD_REQUEST, "PR003", "선택 수량은 음수가 될 수 없습니다."),
+    PRODUCT_INVENTORY_NOT_FOUND(HttpStatus.NOT_FOUND, "PR004", "인벤토리가 없습니다."),
 
     //cart - CA
     CART_ALREADY_EXISTS(HttpStatus.CONFLICT, "CA001", "이미 장바구니에 담긴 상품이 있습니다."),

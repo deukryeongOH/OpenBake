@@ -1,8 +1,10 @@
 package com.openbake.drop.application.queue;
 
-import com.openbake.drop.domain.Drop;
+import com.openbake.drop.application.cache.CachedDrop;
+import com.openbake.drop.application.cache.TodayDropCache;
+import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.DropProduct;
-import com.openbake.drop.domain.DropRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.drop.domain.DropStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,7 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,13 +31,7 @@ class TodayDropCacheTest {
     @InjectMocks
     private TodayDropCache todayDropCache;
 
-    @Test
-    @DisplayName("오늘 진행되는 드롭이 있으면 캐시에 dropId/시작/종료 시각을 채운다")
-    void refresh_WithDropToday_CachesDropInfo() {
-        // given
-        LocalDateTime start = LocalDateTime.now().plusHours(1);
-        LocalDateTime end = LocalDateTime.now().plusHours(2);
-
+    private static Drop drop(Long id, LocalDateTime start, LocalDateTime end, Long sellerId) {
         DropProduct dropProduct = DropProduct.builder()
                 .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
         Drop drop = Drop.builder()
@@ -45,64 +41,83 @@ class TodayDropCacheTest {
                 .limitQuantity(1)
                 .dropStart(start)
                 .dropEnd(end)
-                .sellerId(1L)
+                .sellerId(sellerId)
                 .build();
-        ReflectionTestUtils.setField(drop, "id", 100L);
+        ReflectionTestUtils.setField(drop, "id", id);
+        return drop;
+    }
 
-        given(dropRepository.findByDropStartBetween(any(), any())).willReturn(Optional.of(drop));
+    @Test
+    @DisplayName("오늘 진행되는 드롭이 있으면 캐시에 dropId/시작/종료 시각을 채운다")
+    void refresh_WithDropToday_CachesDropInfo() {
+        // given
+        LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
+        LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
+
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of(drop(100L, start, end, 1L)));
 
         // when
         todayDropCache.refresh();
 
         // then
-        TodayDropCache.CachedDrop cached = todayDropCache.get();
-        assertThat(cached.dropId()).isEqualTo(100L);
-        assertThat(cached.dropStart()).isEqualTo(start);
-        assertThat(cached.dropEnd()).isEqualTo(end);
+        List<CachedDrop> cached = todayDropCache.get();
+        assertThat(cached).hasSize(1);
+        assertThat(cached.get(0).dropId()).isEqualTo(100L);
+        assertThat(cached.get(0).dropStart()).isEqualTo(start);
+        assertThat(cached.get(0).dropEnd()).isEqualTo(end);
+    }
+
+    @Test
+    @DisplayName("오늘 진행되는 드롭이 여러 개면 캐시에도 전부 담긴다")
+    void refresh_WithMultipleDropsToday_CachesAll() {
+        // given
+        LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
+        LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
+
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of(
+                drop(100L, start, end, 1L),
+                drop(200L, start.plusHours(2), end.plusHours(2), 2L)
+        ));
+
+        // when
+        todayDropCache.refresh();
+
+        // then
+        assertThat(todayDropCache.get())
+                .extracting(CachedDrop::dropId)
+                .containsExactlyInAnyOrder(100L, 200L);
     }
 
     @Test
     @DisplayName("오늘 진행되는 드롭이 없으면 캐시를 비운다")
     void refresh_WithNoDropToday_CachesEmpty() {
         // given
-        given(dropRepository.findByDropStartBetween(any(), any())).willReturn(Optional.empty());
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of());
 
         // when
         todayDropCache.refresh();
 
         // then
-        assertThat(todayDropCache.get().dropId()).isNull();
+        assertThat(todayDropCache.get()).isEmpty();
     }
 
     @Test
-    @DisplayName("tryMarkStarted는 최초 1회만 true를 반환한다")
-    void tryMarkStarted_ReturnsTrueOnlyOnce() {
-        assertThat(todayDropCache.tryMarkStarted()).isTrue();
-        assertThat(todayDropCache.tryMarkStarted()).isFalse();
-        assertThat(todayDropCache.tryMarkStarted()).isFalse();
-    }
-
-    @Test
-    @DisplayName("tryMarkEnded는 최초 1회만 true를 반환한다")
-    void tryMarkEnded_ReturnsTrueOnlyOnce() {
-        assertThat(todayDropCache.tryMarkEnded()).isTrue();
-        assertThat(todayDropCache.tryMarkEnded()).isFalse();
-        assertThat(todayDropCache.tryMarkEnded()).isFalse();
-    }
-
-    @Test
-    @DisplayName("refresh를 다시 호출하면 이전에 마킹된 tryMarkStarted/tryMarkEnded 플래그가 초기화된다")
+    @DisplayName("refresh를 다시 호출하면 새 CachedDrop이 만들어져 이전 tryMarkStarted 마킹이 초기화된다")
     void refresh_ResetsMarkFlags() {
-        // given: 드롭이 이미 시작/종료 처리된 상태였다가
-        given(dropRepository.findByDropStartBetween(any(), any())).willReturn(Optional.empty());
-        todayDropCache.tryMarkStarted();
-        todayDropCache.tryMarkEnded();
+        // given: 드롭이 이미 시작 처리(tryMarkStarted 마킹)된 상태였다가
+        // (Drop 생성자가 과거 dropStart를 거부하고 TimeSlot에 맞아야 하므로, 미래의 슬롯 시각을 쓰고
+        // "시작됨" 상태는 마킹으로만 시뮬레이션한다)
+        LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
+        LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of(drop(100L, start, end, 1L)));
+
+        todayDropCache.refresh();
+        todayDropCache.get().get(0).tryMarkStarted();
 
         // when: 드롭 등록/수정으로 캐시가 다시 갱신되면
         todayDropCache.refresh();
 
-        // then: 플래그가 초기화되어 다시 한번 전환을 트리거할 수 있어야 한다
-        assertThat(todayDropCache.tryMarkStarted()).isTrue();
-        assertThat(todayDropCache.tryMarkEnded()).isTrue();
+        // then: 새로 생성된 CachedDrop은 마킹 이력이 없어 다시 한번 전환을 트리거할 수 있어야 한다
+        assertThat(todayDropCache.get().get(0).tryMarkStarted()).isTrue();
     }
 }

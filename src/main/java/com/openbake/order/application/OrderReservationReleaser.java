@@ -2,7 +2,7 @@ package com.openbake.order.application;
 
 import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
-import com.openbake.drop.application.DropLockService;
+import com.openbake.drop.application.service.DropLockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;

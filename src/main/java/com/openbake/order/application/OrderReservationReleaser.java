@@ -1,8 +1,7 @@
 package com.openbake.order.application;
 
-import com.openbake.cart.domain.CartItem;
-import com.openbake.cart.domain.CartRepository;
-import com.openbake.drop.application.DropLockService;
+import com.openbake.order.application.port.CartPort;
+import com.openbake.order.application.port.ReservationPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -19,19 +18,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderReservationReleaser {
 
-    private final CartRepository cartRepository;
-    private final DropLockService dropLockService;
+    private final CartPort cartPort;
+    private final ReservationPort reservationPort;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void releaseOnPaymentFailure(Long memberId) {
-        cartRepository.findByMemberId(memberId).ifPresent(cart -> {
-            CartItem item = cart.getItems();
-            if (item != null) {
+        cartPort.findCart(memberId).ifPresent(cart -> {
+            if (cart.dropId() != null) {
                 //재고 복구는 drop 소유라 rollbackStock 을 호출한다(직접 되돌리지 않는다).
-                dropLockService.rollbackStock(item.getDropId(), memberId);
+                reservationPort.rollbackStock(cart.dropId(), memberId);
             }
             //결제 실패한 장바구니는 더 못 쓰게 정리한다.
-            cartRepository.delete(cart);
+            cartPort.deleteCart(memberId);
         });
     }
 }

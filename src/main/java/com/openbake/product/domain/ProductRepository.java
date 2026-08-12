@@ -1,7 +1,9 @@
 package com.openbake.product.domain;
 
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.Optional;
 
 public interface ProductRepository {
@@ -11,13 +13,7 @@ public interface ProductRepository {
 
     void delete(Product product);
 
-    List<Product> findAllBySellerId(Long sellerId);
+    Page<Product> findAllBySellerId(Long sellerId, Pageable pageable);
 
-    List<Product> findAll();
-
-    int decreaseStock(Long productId, int quantity);
-
-    int rollbackStock(Long productId, int quantity);
-
-    int adjustTotalQuantity(Long productId, int newTotal);
+    Page<Product> findAll(Pageable pageable);
 }

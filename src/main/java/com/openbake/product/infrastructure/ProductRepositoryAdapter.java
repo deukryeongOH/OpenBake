@@ -3,9 +3,10 @@ package com.openbake.product.infrastructure;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -29,27 +30,12 @@ public class ProductRepositoryAdapter implements ProductRepository {
     }
 
     @Override
-    public List<Product> findAllBySellerId(Long sellerId) {
-        return productJpaRepository.findAllBySellerId(sellerId);
+    public Page<Product> findAllBySellerId(Long sellerId, Pageable pageable) {
+        return productJpaRepository.findAllBySellerId(sellerId, pageable);
     }
 
     @Override
-    public List<Product> findAll() {
-        return productJpaRepository.findAll();
-    }
-
-    @Override
-    public int decreaseStock(Long productId, int quantity) {
-        return productJpaRepository.decreaseStock(productId, quantity);
-    }
-
-    @Override
-    public int rollbackStock(Long productId, int quantity) {
-        return productJpaRepository.rollbackStock(productId, quantity);
-    }
-
-    @Override
-    public int adjustTotalQuantity(Long productId, int adjustTotalQuantity) {
-        return productJpaRepository.adjustTotalQuantity(productId, adjustTotalQuantity);
+    public Page<Product> findAll(Pageable pageable) {
+        return productJpaRepository.findAll(pageable);
     }
 }

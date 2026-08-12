@@ -1,5 +1,6 @@
 package com.openbake.product.infrastructure;
 
+import com.openbake.product.domain.Category;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,5 +38,10 @@ public class ProductRepositoryAdapter implements ProductRepository {
     @Override
     public Page<Product> findAll(Pageable pageable) {
         return productJpaRepository.findAll(pageable);
+    }
+
+    @Override
+    public Page<Product> searchByKeywordAndCategory(String keyword, Category category, Pageable pageable) {
+        return productJpaRepository.searchByKeywordAndCategory(keyword, category, pageable);
     }
 }

@@ -16,4 +16,6 @@ public interface ProductRepository {
     Page<Product> findAllBySellerId(Long sellerId, Pageable pageable);
 
     Page<Product> findAll(Pageable pageable);
+
+    Page<Product> searchByKeywordAndCategory(String keyword, Category category, Pageable pageable);
 }

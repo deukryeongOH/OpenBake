@@ -4,6 +4,7 @@ import com.openbake.common.response.ApiResponse;
 import com.openbake.product.application.ProductService;
 import com.openbake.product.application.dto.GeneralProductInfoCommand;
 import com.openbake.product.application.dto.GeneralProductInfoResult;
+import com.openbake.product.domain.Category;
 import com.openbake.product.presentation.dto.GeneralProductInfoRequest;
 import com.openbake.product.presentation.dto.GeneralProductInfoResponse;
 import jakarta.validation.Valid;
@@ -59,12 +60,14 @@ public class ProductController {
     }
 
 
-    // 홈 화면에 상품 리스트 보여주기
+    // 홈 화면에 상품 리스트 보여주기 + 검색
     @GetMapping("/product-list")
     public ApiResponse<PagedModel<GeneralProductInfoResponse>> getGeneralProductList(
-            @PageableDefault(size = 20, sort = "category", direction = Sort.Direction.ASC) Pageable pageable
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Category category,
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable
             ){
-        Page<GeneralProductInfoResult> productPage = productService.getGeneralProductList(pageable);
+        Page<GeneralProductInfoResult> productPage = productService.getGeneralProductList(keyword, category, pageable);
 
         return ApiResponse.ok(new PagedModel<>(productPage.map(GeneralProductInfoResponse::of)));
     }

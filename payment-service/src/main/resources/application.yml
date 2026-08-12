@@ -3,7 +3,7 @@ spring:
     name: openbake-payment
 
   datasource:
-    url: ${DB_URL}
+    url: ${PAYMENT_DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:

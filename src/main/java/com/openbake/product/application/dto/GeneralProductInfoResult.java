@@ -1,6 +1,7 @@
 package com.openbake.product.application.dto;
 
 import com.openbake.product.domain.Category;
+import com.openbake.product.domain.Type;
 
 import java.time.LocalDate;
 import java.util.Set;
@@ -14,9 +15,10 @@ public record GeneralProductInfoResult(
         Set<LocalDate> pickUpAvailableDates,
         Category category,
         Long productId,
-        int remainQuantity
+        int remainQuantity,
+        Type type
 ) {
-    public static GeneralProductInfoResult of(GeneralProductInfoCommand command, Long productId, int remainQuantity) {
-        return new GeneralProductInfoResult(command.name(), command.description(), command.imageUrl(), command.totalQuantity(), command.price(), command.pickupDates(), command.category(), productId, remainQuantity);
+    public static GeneralProductInfoResult of(GeneralProductInfoCommand command, Long productId, int remainQuantity, Type type) {
+        return new GeneralProductInfoResult(command.name(), command.description(), command.imageUrl(), command.totalQuantity(), command.price(), command.pickupDates(), command.category(), productId, remainQuantity, type);
     }
 }

@@ -269,8 +269,8 @@ def login(
 
 
 def main() -> int:
-    base_url = env(
-        "BASE_URL",
+    member_base_url = env(
+        "MEMBER_BASE_URL",
         required=True,
     ).rstrip("/")
 
@@ -288,7 +288,7 @@ def main() -> int:
         login_path = "/" + login_path
 
     login_url = (
-            base_url +
+            member_base_url +
             login_path
     )
 

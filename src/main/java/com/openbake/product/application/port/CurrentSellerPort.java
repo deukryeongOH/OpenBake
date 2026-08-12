@@ -1,4 +1,4 @@
-package com.openbake.product.infrastructure;
+package com.openbake.product.application.port;
 
 
 public interface CurrentSellerPort {

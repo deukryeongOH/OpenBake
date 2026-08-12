@@ -1,6 +1,7 @@
 package com.openbake.product.presentation.dto;
 
 import com.openbake.product.domain.Category;
+import com.openbake.product.domain.Type;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -29,6 +30,10 @@ public record GeneralProductInfoRequest(
         Set<LocalDate> pickUpAvailableDates,
 
         @NotNull(message = "카테고리를 지정해주세요.")
-        Category category
+        Category category,
+
+        @NotNull(message = "타입을 지정해주세요.")
+        Type type
+
 ) {
 }

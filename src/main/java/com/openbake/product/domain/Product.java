@@ -8,6 +8,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.util.HashSet;
@@ -35,57 +36,57 @@ public class Product {
     @Column(nullable = false)
     private int price; // 상품 가격
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private int totalQuantity; // 총 발매 수량 (한정 수량)
+    private Type type; // 상품 타입 (드롭, 일반)
 
-    @Column(nullable = false)
-    private int remainQuantity; // 남은 재고 수량
-
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Category category; // 상품 카테고리
 
     @ElementCollection(fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
     @CollectionTable(
-            name = "pickup_available_dates",
+            name = "product_pickup_available_dates",
             joinColumns = @JoinColumn(name = "product_id")
     )
     @Column(name = "available_date", nullable = false)
-    private Set<LocalDate> pickUpAvailableDate = new HashSet<>(); // 픽업 가능 날짜
+    private Set<LocalDate> pickUpAvailableDates = new HashSet<>(); // 픽업 가능 날짜
 
     @Column(nullable = false)
     private Long sellerId; // 판매자 ID
 
     @Builder
-    public Product(String name, String description, String imageUrl, int price, int totalQuantity, int remainQuantity, Long sellerId, Set<LocalDate> pickUpAvailableDate, Category category) {
-        validateProductInfo(name, description, imageUrl, price, totalQuantity, category);
-        validatePickUpDates(pickUpAvailableDate);
+    public Product(String name, String description, String imageUrl, int price, Long sellerId, Set<LocalDate> pickUpAvailableDates, Category category, Type type) {
+        validateProductInfo(name, description, imageUrl, price, category, type);
+        validatePickUpDates(pickUpAvailableDates);
 
         this.name = name;
         this.description = description;
         this.imageUrl = imageUrl;
         this.price = price;
         this.category = category;
-        this.totalQuantity = totalQuantity;
-        this.remainQuantity = totalQuantity;
         this.sellerId = sellerId;
+        this.type = type;
 
-        this.pickUpAvailableDate.addAll(pickUpAvailableDate);
+        this.pickUpAvailableDates.addAll(pickUpAvailableDates);
     }
 
     public void updateProduct(GeneralProductInfoCommand command) {
-        validateProductInfo(command.name(), command.description(), command.imageUrl(), command.price(), command.totalQuantity(), command.category());
+        validateProductInfo(command.name(), command.description(), command.imageUrl(), command.price(), command.category(), command.type());
         validatePickUpDates(command.pickupDates());
 
         this.name = command.name();
         this.description = command.description();
         this.imageUrl = command.imageUrl();
         this.price = command.price();
-        this.pickUpAvailableDate.clear();
-        this.pickUpAvailableDate.addAll(command.pickupDates());
+        this.pickUpAvailableDates.clear();
+        this.pickUpAvailableDates.addAll(command.pickupDates());
+        this.type = command.type();
         this.category = command.category();
     }
 
-    private void validateProductInfo(String name, String description, String imageUrl, int price, int totalQuantity, Category category) {
+    private void validateProductInfo(String name, String description, String imageUrl, int price, Category category, Type type) {
         if (name == null || name.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 입력해주세요.");
         }
@@ -98,11 +99,11 @@ public class Product {
         if (price <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "가격은 0보다 커야 합니다.");
         }
-        if (totalQuantity <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "총 수량은 0보다 커야 합니다.");
-        }
         if (category == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "카테고리를 지정해주세요.");
+        }
+        if (type == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "타입을 선택해주세요.");
         }
     }
 

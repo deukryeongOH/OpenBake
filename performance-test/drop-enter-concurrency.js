@@ -3,8 +3,8 @@ import { check } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 import { getUserForVu, users } from './k6-users.js';
 
-const BASE_URL =
-    __ENV.BASE_URL ?? 'http://localhost:8080';
+const CORE_BASE_URL =
+    __ENV.CORE_BASE_URL ?? 'http://localhost:8080';
 
 const DROP_ID =
     Number(__ENV.DROP_ID ?? 0);
@@ -74,6 +74,18 @@ export const options = {
             'rate==1',
         ],
 
+        drop_enter_success: [
+            `count==${USER_COUNT}`,
+        ],
+
+        drop_enter_conflict: [
+            'count==0',
+        ],
+
+        drop_enter_bad_request: [
+            'count==0',
+        ],
+
         drop_enter_unexpected: [
             'count==0',
         ],
@@ -92,7 +104,7 @@ export default function () {
     const user = getUserForVu(__VU);
 
     const response = http.post(
-        `${BASE_URL}/api/v1/drops/${DROP_ID}/enter`,
+        `${CORE_BASE_URL}/api/v1/drops/${DROP_ID}/enter`,
         null,
         {
             headers: {

@@ -2,6 +2,7 @@ package com.openbake.product.infrastructure;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.product.application.port.CurrentSellerPort;
 import com.openbake.seller.application.CurrentSellerProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

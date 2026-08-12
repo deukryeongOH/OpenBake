@@ -74,6 +74,18 @@ export const options = {
             'rate==1',
         ],
 
+        drop_enter_success: [
+            `count==${USER_COUNT}`,
+        ],
+
+        drop_enter_conflict: [
+            'count==0',
+        ],
+
+        drop_enter_bad_request: [
+            'count==0',
+        ],
+
         drop_enter_unexpected: [
             'count==0',
         ],

@@ -66,3 +66,7 @@ performance-test/member-map.json
 performance-test/.env.k6
 # k6 실행 결과
 performance-test/results/*.txt
+# Generated from prometheus.yml.template
+prometheus/prometheus.yml
+# Local temporary files
+*.tmp

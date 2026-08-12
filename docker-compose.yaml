@@ -78,7 +78,7 @@ services:
     env_file:
       - .env
     environment:
-      DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
+      PAYMENT_DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
       DB_USERNAME: openbake
       DB_PASSWORD: openbake
       REDIS_HOST: redis
@@ -136,6 +136,8 @@ services:
 
   payment-postgres:
     image: postgres:17
+    ports:
+      - "5435:5432"
     environment:
       POSTGRES_DB: openbake_payment
       POSTGRES_USER: openbake
@@ -151,6 +153,8 @@ services:
 
   member-postgres:
     image: postgres:17
+    ports:
+      - "5434:5432"
     environment:
       POSTGRES_DB: openbake_member
       POSTGRES_USER: openbake
@@ -173,7 +177,7 @@ services:
       - "8081:8081"
     env_file: [ .env ]      # JWT_SECRET, GOOGLE_CLIENT_ID 등 기존 값 재사용
     environment:
-      DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
+      MEMBER_DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
       REDIS_HOST: redis    # 기존 Redis 컨테이너 재사용 (블랙리스트/토큰 저장, 키 네임스페이스로 구분됨)
       REDIS_PORT: 6379
     depends_on:

@@ -2,8 +2,6 @@ package com.openbake.payment.infrastructure.security;
 
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.common.security.gateway.GatewayIdentityHeaders;
-import com.openbake.common.security.jwt.AccessTokenRepository;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.payment.application.DepositService;
 import com.openbake.payment.application.dto.DepositResult;
 import com.openbake.payment.presentation.DepositController;
@@ -19,17 +17,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-        controllers = DepositController.class,
-        properties = "openbake.security.auth-mode=header"
-)
+@WebMvcTest(controllers = DepositController.class)
 @Import({PaymentSecurityConfig.class, CurrentMemberProvider.class})
 @ImportAutoConfiguration(ServletWebSecurityAutoConfiguration.class)
-class PaymentSecurityHeaderModeTest {
+class PaymentSecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -37,14 +31,8 @@ class PaymentSecurityHeaderModeTest {
     @MockitoBean
     private DepositService depositService;
 
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
-
-    @MockitoBean
-    private AccessTokenRepository accessTokenRepository;
-
     @Test
-    void validGatewayHeadersAuthenticateProtectedRequestWithoutJwtValidation() throws Exception {
+    void validGatewayHeadersAuthenticateProtectedRequest() throws Exception {
         given(depositService.getBalance(1L)).willReturn(depositResult());
 
         mockMvc.perform(get("/api/v1/deposit/account")
@@ -56,16 +44,14 @@ class PaymentSecurityHeaderModeTest {
                         ))
                 .andExpect(status().isOk());
 
-        verifyNoInteractions(jwtTokenProvider, accessTokenRepository);
     }
 
     @Test
-    void bearerTokenWithoutGatewayHeadersIsRejectedWithoutJwtValidation() throws Exception {
+    void bearerTokenWithoutGatewayHeadersIsRejected() throws Exception {
         mockMvc.perform(get("/api/v1/deposit/account")
                         .header("Authorization", "Bearer valid-access-token"))
                 .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(jwtTokenProvider, accessTokenRepository);
     }
 
     private DepositResult depositResult() {

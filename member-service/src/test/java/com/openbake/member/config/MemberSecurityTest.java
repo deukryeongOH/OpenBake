@@ -1,8 +1,6 @@
 package com.openbake.member.config;
 
 import com.openbake.common.security.gateway.GatewayIdentityHeaders;
-import com.openbake.common.security.jwt.AccessTokenRepository;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.member.application.MemberService;
 import com.openbake.member.application.dto.member.MemberResult;
 import com.openbake.member.domain.MemberStatus;
@@ -22,13 +20,10 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-        controllers = MemberController.class,
-        properties = "openbake.security.auth-mode=jwt"
-)
+@WebMvcTest(controllers = MemberController.class)
 @Import(SecurityConfig.class)
 @ImportAutoConfiguration(ServletWebSecurityAutoConfiguration.class)
-class MemberSecurityJwtModeTest {
+class MemberSecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -36,27 +31,10 @@ class MemberSecurityJwtModeTest {
     @MockitoBean
     private MemberService memberService;
 
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
-
-    @MockitoBean
-    private AccessTokenRepository accessTokenRepository;
-
     @Test
-    void validBearerTokenAuthenticatesProtectedRequest() throws Exception {
-        given(jwtTokenProvider.isValid("valid-access-token")).willReturn(true);
-        given(accessTokenRepository.isBlacklisted("valid-access-token")).willReturn(false);
-        given(jwtTokenProvider.getMemberId("valid-access-token")).willReturn(1L);
-        given(jwtTokenProvider.getRole("valid-access-token")).willReturn("CUSTOMER");
+    void validGatewayHeadersAuthenticateProtectedRequest() throws Exception {
         given(memberService.getMemberById(1L)).willReturn(memberResult());
 
-        mockMvc.perform(get("/api/v1/members/1")
-                        .header("Authorization", "Bearer valid-access-token"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void gatewayHeadersWithoutBearerTokenDoNotAuthenticate() throws Exception {
         mockMvc.perform(get("/api/v1/members/1")
                         .header(GatewayIdentityHeaders.MEMBER_ID, "1")
                         .header(GatewayIdentityHeaders.MEMBER_ROLE, "CUSTOMER")
@@ -64,7 +42,16 @@ class MemberSecurityJwtModeTest {
                                 GatewayIdentityHeaders.AUTH_SOURCE,
                                 GatewayIdentityHeaders.EXPECTED_AUTH_SOURCE
                         ))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
+
+    }
+
+    @Test
+    void bearerTokenWithoutGatewayHeadersIsRejected() throws Exception {
+        mockMvc.perform(get("/api/v1/members/1")
+                        .header("Authorization", "Bearer valid-access-token"))
+                .andExpect(status().isUnauthorized());
+
     }
 
     private MemberResult memberResult() {

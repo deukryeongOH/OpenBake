@@ -1,8 +1,6 @@
 package com.openbake.common.config;
 
 import com.openbake.common.security.gateway.GatewayIdentityHeaders;
-import com.openbake.common.security.jwt.AccessTokenRepository;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.seller.application.MySellerResult;
 import com.openbake.seller.application.SellerService;
 import com.openbake.seller.domain.ApplicationStatus;
@@ -19,17 +17,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(
-        controllers = SellerController.class,
-        properties = "openbake.security.auth-mode=header"
-)
+@WebMvcTest(controllers = SellerController.class)
 @Import(SecurityConfig.class)
 @ImportAutoConfiguration(ServletWebSecurityAutoConfiguration.class)
-class BackendSecurityHeaderModeTest {
+class BackendSecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -37,14 +31,8 @@ class BackendSecurityHeaderModeTest {
     @MockitoBean
     private SellerService sellerService;
 
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
-
-    @MockitoBean
-    private AccessTokenRepository accessTokenRepository;
-
     @Test
-    void validGatewayHeadersAuthenticateProtectedRequestWithoutJwtValidation() throws Exception {
+    void validGatewayHeadersAuthenticateProtectedRequest() throws Exception {
         given(sellerService.getMySeller()).willReturn(mySellerResult());
 
         mockMvc.perform(get("/api/v1/sellers/me")
@@ -56,16 +44,14 @@ class BackendSecurityHeaderModeTest {
                         ))
                 .andExpect(status().isOk());
 
-        verifyNoInteractions(jwtTokenProvider, accessTokenRepository);
     }
 
     @Test
-    void bearerTokenWithoutGatewayHeadersIsRejectedWithoutJwtValidation() throws Exception {
+    void bearerTokenWithoutGatewayHeadersIsRejected() throws Exception {
         mockMvc.perform(get("/api/v1/sellers/me")
                         .header("Authorization", "Bearer valid-access-token"))
                 .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(jwtTokenProvider, accessTokenRepository);
     }
 
     private MySellerResult mySellerResult() {

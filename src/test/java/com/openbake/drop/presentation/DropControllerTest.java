@@ -3,8 +3,6 @@ package com.openbake.drop.presentation;
 import com.openbake.drop.application.DropService;
 import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.domain.DropStatus;
-import com.openbake.common.security.jwt.JwtAuthenticationFilter;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.seller.application.CurrentSellerProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,16 +33,6 @@ class DropControllerTest {
 
     @MockitoBean
     private CurrentSellerProvider currentSellerProvider;
-
-    /*
-     * 현재 프로젝트의 @WebMvcTest에서 JWT Filter가 발견되므로
-     * 테스트 컨텍스트 생성에 필요한 Mock입니다.
-     */
-    @MockitoBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
 
     @Test
     @DisplayName("예정된 드롭 목록을 조회한다")

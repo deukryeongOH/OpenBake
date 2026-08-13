@@ -20,7 +20,9 @@ services:
       - openbake-net
 
   elasticsearch:
-    image: elasticsearch:8.15.0
+    build:
+      context: ./elasticsearch
+      dockerfile: Dockerfile
     container_name: openbake-elasticsearch
     restart: unless-stopped
     ports:

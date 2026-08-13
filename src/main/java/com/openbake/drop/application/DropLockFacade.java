@@ -4,7 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.DropReserveCommand;
 import com.openbake.drop.application.service.DropLockService;
-import com.openbake.drop.infrastructure.port.CurrentMemberPort;
+import com.openbake.drop.application.port.CurrentMemberPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,6 +16,8 @@ import java.util.concurrent.locks.ReentrantLock;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+// 인스턴스 다중화 시 Redis 분산락(Redisson 등)으로 교체 예정.
+// 현재는 DropLockController가 DropLockService.reserveStock을 직접 호출하므로 미사용 상태
 public class DropLockFacade {
 
     private final DropLockService dropLockService;

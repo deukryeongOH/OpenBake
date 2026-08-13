@@ -1,16 +1,17 @@
 package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
-import com.openbake.drop.application.dto.DropProductInfoCommand;
+import com.openbake.drop.application.dto.DropInfoCommand;
+import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.application.cache.TodayDropCache;
+import com.openbake.drop.application.port.CurrentSellerPort;
+import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.domain.entity.Drop;
-import com.openbake.drop.domain.entity.DropInventory;
-import com.openbake.drop.domain.repository.DropInventoryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
-import com.openbake.drop.infrastructure.adapter.SellerAdapter;
+import com.openbake.product.domain.Category;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -34,9 +36,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-
-
 import static org.mockito.BDDMockito.given;
+
 @ExtendWith(MockitoExtension.class)
 class DropServiceTest {
 
@@ -44,18 +45,18 @@ class DropServiceTest {
     private DropRepository dropRepository;
 
     @Mock
-    private DropInventoryRepository dropInventoryRepository; // 추가된 Repository Mock
-
-    @Mock
     private TodayDropCache todayDropCache;
 
     @Mock
-    private SellerAdapter sellerAdapter;
+    private CurrentSellerPort currentSellerPort;
+
+    @Mock
+    private ProductPort productPort;
 
     @InjectMocks
     private DropService dropService;
 
-    private DropProductInfoCommand command;
+    private DropInfoCommand command;
 
     @BeforeEach
     void setUp() {
@@ -65,7 +66,7 @@ class DropServiceTest {
                 LocalDate.parse("2028-08-03")
         );
 
-        command = DropProductInfoCommand.create(
+        command = DropInfoCommand.create(
                 "두쫀쿠",
                 "원물 맛이 많이 나요.",
                 "C:\\Users\\deukr\\OneDrive\\바탕 화면\\두쫀쿠.jpg",
@@ -74,147 +75,98 @@ class DropServiceTest {
                 200,
                 5,
                 8000,
-                pickUpDates
+                pickUpDates,
+                Category.COOKIES_BAKES
         );
     }
 
+    private Drop drop(Long dropId, Long productId, DropStatus status, LocalDateTime start, LocalDateTime end) {
+        Drop drop = Drop.builder()
+                .dropStatus(status)
+                .productId(productId)
+                .limitQuantity(3)
+                .dropStart(start)
+                .dropEnd(end)
+                .build();
+        ReflectionTestUtils.setField(drop, "id", dropId);
+        return drop;
+    }
+
     @Test
-    @DisplayName("드롭 상품 등록 성공 - Drop과 DropInventory가 정상 저장되고 오늘 드롭 캐시가 갱신되어야 한다")
-    void registerDropProduct_Success() {
+    @DisplayName("드롭 등록 성공 - Product가 생성되고 Drop이 저장되며 오늘 드롭 캐시가 갱신되어야 한다")
+    void registerDrop_Success() {
         // given
         Long sellerId = 1L;
+        Long productId = 100L;
 
-        // 1. Mock Drop 엔티티 준비 (DB 저장 후 ID가 할당된 상태 모킹)
-        DropProduct dropProduct = DropProduct.builder()
-                .name(command.name())
-                .description(command.description())
-                .imageUrl(command.image())
-                .price(command.price())
-                .build();
+        given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of());
 
-        Drop savedDrop = Drop.builder()
-                .dropStatus(UPCOMING)
-                .pickUpAvailableDates(command.pickupDates())
-                .dropProduct(dropProduct)
-                .limitQuantity(command.LimitQuantity())
-                .dropStart(command.dropStart())
-                .dropEnd(command.dropEnd())
-                .sellerId(sellerId)
-                .build();
-
-        ReflectionTestUtils.setField(savedDrop, "id", 100L);
-
-        // 2. Mock DropInventory 엔티티 준비
-        DropInventory savedDropInventory = DropInventory.builder()
-                .dropId(100L)
-                .totalQuantity(command.totalQuantity())
-                .remainQuantity(command.totalQuantity())
-                .build();
-
-        // 3. Repository 스터빙 (Stubbing)
-        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
-        given(dropRepository.save(any())).willReturn(savedDrop);
-        given(dropInventoryRepository.save(any(DropInventory.class))).willReturn(savedDropInventory);
+        DropInfoResult productResult = DropInfoResult.of(
+                command.dropStart(), command.dropEnd(), command.limitQuantity(), UPCOMING,
+                command.name(), command.description(), command.image(), command.pickupDates(),
+                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId
+        );
+        given(productPort.registerProduct(command)).willReturn(productResult);
 
         // when
-        DropProductInfoResult response = dropService.registerDropProduct(command);
+        DropInfoResult response = dropService.registerDrop(command);
 
         // then
-        assertThat(response).isNotNull();
-        assertThat(response.name()).isEqualTo(command.name());
-        assertThat(response.description()).isEqualTo(command.description());
-        assertThat(response.dropStart()).isEqualTo(command.dropStart());
-        assertThat(response.dropEnd()).isEqualTo(command.dropEnd());
-        assertThat(response.limitQuantity()).isEqualTo(command.LimitQuantity());
-        assertThat(response.price()).isEqualTo(command.price());
-        assertThat(response.totalQuantity()).isEqualTo(command.totalQuantity());
-        assertThat(response.imageUrl()).isEqualTo(command.image());
-        assertThat(response.dropStatus()).isEqualTo(UPCOMING);
-        assertThat(response.dropId()).isEqualTo(100L);
-        assertThat(response.remainQuantity()).isEqualTo(command.totalQuantity());
-
-        // 4. 실제 DB 저장 메소드가 호출되었는지 검증
+        assertThat(response).isEqualTo(productResult);
         verify(dropRepository).save(any(Drop.class));
-        verify(dropInventoryRepository).save(any(DropInventory.class));
-        // 5. 자정 캐시가 오늘 새로 등록된 드롭을 놓치지 않도록 즉시 갱신되어야 한다
         verify(todayDropCache).refresh();
     }
 
     @Test
-    @DisplayName("같은 날짜/시간대에 이미 등록된 드롭이 있으면 등록에 실패하고, 오늘 드롭 캐시는 갱신하지 않는다")
-    void registerDropProduct_Fail_DuplicateDate_DoesNotRefreshCache() {
+    @DisplayName("같은 시간대에 이미 등록된 드롭이 있으면 등록에 실패하고, 오늘 드롭 캐시는 갱신하지 않는다")
+    void registerDrop_Fail_DuplicateSlot_DoesNotRefreshCache() {
         // given
-        DropProduct existingProduct = DropProduct.builder()
-                .name("기존쿠키").description("d").imageUrl("i.jpg").price(1000).build();
-        Drop existingDrop = Drop.builder()
-                .dropStatus(UPCOMING)
-                .dropProduct(existingProduct)
-                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-26")))
-                .limitQuantity(1)
-                .dropStart(command.dropStart())
-                .dropEnd(command.dropEnd())
-                .sellerId(2L)
-                .build();
-        ReflectionTestUtils.setField(existingDrop, "id", 999L);
+        Long sellerId = 1L;
+        given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
 
-        given(sellerAdapter.getCurrentSellerId()).willReturn(1L);
+        Drop existingDrop = drop(999L, 999L, UPCOMING, command.dropStart(), command.dropEnd());
         given(dropRepository.findListByDropDate(any())).willReturn(List.of(existingDrop));
 
         // when & then
-        assertThatThrownBy(() -> dropService.registerDropProduct(command))
+        assertThatThrownBy(() -> dropService.registerDrop(command))
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
+        verifyNoInteractions(productPort);
     }
 
     @Test
-    @DisplayName("드롭 수정 성공 - Drop/DropInventory가 갱신되고 오늘 드롭 캐시가 즉시 갱신되어야 한다")
+    @DisplayName("드롭 수정 성공 - Drop이 갱신되고 오늘 드롭 캐시가 즉시 갱신되어야 한다")
     void updateDropProduct_Success() {
         // given
         Long dropId = 100L;
         Long sellerId = 1L;
+        Long productId = 500L;
 
-        DropProduct existingProduct = DropProduct.builder()
-                .name("옛날쿠키")
-                .description("이전 설명")
-                .imageUrl("old.jpg")
-                .price(5000)
-                .build();
+        Drop existingDrop = drop(dropId, productId, UPCOMING,
+                LocalDateTime.parse("2028-07-20T09:00:00"), LocalDateTime.parse("2028-07-20T10:00:00"));
 
-        Drop existingDrop = Drop.builder()
-                .dropStatus(UPCOMING)
-                .dropProduct(existingProduct)
-                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
-                .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .sellerId(sellerId)
-                .build();
-        ReflectionTestUtils.setField(existingDrop, "id", dropId);
-
-        DropInventory dropInventory = DropInventory.builder()
-                .dropId(dropId)
-                .totalQuantity(100)
-                .remainQuantity(60)
-                .build();
-
-        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
+        given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(existingDrop));
+        given(productPort.getSellerIdByProductId(productId)).willReturn(sellerId);
         given(dropRepository.findListByDropDate(any())).willReturn(List.of());
-        given(dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(eq(sellerId), any(), any(), eq(dropId))).willReturn(false);
-        given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
+
+        DropProductInfoResult productResult = DropProductInfoResult.of(
+                command.name(), command.description(), command.image(), command.pickupDates(),
+                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId
+        );
+        given(productPort.updateProduct(eq(productId), eq(command))).willReturn(productResult);
 
         // when
-        DropProductInfoResult response = dropService.updateDropProduct(dropId, command);
+        DropInfoResult response = dropService.updateDropProduct(dropId, command);
 
         // then
         assertThat(response.name()).isEqualTo(command.name());
         assertThat(response.dropStart()).isEqualTo(command.dropStart());
         assertThat(response.dropEnd()).isEqualTo(command.dropEnd());
         assertThat(response.totalQuantity()).isEqualTo(command.totalQuantity());
-        assertThat(dropInventory.getRemainQuantity()).isEqualTo(command.totalQuantity());
 
-        // 시작/종료 시각이 바뀌었을 수 있으므로 캐시가 즉시 갱신되어야 한다
         verify(todayDropCache).refresh();
     }
 
@@ -225,22 +177,14 @@ class DropServiceTest {
         Long dropId = 100L;
         Long ownerId = 1L;
         Long requesterId = 2L;
+        Long productId = 500L;
 
-        DropProduct dropProduct = DropProduct.builder()
-                .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
-        Drop drop = Drop.builder()
-                .dropStatus(UPCOMING)
-                .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
-                .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .sellerId(ownerId)
-                .build();
-        ReflectionTestUtils.setField(drop, "id", dropId);
+        Drop existingDrop = drop(dropId, productId, UPCOMING,
+                LocalDateTime.parse("2028-07-20T09:00:00"), LocalDateTime.parse("2028-07-20T10:00:00"));
 
-        given(sellerAdapter.getCurrentSellerId()).willReturn(requesterId);
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        given(currentSellerPort.getCurrentSellerId()).willReturn(requesterId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(existingDrop));
+        given(productPort.getSellerIdByProductId(productId)).willReturn(ownerId);
 
         // when & then
         assertThatThrownBy(() -> dropService.updateDropProduct(dropId, command))
@@ -250,70 +194,46 @@ class DropServiceTest {
     }
 
     @Test
-    @DisplayName("드롭 삭제 성공 - Drop/DropInventory가 삭제되고 오늘 드롭 캐시가 즉시 갱신되어야 한다")
-    void deleteDropProduct_Success() {
+    @DisplayName("드롭 삭제 성공 - Product와 Drop이 삭제되고 오늘 드롭 캐시가 즉시 갱신되어야 한다")
+    void deleteProduct_Success() {
         // given
         Long dropId = 100L;
         Long sellerId = 1L;
+        Long productId = 500L;
 
-        DropProduct dropProduct = DropProduct.builder()
-                .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
-        Drop drop = Drop.builder()
-                .dropStatus(UPCOMING)
-                .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
-                .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .sellerId(sellerId)
-                .build();
-        ReflectionTestUtils.setField(drop, "id", dropId);
+        Drop existingDrop = drop(dropId, productId, UPCOMING,
+                LocalDateTime.parse("2028-07-20T09:00:00"), LocalDateTime.parse("2028-07-20T10:00:00"));
 
-        DropInventory dropInventory = DropInventory.builder()
-                .dropId(dropId)
-                .totalQuantity(100)
-                .remainQuantity(100)
-                .build();
-
-        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
-        given(dropInventoryRepository.findByDropId(dropId)).willReturn(dropInventory);
+        given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(existingDrop));
+        given(productPort.getSellerIdByProductId(productId)).willReturn(sellerId);
 
         // when
-        dropService.deleteDropProduct(dropId);
+        dropService.deleteProduct(dropId);
 
         // then
-        verify(dropInventoryRepository).delete(dropInventory);
-        verify(dropRepository).delete(drop);
-        // 삭제된 드롭이 캐시에 남아 스케줄러가 존재하지 않는 드롭을 참조하지 않도록 즉시 갱신되어야 한다
+        verify(productPort).deleteDropProduct(productId);
+        verify(dropRepository).delete(existingDrop);
         verify(todayDropCache).refresh();
     }
 
     @Test
     @DisplayName("이미 시작/종료된 드롭은 삭제할 수 없고, 오늘 드롭 캐시도 갱신하지 않는다")
-    void deleteDropProduct_Fail_NotEditable_DoesNotRefreshCache() {
+    void deleteProduct_Fail_NotEditable_DoesNotRefreshCache() {
         // given
         Long dropId = 100L;
         Long sellerId = 1L;
+        Long productId = 500L;
 
-        DropProduct dropProduct = DropProduct.builder()
-                .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
-        Drop drop = Drop.builder()
-                .dropStatus(DropStatus.ACTIVE)
-                .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-07-21")))
-                .limitQuantity(3)
-                .dropStart(LocalDateTime.parse("2028-07-20T09:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-07-20T10:00:00"))
-                .sellerId(sellerId)
-                .build();
-        ReflectionTestUtils.setField(drop, "id", dropId);
+        Drop existingDrop = drop(dropId, productId, DropStatus.ACTIVE,
+                LocalDateTime.parse("2028-07-20T09:00:00"), LocalDateTime.parse("2028-07-20T10:00:00"));
 
-        given(sellerAdapter.getCurrentSellerId()).willReturn(sellerId);
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(existingDrop));
+        given(productPort.getSellerIdByProductId(productId)).willReturn(sellerId);
 
         // when & then
-        assertThatThrownBy(() -> dropService.deleteDropProduct(dropId))
+        assertThatThrownBy(() -> dropService.deleteProduct(dropId))
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
@@ -323,44 +243,26 @@ class DropServiceTest {
     @DisplayName("예정된 드롭 목록을 dropStart 오름차순으로 조회한다")
     void getUpcomingDrops_success() {
         // given
-        DropProduct dropProduct = DropProduct.builder()
-                .name("버터떡")
-                .description("버터를 많이 써서 향이 좋아요.")
-                .imageUrl("https://cdn.openbake.com/drops/12.jpg")
-                .price(3000)
-                .build();
-
-        Drop drop = Drop.builder()
-                .dropStatus(UPCOMING)
-                .pickUpAvailableDates(Set.of(LocalDate.parse("2028-08-02")))
-                .dropProduct(dropProduct)
-                .limitQuantity(5)
-                .dropStart(LocalDateTime.parse("2028-08-01T13:00:00"))
-                .dropEnd(LocalDateTime.parse("2028-08-01T14:00:00"))
-                .sellerId(1L)
-                .build();
-
-        ReflectionTestUtils.setField(drop, "id", 12L);
-
-        DropInventory inventory = DropInventory.builder()
-                .dropId(12L)
-                .totalQuantity(200)
-                .remainQuantity(200)
-                .build();
+        Long productId = 12L;
+        Drop drop = drop(productId, productId, UPCOMING,
+                LocalDateTime.parse("2028-08-01T13:00:00"), LocalDateTime.parse("2028-08-01T14:00:00"));
 
         given(dropRepository.findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
                 any(), any(), any()
         )).willReturn(List.of(drop));
 
-        given(dropInventoryRepository.findByDropId(12L))
-                .willReturn(inventory);
+        DropProductInfoResult productResult = DropProductInfoResult.of(
+                "버터떡", "버터를 많이 써서 향이 좋아요.", "https://cdn.openbake.com/drops/12.jpg",
+                Set.of(LocalDate.parse("2028-08-02")), 3000, 200, 200, 1L, productId
+        );
+        given(productPort.getProductInfo(productId)).willReturn(productResult);
 
         // when
         var response = dropService.getUpcomingDrops(7);
 
         // then
         assertThat(response).hasSize(1);
-        assertThat(response.get(0).dropId()).isEqualTo(12L);
+        assertThat(response.get(0).productId()).isEqualTo(productId);
         assertThat(response.get(0).name()).isEqualTo("버터떡");
         assertThat(response.get(0).dropStatus()).isEqualTo(UPCOMING);
         assertThat(response.get(0).remainQuantity()).isEqualTo(200);
@@ -380,5 +282,38 @@ class DropServiceTest {
                 .hasMessage("days는 0보다 커야 합니다.");
 
         verifyNoInteractions(dropRepository);
+    }
+
+    @Test
+    @DisplayName("일반(GENERAL) 타입 상품은 내 드롭 목록에서 제외된다")
+    void getMyDrops_FiltersOutGeneralProducts() {
+        // given
+        Long sellerId = 1L;
+        Long dropProductId = 10L;
+        Long generalProductId = 20L;
+
+        given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
+
+        DropProductInfoResult dropProduct = DropProductInfoResult.of(
+                "두쫀쿠", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 8000, 100, 100, sellerId, dropProductId);
+        DropProductInfoResult generalProduct = DropProductInfoResult.of(
+                "머핀", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 3000, 50, 50, sellerId, generalProductId);
+
+        given(productPort.findProductListBySellerId(sellerId))
+                .willReturn(new ArrayList<>(List.of(dropProduct, generalProduct)));
+        given(productPort.isGeneralProduct(dropProductId)).willReturn(false);
+        given(productPort.isGeneralProduct(generalProductId)).willReturn(true);
+
+        Drop drop = drop(200L, dropProductId, UPCOMING,
+                LocalDateTime.parse("2028-08-01T09:00:00"), LocalDateTime.parse("2028-08-01T10:00:00"));
+        given(dropRepository.findByProductId(dropProductId)).willReturn(drop);
+
+        // when
+        List<DropInfoResult> result = dropService.getMyDrops();
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).productId()).isEqualTo(dropProductId);
+        verify(dropRepository, never()).findByProductId(generalProductId);
     }
 }

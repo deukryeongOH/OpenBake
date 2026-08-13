@@ -2,9 +2,8 @@ package com.openbake.drop.presentation.controller;
 
 
 import com.openbake.common.response.ApiResponse;
-import com.openbake.common.security.CurrentMemberProvider;
-import com.openbake.drop.application.DropLockFacade;
 import com.openbake.drop.application.dto.DropReserveCommand;
+import com.openbake.drop.application.service.DropLockService;
 import com.openbake.drop.presentation.dto.DropReserveRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class DropLockController {
 
-    private final DropLockFacade dropLockFacade;
+    private final DropLockService dropLockService;
 
     @Operation(
             summary = "드롭 재고 선점",
@@ -36,7 +35,7 @@ public class DropLockController {
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId,
             @Valid @RequestBody DropReserveRequest request){
         DropReserveCommand command = DropReserveCommand.create(request.quantity());
-        dropLockFacade.reserveStock(dropId, command);
+        dropLockService.reserveStock(dropId, command);
 
         return ApiResponse.ok("재고 선점 및 장바구니 담기 완료");
     }

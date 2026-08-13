@@ -10,6 +10,7 @@ import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
 import com.openbake.order.application.port.PaymentPort;
+import com.openbake.product.domain.ProductRepository;
 import com.openbake.seller.application.CurrentSellerProvider;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
@@ -44,6 +45,8 @@ class OrderServiceTest {
     @Mock
     private PaymentPort paymentPort;
     @Mock
+    private ProductRepository productRepository;
+    @Mock
     private CurrentSellerProvider currentSellerProvider;
     @Mock
     private SellerRepository sellerRepository;
@@ -66,6 +69,7 @@ class OrderServiceTest {
                 orderRepository,
                 cartRepository,
                 paymentPort,
+                productRepository,
                 currentSellerProvider,
                 sellerRepository,
                 memberPort,

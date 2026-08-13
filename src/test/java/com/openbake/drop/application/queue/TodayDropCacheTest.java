@@ -3,7 +3,6 @@ package com.openbake.drop.application.queue;
 import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.domain.entity.Drop;
-import com.openbake.drop.domain.DropProduct;
 import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.drop.domain.DropStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -16,7 +15,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,17 +29,13 @@ class TodayDropCacheTest {
     @InjectMocks
     private TodayDropCache todayDropCache;
 
-    private static Drop drop(Long id, LocalDateTime start, LocalDateTime end, Long sellerId) {
-        DropProduct dropProduct = DropProduct.builder()
-                .name("두쫀쿠").description("d").imageUrl("i.jpg").price(8000).build();
+    private static Drop drop(Long id, LocalDateTime start, LocalDateTime end, Long productId) {
         Drop drop = Drop.builder()
                 .dropStatus(DropStatus.UPCOMING)
-                .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(end.toLocalDate().plusDays(1)))
+                .productId(productId)
                 .limitQuantity(1)
                 .dropStart(start)
                 .dropEnd(end)
-                .sellerId(sellerId)
                 .build();
         ReflectionTestUtils.setField(drop, "id", id);
         return drop;

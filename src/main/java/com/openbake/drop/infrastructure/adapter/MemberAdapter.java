@@ -1,7 +1,7 @@
 package com.openbake.drop.infrastructure.adapter;
 
 import com.openbake.common.security.CurrentMemberProvider;
-import com.openbake.drop.infrastructure.port.CurrentMemberPort;
+import com.openbake.drop.application.port.CurrentMemberPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

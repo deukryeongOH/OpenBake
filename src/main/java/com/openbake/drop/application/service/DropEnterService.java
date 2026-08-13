@@ -3,16 +3,16 @@ package com.openbake.drop.application.service;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.ConfirmEntryResult;
+import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.application.dto.QueueRankResult;
+import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.entity.DropEntry;
-import com.openbake.drop.domain.entity.DropInventory;
 import com.openbake.drop.domain.repository.DropEntryRepository;
-import com.openbake.drop.domain.repository.DropInventoryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
-import com.openbake.drop.infrastructure.port.CurrentMemberPort;
+import com.openbake.drop.application.port.CurrentMemberPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +29,10 @@ public class DropEnterService {
 
     private final DropEntryRepository dropEntryRepository;
     private final QueueManager queueManager;
-    private final DropInventoryRepository dropInventoryRepository;
     private final DropRepository dropRepository;
     private final CurrentMemberPort currentMemberPort;
+    private final ProductPort productPort;
+
 
     @Transactional(readOnly = true)
     public List<Long> getTodayDropIds() {
@@ -86,7 +87,7 @@ public class DropEnterService {
         Drop findDrop = dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
 
-        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
+        DropProductInfoResult result = productPort.getProductInfo(findDrop.getProductId());
 
         DropEntry dropEntry;
         if (dropEntryRepository.existsByDropIdAndMemberId(dropId, memberId)) { // 이미 입장한 적이 있으면
@@ -101,7 +102,7 @@ public class DropEnterService {
         // 5. 입장 처리 완료 후 대기열 권한 제거
         queueManager.removeActiveUser(dropId, memberId);
 
-        return ConfirmEntryResult.of(findDrop.getDropProduct(), findDrop.getLimitQuantity(), dropInventory.getRemainQuantity(), findDrop.getPickUpAvailableDate());
+        return ConfirmEntryResult.of(result, findDrop.getLimitQuantity());
     }
 
 

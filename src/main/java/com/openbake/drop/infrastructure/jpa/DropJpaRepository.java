@@ -6,21 +6,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface DropJpaRepository extends JpaRepository<Drop, Long> {
-    // 해당 판매자가 해당 날짜(00:00:00 ~ 23:59:59)에 이미 등록한 드롭이 있는지 확인
-    boolean existsBySellerIdAndDropStartBetween(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay);
-
     // 해당 날짜(00:00:00 ~ 23:59:59)에 등록된 드롭 목록 조회
     List<Drop> findAllByDropStartBetween(LocalDateTime startOfDay, LocalDateTime endOfDay);
-
-    boolean existsBySellerIdAndDropStartBetweenAndIdNot(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId);
-
-    List<Drop> findAllBySellerId(Long sellerId);
 
     List<Drop> findByDropStatusInAndDropStartBetweenOrderByDropStartAsc(
             List<DropStatus> dropStatuses,
             LocalDateTime from,
             LocalDateTime to
     );
+
+    Optional<Drop> findByProductId(Long productId);
 }

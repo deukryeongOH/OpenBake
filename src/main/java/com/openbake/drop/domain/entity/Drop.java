@@ -2,7 +2,6 @@ package com.openbake.drop.domain.entity;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.domain.DropProduct;
 import com.openbake.drop.domain.DropStatus;
 import com.openbake.drop.domain.DropTimeSlot;
 import jakarta.persistence.*;
@@ -11,7 +10,6 @@ import lombok.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Set;
 
 
@@ -28,19 +26,11 @@ public class Drop {
     @Column(nullable = false)
     private DropStatus dropStatus; // 드롭 상태 (시작 전, 진행 중, 마감)
 
-    @Embedded
-    private DropProduct dropProduct; // 드롭 상품 VO
+    @Column(name = "product_id", nullable = false)
+    private Long productId;
 
     @Column(nullable = false)
     private int limitQuantity; // 1인당 한정 수량
-
-    @ElementCollection(fetch = FetchType.LAZY)
-    @CollectionTable(
-            name = "pickup_available_dates",
-            joinColumns = @JoinColumn(name = "drop_id")
-    )
-    @Column(name = "available_date", nullable = false)
-    private Set<LocalDate> pickUpAvailableDate = new HashSet<>(); // 픽업 가능 날짜
 
     @Column(nullable = false)
     private LocalDateTime dropStart; // 드롭 시작 시간
@@ -48,31 +38,22 @@ public class Drop {
     @Column(nullable = false)
     private LocalDateTime dropEnd; // 드롭 마감 시간
 
-    @Column(nullable = false)
-    private Long sellerId; // 판매자 ID
-
     @Builder
-    public Drop(DropStatus dropStatus, DropProduct dropProduct, Set<LocalDate> pickUpAvailableDates, int limitQuantity, LocalDateTime dropStart, LocalDateTime dropEnd, Long sellerId) {
+    public Drop(DropStatus dropStatus, Long productId, int limitQuantity, LocalDateTime dropStart, LocalDateTime dropEnd) {
         validateDropPeriod(dropStart, dropEnd);
-        validatePickUpDates(dropEnd, pickUpAvailableDates);
         if (limitQuantity <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "1인당 제한 수량은 1개 이상이어야 합니다.");
         }
-        if (sellerId == null || dropProduct == null || dropStatus == null) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "판매자 ID, 상품 정보, 드롭 상태는 필수입니다.");
+        if (productId == null || dropStatus == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "상품 정보, 드롭 상태는 필수입니다.");
         }
 
 
         this.dropStatus = dropStatus;
-        this.dropProduct = dropProduct;
+        this.productId = productId;
         this.limitQuantity = limitQuantity;
         this.dropStart = dropStart;
         this.dropEnd = dropEnd;
-        this.sellerId = sellerId;
-
-        if (pickUpAvailableDates != null) {
-            this.pickUpAvailableDate.addAll(pickUpAvailableDates);
-        }
     }
 
     private void validateDropPeriod(LocalDateTime dropStart, LocalDateTime dropEnd) {
@@ -125,21 +106,18 @@ public class Drop {
         return this.dropStatus == DropStatus.UPCOMING;
     }
 
-    public void update(DropProduct dropProduct, Set<LocalDate> pickUpAvailableDates, int limitQuantity, LocalDateTime dropStart, LocalDateTime dropEnd) {
+    public void update(Long productId, int limitQuantity, LocalDateTime dropStart, LocalDateTime dropEnd) {
         validateDropPeriod(dropStart, dropEnd);
-        validatePickUpDates(dropEnd, pickUpAvailableDates);
         if (limitQuantity <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "1인당 제한 수량은 1개 이상이어야 합니다.");
         }
-        if (dropProduct == null) {
+        if (productId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "상품 정보는 필수입니다.");
         }
 
-        this.dropProduct = dropProduct;
+        this.productId = productId;
         this.limitQuantity = limitQuantity;
         this.dropStart = dropStart;
         this.dropEnd = dropEnd;
-        this.pickUpAvailableDate.clear();
-        this.pickUpAvailableDate.addAll(pickUpAvailableDates);
     }
 }

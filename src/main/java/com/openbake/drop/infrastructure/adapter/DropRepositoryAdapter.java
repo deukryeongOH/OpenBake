@@ -1,5 +1,7 @@
 package com.openbake.drop.infrastructure.adapter;
 
+import com.openbake.common.exception.BusinessException;
+import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.drop.domain.DropStatus;
@@ -23,10 +25,6 @@ public class DropRepositoryAdapter implements DropRepository {
         return dropJpaRepository.save(drop);
     }
 
-    @Override // 해당 판매자가 해당 날짜(00:00:00 ~ 23:59:59)에 이미 등록한 드롭이 있는지 확인
-    public boolean existsBySellerIdAndDropStartBetween(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay) {
-        return dropJpaRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay);
-    }
 
     @Override // 해당 날짜에 등록된 드롭 리스트 반환
     public List<Drop> findListByDropDate(LocalDate today) {
@@ -38,16 +36,6 @@ public class DropRepositoryAdapter implements DropRepository {
     @Override
     public Optional<Drop> findById(Long dropId) {
         return dropJpaRepository.findById(dropId);
-    }
-
-    @Override
-    public boolean existsBySellerIdAndDropStartBetweenAndIdNot(Long sellerId, LocalDateTime startOfDay, LocalDateTime endOfDay, Long excludeDropId) {
-        return dropJpaRepository.existsBySellerIdAndDropStartBetweenAndIdNot(sellerId, startOfDay, endOfDay, excludeDropId);
-    }
-
-    @Override
-    public List<Drop> findAllBySellerId(Long sellerId) {
-        return dropJpaRepository.findAllBySellerId(sellerId);
     }
 
     @Override
@@ -67,5 +55,10 @@ public class DropRepositoryAdapter implements DropRepository {
     @Override
     public void delete(Drop drop) {
         dropJpaRepository.delete(drop);
+    }
+
+    @Override
+    public Drop findByProductId(Long productId) {
+        return dropJpaRepository.findByProductId(productId).orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
     }
 }

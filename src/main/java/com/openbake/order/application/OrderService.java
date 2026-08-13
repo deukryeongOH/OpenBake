@@ -16,6 +16,8 @@ import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.order.application.port.PaymentPort;
 import com.openbake.order.application.port.dto.PaymentResult;
+import com.openbake.product.domain.Product;
+import com.openbake.product.domain.ProductRepository;
 import com.openbake.seller.application.CurrentSellerProvider;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
@@ -43,6 +45,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
     private final PaymentPort paymentPort;
+    private final ProductRepository productRepository;
     private final CurrentSellerProvider currentSellerProvider;
     private final SellerRepository sellerRepository;
     //판매자 판매내역 조회 시 구매자 표시 이름 + 판매자 전화번호 조회용
@@ -100,10 +103,12 @@ public class OrderService {
         //    가격/상품명/판매자는 주문 시점에 고정(스냅샷)되어 이후 드롭이 바뀌어도 유지된다.
         Drop drop = dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
-        Long sellerId = drop.getSellerId();
+        Product product = productRepository.findById(drop.getProductId()).orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        Long sellerId = product.getSellerId();
         //가격은 drop 이 int 라 BigDecimal 로 변환한다.
-        BigDecimal priceSnapshot = BigDecimal.valueOf(drop.getDropProduct().getPrice());
-        String dropNameSnapshot = drop.getDropProduct().getName();
+        BigDecimal priceSnapshot = BigDecimal.valueOf(product.getPrice());
+        String dropNameSnapshot = product.getName();
         BigDecimal totalAmount = priceSnapshot.multiply(BigDecimal.valueOf(quantity));
 
         // 구매자 이름 스냅샷

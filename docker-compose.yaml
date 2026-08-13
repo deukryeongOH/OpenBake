@@ -19,6 +19,27 @@ services:
     networks:
       - openbake-net
 
+  elasticsearch:
+    image: elasticsearch:8.15.0
+    container_name: openbake-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - openbake-es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - openbake-net
+
   redis:
     image: redis:7
     container_name: openbake-redis
@@ -49,10 +70,13 @@ services:
       REDIS_PORT: 6379
       PAYMENT_SERVICE_URL: http://payment-service:8082
       MEMBER_SERVICE_URL: http://member-service:8081
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
       payment-service:
         condition: service_healthy
@@ -197,3 +221,4 @@ volumes:
   certbot-etc:
   openbake-payment-pg-data:
   openbake-member-pg-data:
+  openbake-es-data:

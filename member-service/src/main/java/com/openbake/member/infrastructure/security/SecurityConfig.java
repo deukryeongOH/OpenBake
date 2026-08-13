@@ -1,4 +1,4 @@
-package com.openbake.common.config;
+package com.openbake.member.infrastructure.security;
 
 import com.openbake.common.security.gateway.DualValidationMismatchFilter;
 import com.openbake.common.security.gateway.AuthModeProperties;
@@ -27,10 +27,7 @@ public class SecurityConfig {
     private final AccessTokenRepository accessTokenRepository;
 
     @Bean
-    public SecurityFilterChain filterChain(
-            HttpSecurity http,
-            AuthModeProperties authModeProperties
-    ) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, AuthModeProperties authModeProperties) throws Exception {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
@@ -39,11 +36,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/webhooks/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/sellers/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/sellers/*").permitAll()
-                        /** 2. 관리자 전용 내부 API: 현재는 정산만 사용중 */
-                        .requestMatchers("/internal/v1/**").hasRole("ADMIN")
+                        .requestMatchers("/internal/v1/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .anyRequest().authenticated()
@@ -51,10 +44,11 @@ public class SecurityConfig {
 
         switch (authModeProperties.authMode()) {
             case JWT -> {
-                JwtAuthenticationFilter jwt = new JwtAuthenticationFilter(
-                        jwtTokenProvider,
-                        accessTokenRepository
-                );
+                JwtAuthenticationFilter jwt =
+                        new JwtAuthenticationFilter(
+                                jwtTokenProvider,
+                                accessTokenRepository
+                        );
 
                 http.addFilterBefore(
                         jwt,
@@ -63,10 +57,11 @@ public class SecurityConfig {
             }
 
             case DUAL -> {
-                JwtAuthenticationFilter jwt = new JwtAuthenticationFilter(
-                        jwtTokenProvider,
-                        accessTokenRepository
-                );
+                JwtAuthenticationFilter jwt =
+                        new JwtAuthenticationFilter(
+                                jwtTokenProvider,
+                                accessTokenRepository
+                        );
 
                 http
                         .addFilterBefore(
@@ -87,4 +82,5 @@ public class SecurityConfig {
 
         return http.build();
     }
+
 }

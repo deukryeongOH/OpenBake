@@ -72,6 +72,9 @@ settlement:
       zone: Asia/Seoul
 
 openbake:
+  security:
+    auth-mode: ${AUTH_MODE:dual}
+
   cart:
     # 장바구니 만료 시간
     # 장바구니 생성 = 재고 선점이라 결제하지 않고 방치되면 재고가 묶인다.

@@ -1,6 +1,7 @@
 package com.openbake.member.infrastructure;
 
 import com.openbake.common.security.jwt.JwtProperties;
+import com.openbake.member.infrastructure.security.jwt.RefreshTokenRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

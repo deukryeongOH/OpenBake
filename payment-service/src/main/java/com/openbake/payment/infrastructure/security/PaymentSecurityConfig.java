@@ -27,6 +27,11 @@ public class PaymentSecurityConfig {
                         .requestMatchers("/internal/v1/**").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        /** Actuator와 Prometheus */
+                        .requestMatchers( "/actuator/health",
+                                "/actuator/prometheus",
+                                "/actuator/metrics",
+                                "/actuator/metrics/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(new HeaderAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);

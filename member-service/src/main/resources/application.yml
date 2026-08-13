@@ -5,7 +5,7 @@ spring:
   application:
     name: member-service
   datasource:
-    url: ${DB_URL}          # 3단계에서 전용 DB URL로 교체
+    url: ${MEMBER_DB_URL}          # 3단계에서 전용 DB URL로 교체
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   data:

@@ -1,10 +1,10 @@
 package com.openbake.drop.infrastructure.scheduler;
 
-import com.openbake.drop.application.DropEnterService;
-import com.openbake.drop.application.DropService;
+import com.openbake.drop.application.service.DropEnterService;
+import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.application.queue.InMemoryQueueManager;
-import com.openbake.drop.application.queue.TodayDropCache;
-import com.openbake.drop.application.queue.TodayDropCache.CachedDrop;
+import com.openbake.drop.application.cache.CachedDrop;
+import com.openbake.drop.application.cache.TodayDropCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,7 +14,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -43,15 +45,17 @@ class QueueSchedulerTest {
 
     private final Long dropId = 1L;
 
-    private static CachedDrop cachedDrop(Long dropId, LocalDateTime start, LocalDateTime end) {
-        return new CachedDrop(LocalDate.now(), dropId, start, end);
+    // started/ended가 이미 마킹된 상태로 만들고 싶으면 alreadyStarted/alreadyEnded를 true로 넘긴다
+    // (tryMarkStarted/tryMarkEnded가 compareAndSet(false, true)라 이미 true면 항상 false를 반환한다)
+    private static CachedDrop cachedDrop(Long dropId, LocalDateTime start, LocalDateTime end, boolean alreadyStarted, boolean alreadyEnded) {
+        return new CachedDrop(LocalDate.now(), dropId, start, end, new AtomicBoolean(alreadyStarted), new AtomicBoolean(alreadyEnded));
     }
 
     @Test
     @DisplayName("오늘 진행되는 드롭이 없으면 아무 것도 하지 않는다")
     void processQueue_NoDropToday_DoesNothing() {
         // given
-        given(todayDropCache.get()).willReturn(cachedDrop(null, null, null));
+        given(todayDropCache.get()).willReturn(List.of());
 
         // when
         queueScheduler.processQueue();
@@ -64,19 +68,21 @@ class QueueSchedulerTest {
     }
 
     @Test
-    @DisplayName("드롭 시작 전이면 상태 전환 없이 대기열만 정리한다")
-    void processQueue_BeforeDropStart_OnlyFinishesQueue() {
+    @DisplayName("드롭 시작 전이면 상태 전환/대기열 정리 없이 다음 드롭으로 넘어간다")
+    void processQueue_BeforeDropStart_SkipsToNextDrop() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.plusMinutes(10), now.plusHours(1)));
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.plusMinutes(10), now.plusHours(1), false, false)
+        ));
 
         // when
         queueScheduler.processQueue();
 
         // then
-        verify(queueManager).finishDrop(dropId);
+        verify(queueManager, never()).finishDrop(any());
+        verify(queueManager, never()).allowEntries(any(), anyInt());
         verify(dropService, never()).changeDropStatusActive(any());
-        verify(todayDropCache, never()).tryMarkStarted();
     }
 
     @Test
@@ -84,8 +90,9 @@ class QueueSchedulerTest {
     void processQueue_JustAfterDropStart_ActivatesOnceAndAllowsEntries() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30)));
-        given(todayDropCache.tryMarkStarted()).willReturn(true);
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30), false, false)
+        ));
 
         // when
         queueScheduler.processQueue();
@@ -101,8 +108,9 @@ class QueueSchedulerTest {
     void processQueue_AlreadyStarted_DoesNotReactivate() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30)));
-        given(todayDropCache.tryMarkStarted()).willReturn(false);
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30), true, false)
+        ));
 
         // when
         queueScheduler.processQueue();
@@ -117,8 +125,9 @@ class QueueSchedulerTest {
     void processQueue_AfterDropEnd_CompletesOnceAndFinishesQueue() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1)));
-        given(todayDropCache.tryMarkEnded()).willReturn(true);
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1), true, false)
+        ));
 
         // when
         queueScheduler.processQueue();
@@ -135,8 +144,9 @@ class QueueSchedulerTest {
     void processQueue_AfterDropEnd_AlreadyCompleted_DoesNotCompleteAgain() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1)));
-        given(todayDropCache.tryMarkEnded()).willReturn(false);
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1), true, true)
+        ));
 
         // when
         queueScheduler.processQueue();
@@ -147,10 +157,32 @@ class QueueSchedulerTest {
     }
 
     @Test
+    @DisplayName("여러 드롭이 있을 때 앞쪽 드롭이 시작 전이어도 뒤쪽의 진행 중인 드롭은 정상 처리한다")
+    void processQueue_MultipleDrops_ProcessesEachIndependently() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Long upcomingDropId = 2L;
+        Long activeDropId = 3L;
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(upcomingDropId, now.plusMinutes(10), now.plusHours(1), false, false),
+                cachedDrop(activeDropId, now.minusMinutes(1), now.plusMinutes(30), false, false)
+        ));
+
+        // when
+        queueScheduler.processQueue();
+
+        // then
+        verify(dropService, never()).changeDropStatusActive(upcomingDropId);
+        verify(queueManager, never()).allowEntries(eq(upcomingDropId), anyInt());
+        verify(dropService).changeDropStatusActive(activeDropId);
+        verify(queueManager).allowEntries(eq(activeDropId), anyInt());
+    }
+
+    @Test
     @DisplayName("오늘 진행되는 드롭이 없으면 active 멤버 만료 체크를 하지 않는다")
     void checkActiveMembers_NoDropToday_DoesNothing() {
         // given
-        given(todayDropCache.get()).willReturn(cachedDrop(null, null, null));
+        given(todayDropCache.get()).willReturn(List.of());
 
         // when
         queueScheduler.checkActiveMembers();
@@ -165,7 +197,9 @@ class QueueSchedulerTest {
     void checkActiveMembers_OutsideWindow_DoesNothing() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.plusMinutes(10), now.plusHours(1)));
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.plusMinutes(10), now.plusHours(1), false, false)
+        ));
 
         // when
         queueScheduler.checkActiveMembers();
@@ -180,7 +214,9 @@ class QueueSchedulerTest {
     void checkActiveMembers_InsideWindow_ChecksActiveMembers() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30)));
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30), true, false)
+        ));
         Set<Long> expiredMemberIds = Set.of(10L, 20L);
         given(queueManager.checkActiveMembers(dropId)).willReturn(expiredMemberIds);
 
@@ -197,7 +233,9 @@ class QueueSchedulerTest {
     void checkActiveMembers_NoExpiredMembers_PassesEmptySetWithoutError() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30)));
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30), true, false)
+        ));
         given(queueManager.checkActiveMembers(dropId)).willReturn(Set.of());
 
         // when

@@ -19,6 +19,29 @@ services:
     networks:
       - openbake-net
 
+  elasticsearch:
+    build:
+      context: ./elasticsearch
+      dockerfile: Dockerfile
+    container_name: openbake-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - openbake-es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - openbake-net
+
   redis:
     image: redis:7
     container_name: openbake-redis
@@ -50,10 +73,13 @@ services:
       TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
       SETTLEMENT_ENCRYPTION_KEY: ${SETTLEMENT_ENCRYPTION_KEY}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
       payment-service:
         condition: service_healthy
@@ -75,7 +101,7 @@ services:
     container_name: openbake-payment
     restart: unless-stopped
     environment:
-      DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
+      PAYMENT_DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
       DB_USERNAME: openbake
       DB_PASSWORD: openbake
       TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
@@ -162,6 +188,8 @@ services:
 
   payment-postgres:
     image: postgres:17
+    ports:
+      - "5435:5432"
     environment:
       POSTGRES_DB: openbake_payment
       POSTGRES_USER: openbake
@@ -177,6 +205,8 @@ services:
 
   member-postgres:
     image: postgres:17
+    ports:
+      - "5434:5432"
     environment:
       POSTGRES_DB: openbake_member
       POSTGRES_USER: openbake
@@ -197,7 +227,7 @@ services:
     container_name: openbake-member-service
     env_file: [ .env ]      # JWT_SECRET, GOOGLE_CLIENT_ID 등 기존 값 재사용
     environment:
-      DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
+      MEMBER_DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
       REDIS_HOST: redis    # 기존 Redis 컨테이너 재사용 (블랙리스트/토큰 저장, 키 네임스페이스로 구분됨)
       REDIS_PORT: 6379
     depends_on:
@@ -217,3 +247,4 @@ volumes:
   certbot-etc:
   openbake-payment-pg-data:
   openbake-member-pg-data:
+  openbake-es-data:

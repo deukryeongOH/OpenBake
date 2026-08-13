@@ -3,7 +3,14 @@ package com.openbake.drop.application;
 import com.openbake.drop.application.dto.ConfirmEntryResult;
 import com.openbake.drop.application.dto.QueueRankResult;
 import com.openbake.drop.application.queue.QueueManager;
+import com.openbake.drop.application.service.DropEnterService;
 import com.openbake.drop.domain.*;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.entity.DropEntry;
+import com.openbake.drop.domain.entity.DropInventory;
+import com.openbake.drop.domain.repository.DropEntryRepository;
+import com.openbake.drop.domain.repository.DropInventoryRepository;
+import com.openbake.drop.domain.repository.DropRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -62,16 +70,21 @@ class DropEnterServiceTest {
         activeDrop = Drop.builder()
                 .dropStatus(DropStatus.ACTIVE)
                 .dropProduct(dropProduct)
-                .pickUpAvailableDates(Set.of(now.toLocalDate().plusDays(3)))
+                // 빌더는 과거 시각을 허용하지 않고 시작 시각이 TimeSlot(9/11/13/15/17시)에 맞아야 하며,
+                // 픽업 가능 날짜는 dropEnd 날짜보다 이후여야 하므로 아래 dropEnd(2028-07-25)보다 뒤로 잡는다.
+                .pickUpAvailableDates(Set.of(LocalDate.of(2028, 7, 28)))
                 .limitQuantity(5)
-                .dropStart(now.plusMinutes(1))
-                .dropEnd(now.plusMinutes(30))
+                // 우선 미래의 슬롯 시각으로 생성한 뒤, 아래에서 현재 시각 기준으로 되돌린다.
+                .dropStart(LocalDateTime.of(2028, 7, 25, 9, 0))
+                .dropEnd(LocalDateTime.of(2028, 7, 25, 10, 0))
                 .sellerId(1L)
                 .build();
 
         ReflectionTestUtils.setField(activeDrop, "id", dropId);
-        // 진행 시간 검증(isAccessible)을 통과시키기 위해 시작 시각을 현재 시각 이전으로 조정
+        // 진행 시간 검증(isAccessible)을 통과시키기 위해 시작/종료 시각을 현재 시각 기준으로 조정
+        // 드롭 진행 시간은 항상 1시간이므로 dropEnd도 dropStart + 1시간으로 맞춘다
         ReflectionTestUtils.setField(activeDrop, "dropStart", now.minusMinutes(10));
+        ReflectionTestUtils.setField(activeDrop, "dropEnd", now.minusMinutes(10).plusHours(1));
 
         dropInventory = DropInventory.builder()
                 .dropId(dropId)
@@ -81,17 +94,17 @@ class DropEnterServiceTest {
     }
 
     @Test
-    @DisplayName("오늘 진행하는 드롭 ID 조회 성공")
-    void getTodayDropId_Success() {
+    @DisplayName("오늘 진행하는 드롭 ID 리스트 조회 성공")
+    void getTodayDropIds_Success() {
         // given
-        given(dropRepository.findByDropStartBetween(any(), any()))
-                .willReturn(Optional.of(activeDrop));
+        given(dropRepository.findListByDropDate(any()))
+                .willReturn(List.of(activeDrop));
 
         // when
-        Long result = dropEnterService.getTodayDropId();
+        List<Long> result = dropEnterService.getTodayDropIds();
 
         // then
-        assertThat(result).isEqualTo(dropId);
+        assertThat(result).containsExactly(dropId);
     }
 
     @Test

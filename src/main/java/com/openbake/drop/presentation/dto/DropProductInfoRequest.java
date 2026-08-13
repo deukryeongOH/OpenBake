@@ -26,9 +26,6 @@ public record DropProductInfoRequest(
         @NotNull(message = "시작 시간을 입력해주세요.")
         LocalDateTime dropStart,
 
-        @NotNull(message = "종료 시간을 입력해주세요.")
-        LocalDateTime dropEnd,
-
         @Positive(message = "1인당 제한 수량은 1개 이상이어야 합니다.")
         int limitQuantity,
 

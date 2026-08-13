@@ -13,6 +13,12 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+    web:
+      pageable:
+        max-page-size: 20
+
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
 
   jpa:
     hibernate:
@@ -94,7 +100,29 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+
+      slo:
+        "[http.server.requests]":
+          - 100ms
+          - 300ms
+          - 500ms
+          - 1s
+          - 2s
 
 oauth:
   providers:

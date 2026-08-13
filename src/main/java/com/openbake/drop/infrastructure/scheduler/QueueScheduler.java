@@ -1,10 +1,10 @@
 package com.openbake.drop.infrastructure.scheduler;
 
-import com.openbake.drop.application.DropEnterService;
-import com.openbake.drop.application.DropService;
+import com.openbake.drop.application.cache.CachedDrop;
+import com.openbake.drop.application.service.DropEnterService;
+import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.application.queue.QueueManager;
-import com.openbake.drop.application.queue.TodayDropCache;
-import com.openbake.drop.application.queue.TodayDropCache.CachedDrop;
+import com.openbake.drop.application.cache.TodayDropCache;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -39,44 +39,39 @@ public class QueueScheduler {
     // 1초마다 실행되지만 DB에는 접근하지 않고, 캐싱된 시간 정보로만 진행 중 여부를 판단한다.
     @Scheduled(fixedRate = 1000)
     public void processQueue() {
-        CachedDrop drop = todayDropCache.get();
-
-        if (drop.dropId() == null) {
-            return; // 오늘 진행되는 드롭이 없음 (정상 상태)
-        }
-
-        if (LocalDateTime.now().isAfter(drop.dropEnd()) && todayDropCache.tryMarkEnded()) {
-            dropService.changeDropStatusCompleted(drop.dropId());
-        }
-
         LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())) {
-            queueManager.finishDrop(drop.dropId());
-            return; // 드롭 진행 시간이 아님
-        }
+        for(CachedDrop drop : todayDropCache.get()){
+            if (now.isAfter(drop.dropEnd())) {
+                if (drop.tryMarkEnded()) {
+                    dropService.changeDropStatusCompleted(drop.dropId());
+                }
+                queueManager.finishDrop(drop.dropId());
+                continue;
+            }
 
-        if (LocalDateTime.now().isAfter(drop.dropStart()) && todayDropCache.tryMarkStarted()) {
-            dropService.changeDropStatusActive(drop.dropId());
-        }
+            if (now.isBefore(drop.dropStart())) {
+                continue;
+            }
 
-        queueManager.allowEntries(drop.dropId(), ENTRIES_PER_TICK);
+            if (drop.tryMarkStarted()) {
+                dropService.changeDropStatusActive(drop.dropId());
+            }
+
+            queueManager.allowEntries(drop.dropId(), ENTRIES_PER_TICK);
+        }
     }
 
     // 대기열은 통과했지만 수량을 선택하고 장바구니로 넘어가지 않는 Member 지속적으로 만료
     @Scheduled(fixedRate = 120000)
     public void checkActiveMembers() {
-        CachedDrop drop = todayDropCache.get();
-
-        if (drop.dropId() == null) {
-            return; // 오늘 진행되는 드롭이 없음 (정상 상태)
-        }
-
         LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())) {
-            return; // 드롭 진행 시간이 아님
-        }
+        for(CachedDrop drop : todayDropCache.get()){
+            if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())){
+                continue;
+            }
 
-        Set<Long> memberSet = queueManager.checkActiveMembers(drop.dropId());
-        dropEnterService.failExpiredEntries(drop.dropId(), memberSet);
+            Set<Long> memberSet = queueManager.checkActiveMembers(drop.dropId());
+            dropEnterService.failExpiredEntries(drop.dropId(), memberSet);
+        }
     }
 }

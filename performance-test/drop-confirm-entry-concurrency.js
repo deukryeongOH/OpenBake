@@ -66,6 +66,7 @@ export const options = {
     },
 
     thresholds: {
+        // checks는 기능 정합성만 검증하고, 응답시간은 Trend threshold로 분리합니다.
         checks: ['rate==1'],
 
         http_req_failed: ['rate==0'],
@@ -214,10 +215,5 @@ export default function () {
                     return false;
                 }
             },
-
-        '200 응답이며 2초 미만이다':
-            (res) =>
-                res.status === 200 &&
-                res.timings.duration < 2000,
     });
 }

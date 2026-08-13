@@ -39,11 +39,10 @@ services:
       dockerfile: Dockerfile
     container_name: openbake-backend
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     env_file:
       - .env
     environment:
+      AUTH_MODE: header
       DB_URL: jdbc:postgresql://postgres:5432/openbake
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -73,11 +72,10 @@ services:
       dockerfile: payment-service/Dockerfile
     container_name: openbake-payment
     restart: unless-stopped
-    ports:
-      - "8082:8082"
     env_file:
       - .env
     environment:
+      AUTH_MODE: header
       DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
       DB_USERNAME: openbake
       DB_PASSWORD: openbake
@@ -97,6 +95,39 @@ services:
     networks:
       - openbake-net
 
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: openbake-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      MEMBER_SERVICE_URL: http://member-service:8081
+      PAYMENT_SERVICE_URL: http://payment-service:8082
+      CORE_SERVICE_URL: http://backend:8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GATEWAY_JWT_ENABLED: "true"
+      BLACKLIST_TIMEOUT: 300ms
+    depends_on:
+      backend:
+        condition: service_healthy
+      member-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - openbake-net
+
   nginx:
     image: nginx:1.27-alpine
     container_name: openbake-nginx
@@ -109,9 +140,7 @@ services:
       - certbot-webroot:/var/www/certbot
       - certbot-etc:/etc/letsencrypt:ro
     depends_on:
-      backend:
-        condition: service_healthy
-      member-service:
+      api-gateway:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
@@ -169,10 +198,9 @@ services:
       context: .
       dockerfile: member-service/Dockerfile
     container_name: openbake-member-service
-    ports:
-      - "8081:8081"
     env_file: [ .env ]      # JWT_SECRET, GOOGLE_CLIENT_ID 등 기존 값 재사용
     environment:
+      AUTH_MODE: header
       DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
       REDIS_HOST: redis    # 기존 Redis 컨테이너 재사용 (블랙리스트/토큰 저장, 키 네임스페이스로 구분됨)
       REDIS_PORT: 6379

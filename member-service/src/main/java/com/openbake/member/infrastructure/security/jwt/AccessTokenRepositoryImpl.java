@@ -1,5 +1,6 @@
-package com.openbake.common.security.jwt;
+package com.openbake.member.infrastructure.security.jwt;
 
+import com.openbake.member.domain.AccessTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;

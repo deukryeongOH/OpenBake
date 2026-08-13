@@ -1,4 +1,4 @@
-package com.openbake.common.security.jwt;
+package com.openbake.member.infrastructure.security.jwt;
 
 import io.jsonwebtoken.security.SignatureException;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,4 +1,4 @@
-package com.openbake.common.security.jwt;
+package com.openbake.member.domain;
 
 public interface AccessTokenRepository {
     void save(Long memberId, String accessToken);

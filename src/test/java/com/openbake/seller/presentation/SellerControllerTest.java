@@ -9,8 +9,6 @@ import com.openbake.common.exception.DuplicateSellerApplicationException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.common.exception.InvalidApplicationStatusException;
 import com.openbake.common.exception.InvalidSettlementAccountException;
-import com.openbake.common.security.jwt.AccessTokenRepository;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.seller.application.AccountVerificationConfirmResult;
 import com.openbake.seller.application.AccountVerificationStartResult;
 import com.openbake.seller.application.ApplicationCreateResult;
@@ -59,12 +57,6 @@ class SellerControllerTest {
 
     @MockitoBean
     private SellerService sellerService;
-
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
-
-    @MockitoBean
-    private AccessTokenRepository accessTokenRepository;
 
     @Test
     @DisplayName("사업자 인증 성공 시 200을 반환한다")

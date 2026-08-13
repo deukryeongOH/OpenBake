@@ -126,7 +126,7 @@ public class Drop {
     }
 
     public void update(DropProduct dropProduct, Set<LocalDate> pickUpAvailableDates, int limitQuantity, LocalDateTime dropStart, LocalDateTime dropEnd) {
-        validateDropPeriod(dropStart, dropEnd);
+//        validateDropPeriod(dropStart, dropEnd);
         validatePickUpDates(dropEnd, pickUpAvailableDates);
         if (limitQuantity <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "1인당 제한 수량은 1개 이상이어야 합니다.");

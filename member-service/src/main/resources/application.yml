@@ -29,10 +29,6 @@ jwt:
   access-token-expiration: 1800000
   refresh-token-expiration: 1209600000
 
-openbake:
-  security:
-    auth-mode: ${AUTH_MODE:dual}
-
 management:
   endpoints:
     web:

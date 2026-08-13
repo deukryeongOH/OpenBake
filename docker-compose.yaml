@@ -39,15 +39,17 @@ services:
       dockerfile: Dockerfile
     container_name: openbake-backend
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      AUTH_MODE: header
       DB_URL: jdbc:postgresql://postgres:5432/openbake
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       PAYMENT_SERVICE_URL: http://payment-service:8082
       MEMBER_SERVICE_URL: http://member-service:8081
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
+      SETTLEMENT_ENCRYPTION_KEY: ${SETTLEMENT_ENCRYPTION_KEY}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,19 +74,14 @@ services:
       dockerfile: payment-service/Dockerfile
     container_name: openbake-payment
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      AUTH_MODE: header
       DB_URL: jdbc:postgresql://payment-postgres:5432/openbake_payment
       DB_USERNAME: openbake
       DB_PASSWORD: openbake
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
     depends_on:
       payment-postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
@@ -200,7 +197,6 @@ services:
     container_name: openbake-member-service
     env_file: [ .env ]      # JWT_SECRET, GOOGLE_CLIENT_ID 등 기존 값 재사용
     environment:
-      AUTH_MODE: header
       DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
       REDIS_HOST: redis    # 기존 Redis 컨테이너 재사용 (블랙리스트/토큰 저장, 키 네임스페이스로 구분됨)
       REDIS_PORT: 6379

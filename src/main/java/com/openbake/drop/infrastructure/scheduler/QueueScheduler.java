@@ -36,8 +36,8 @@ public class QueueScheduler {
         todayDropCache.refresh();
     }
 
-    // 1초마다 실행되지만 DB에는 접근하지 않고, 캐싱된 시간 정보로만 진행 중 여부를 판단한다.
-    @Scheduled(fixedRate = 1000)
+    // 200ms마다 실행되지만 DB에는 접근하지 않고, 캐싱된 시간 정보로만 진행 중 여부를 판단한다.
+    @Scheduled(fixedRate = 200) // 200ms 마다 스케줄링 실행하고 틱마다 100명씩 입장
     public void processQueue() {
         LocalDateTime now = LocalDateTime.now();
         for(CachedDrop drop : todayDropCache.get()){

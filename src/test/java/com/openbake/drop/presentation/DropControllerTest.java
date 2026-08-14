@@ -1,7 +1,7 @@
 package com.openbake.drop.presentation;
 
 import com.openbake.drop.application.service.DropService;
-import com.openbake.drop.application.dto.DropProductInfoResult;
+import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.domain.DropStatus;
 import com.openbake.drop.presentation.controller.DropController;
 import com.openbake.seller.application.CurrentSellerProvider;
@@ -38,18 +38,19 @@ class DropControllerTest {
     @Test
     @DisplayName("예정된 드롭 목록을 조회한다")
     void getUpcomingDrops() throws Exception {
-        DropProductInfoResult result = new DropProductInfoResult(
+        DropInfoResult result = DropInfoResult.of(
+                LocalDateTime.parse("2028-08-01T14:00:00"),
+                LocalDateTime.parse("2028-08-01T18:00:00"),
+                5,
+                DropStatus.UPCOMING,
                 "버터떡",
                 "버터를 많이 써서 향이 좋아요.",
                 "https://cdn.openbake.com/drops/12.jpg",
                 new HashSet<>(),
-                LocalDateTime.parse("2028-08-01T14:00:00"),
-                LocalDateTime.parse("2028-08-01T18:00:00"),
-                5,
                 3000,
                 200,
                 200,
-                DropStatus.UPCOMING,
+                1L,
                 12L
         );
 
@@ -59,9 +60,9 @@ class DropControllerTest {
         mockMvc.perform(get("/api/v1/drops/upcoming"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].dropId").value(12))
                 .andExpect(jsonPath("$.data[0].name").value("버터떡"))
-                .andExpect(jsonPath("$.data[0].dropStatus").value("UPCOMING"));
+                .andExpect(jsonPath("$.data[0].dropStatus").value("UPCOMING"))
+                .andExpect(jsonPath("$.data[0].remainQuantity").value(200));
     }
 
     @Test

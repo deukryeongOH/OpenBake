@@ -2,6 +2,7 @@ package com.openbake.common.exception;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.response.ApiResponse.ApiError;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -57,6 +58,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
         log.error("처리되지 않은 예외 발생", e);
         return build(ErrorCode.INTERNAL_ERROR.getStatus(), ErrorCode.INTERNAL_ERROR.getCode(), ErrorCode.INTERNAL_ERROR.getMessage());
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(OptimisticLockingFailureException exception) {
+        ErrorCode errorCode = ErrorCode.OPTIMISTIC_LOCK_CONFLICT;
+        return build(errorCode.getStatus(), errorCode.getCode(), errorCode.getMessage());
     }
 
 

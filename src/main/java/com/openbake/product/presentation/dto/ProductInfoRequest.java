@@ -1,7 +1,6 @@
 package com.openbake.product.presentation.dto;
 
 import com.openbake.product.domain.Category;
-import com.openbake.product.domain.Type;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -10,7 +9,7 @@ import jakarta.validation.constraints.Positive;
 import java.time.LocalDate;
 import java.util.Set;
 
-public record GeneralProductInfoRequest(
+public record ProductInfoRequest(
         @NotBlank(message = "이름을 입력해주세요.")
         String name,
 
@@ -30,10 +29,6 @@ public record GeneralProductInfoRequest(
         Set<LocalDate> pickUpAvailableDates,
 
         @NotNull(message = "카테고리를 지정해주세요.")
-        Category category,
-
-        @NotNull(message = "타입을 지정해주세요.")
-        Type type
-
+        Category category
 ) {
 }

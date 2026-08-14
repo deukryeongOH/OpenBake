@@ -4,15 +4,23 @@ import com.openbake.drop.domain.DropStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Set;
 
-public record DropInfoResult(String name, String description, String imageUrl,
+public record DropInfoResult(
+        LocalDateTime dropStart, LocalDateTime dropEnd,
+        int limitQuantity, DropStatus dropStatus,
+        String name, String description, String imageUrl,
+        Set<LocalDate> pickUpAvailableDates,
+        int price, int totalQuantity, int remainQuantity,
+        Long sellerId, Long productId) {
+    public static DropInfoResult of(
                              LocalDateTime dropStart, LocalDateTime dropEnd,
-                             int limitQuantity, int price, int totalQuantity, int remainQuantity, DropStatus dropStatus,
-                             Set<LocalDate> pickupDates) {
-    public static DropInfoResult of(String name, String description, String imageUrl,
-                             LocalDateTime dropStart, LocalDateTime dropEnd,
-                             int limitQuantity, int price, int totalQuantity, int remainQuantity, DropStatus dropStatus, Set<LocalDate> pickupDates){
-        return new DropInfoResult(name, description, imageUrl, dropStart, dropEnd, limitQuantity, price, totalQuantity, remainQuantity, dropStatus, pickupDates);
+                             int limitQuantity, DropStatus dropStatus, String name, String description, String imageUrl,
+                             Set<LocalDate> pickUpAvailableDates,
+                             int price, int totalQuantity, int remainQuantity,
+                             Long sellerId, Long productId){
+        return new DropInfoResult(dropStart, dropEnd, limitQuantity, dropStatus, name,description, imageUrl,
+                new HashSet<>(pickUpAvailableDates), price, totalQuantity, remainQuantity, sellerId, productId);
     }
 }

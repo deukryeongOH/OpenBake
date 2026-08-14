@@ -16,4 +16,8 @@ public interface DropEntryRepository {
 
     // 재입장 여부 판단
     boolean existsByDropIdAndMemberId(Long dropId, Long memberId);
+
+    int reserve(Long dropId, Long memberId, int selectQuantity);
+
+    int fail(Long dropId, Long memberId);
 }

@@ -2,13 +2,10 @@ package com.openbake.product.application;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.product.application.dto.GeneralProductInfoCommand;
-import com.openbake.product.application.dto.GeneralProductInfoResult;
-import com.openbake.product.domain.Category;
-import com.openbake.product.domain.Product;
-import com.openbake.product.domain.ProductInventory;
-import com.openbake.product.domain.ProductInventoryRepository;
-import com.openbake.product.domain.ProductRepository;
+import com.openbake.product.application.dto.ProductInfoCommand;
+import com.openbake.product.application.dto.ProductInfoResult;
+import com.openbake.product.domain.*;
+
 import com.openbake.product.application.port.CurrentSellerPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -16,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -29,7 +27,7 @@ public class ProductService {
 
     // register product
     @Transactional
-    public GeneralProductInfoResult registerGeneralProduct(GeneralProductInfoCommand command) {
+    public ProductInfoResult register(ProductInfoCommand command, Type type) {
         Long sellerId = currentSellerPort.getCurrentSellerId();
 
         Product product = Product.builder()
@@ -39,7 +37,7 @@ public class ProductService {
                 .price(command.price())
                 .pickUpAvailableDates(command.pickupDates())
                 .category(command.category())
-                .type(command.type())
+                .type(type)
                 .sellerId(sellerId)
                 .build();
 
@@ -51,17 +49,36 @@ public class ProductService {
         productRepository.save(product);
         productInventoryRepository.save(productInventory);
 
-        return GeneralProductInfoResult.of(command, product.getId(), productInventory.getRemainQuantity(), command.type());
+        return ProductInfoResult.of(product.getName(), product.getDescription(), product.getImageUrl(),
+                productInventory.getTotalQuantity(), product.getPrice(), product.getPickUpAvailableDates(), product.getCategory(),
+                product.getId(), productInventory.getRemainQuantity(), product.getType(), product.getSellerId());
     }
+
+    // register Drop product
+    @Transactional
+    public ProductInfoResult registerDropProduct(ProductInfoCommand command) {
+        return register(command, Type.DROP);
+    }
+
+    // register General product
+    @Transactional
+    public ProductInfoResult registerGeneralProduct(ProductInfoCommand command) {
+        return register(command, Type.GENERAL);
+    }
+
 
     // update product
     @Transactional
-    public GeneralProductInfoResult updateGeneralProduct(GeneralProductInfoCommand command, Long productId) {
+    public ProductInfoResult updateProduct(ProductInfoCommand command, Long productId, Type type) {
         Long sellerId = currentSellerPort.getCurrentSellerId();
 
         validateSellerProduct(productId, sellerId); // 해당 상품이 판매자의 상품인지 확인
 
         Product product = getProduct(productId);
+
+        if (product.getType() != type) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
+        }
 
         product.updateProduct(command); // 수량 외 필드만 엔티티로 저장
         productRepository.save(product);
@@ -72,53 +89,94 @@ public class ProductService {
             throw new BusinessException(ErrorCode.INVALID_TOTAL_QUANTITY);
         }
 
-        ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
         Product updated = getProduct(productId); // adjustTotalQuantity는 별도 UPDATE이기 떄문에 최신값 다시 조회 해야함.
+        ProductInventory productInventory = productInventoryRepository.findByProductId(updated.getId());
 
-        return GeneralProductInfoResult.of(command, productId, productInventory.getRemainQuantity(), updated.getType());
+        return ProductInfoResult.of(updated.getName(), updated.getDescription(), updated.getImageUrl(),
+                productInventory.getTotalQuantity(), updated.getPrice(), updated.getPickUpAvailableDates(), updated.getCategory(),
+                updated.getId(), productInventory.getRemainQuantity(), updated.getType(), updated.getSellerId());
+    }
+
+    // update Drop product
+    @Transactional
+    public ProductInfoResult updateDropProduct(ProductInfoCommand command, Long productId) {
+        return updateProduct(command, productId, Type.DROP);
+    }
+
+    // update General product
+    @Transactional
+    public ProductInfoResult updateGeneralProduct(ProductInfoCommand command, Long productId) {
+        return updateProduct(command, productId, Type.GENERAL);
     }
 
     // delete product
     @Transactional
-    public void deleteGeneralProduct(Long productId) {
+    public void deleteProduct(Long productId, Type type) {
         Long sellerId = currentSellerPort.getCurrentSellerId();
 
         Product product = validateSellerProduct(productId, sellerId); // 해당 상품이 판매자의 상품인지 확인
+        ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
 
+        if (product.getType() != type) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
+        }
+        productInventoryRepository.delete(productInventory);
         productRepository.delete(product);
+
+    }
+
+    // delete Drop product
+    @Transactional
+    public void deleteDropProduct(Long productId) {
+        deleteProduct(productId, Type.DROP);
+    }
+
+    // delete General product
+    @Transactional
+    public void deleteGeneralProduct(Long productId) {
+        deleteProduct(productId, Type.GENERAL);
     }
 
     // 판매자가 등록한 일반 상품 리스트 반환
     @Transactional(readOnly = true)
-    public Page<GeneralProductInfoResult> getSellerGeneralProductList(Pageable pageable) {
+    public Page<ProductInfoResult> getSellerProductList(Pageable pageable) {
         Long sellerId = currentSellerPort.getCurrentSellerId();
 
-        return productRepository.findAllBySellerId(sellerId, pageable).map(this::toResult);
+        return productRepository.findAllBySellerIdAndType(sellerId, Type.GENERAL, pageable).map(this::toResult);
     }
 
     @Transactional(readOnly = true)
-    public Page<GeneralProductInfoResult> getGeneralProductList(String keyword, Category category, Pageable pageable) {
-        return productRepository.searchByKeywordAndCategory(keyword, category, pageable).map(this::toResult);
-    }
-
-    @Transactional // 일반 상품 재고 차감
-    public void decreaseStock(Long productId, int quantity) {
-        if (quantity <= 0) {
-            throw new BusinessException(ErrorCode.QUANTITY_CAN_NOT_BE_MINUS);
-        }
-        if (productInventoryRepository.decreaseStock(productId, quantity) == 0) {
-            throw new BusinessException(ErrorCode.INVALID_USER_SELECT_QUANTITY);
-        }
+    public Page<ProductInfoResult> getProductList(Pageable pageable) {
+        return productRepository.findAllByType(Type.GENERAL, pageable).map(this::toResult);
     }
 
     @Transactional
-    public void rollbackStock(Long productId, int quantity){
+    public int decreaseStock(Long productId, int quantity) {
+        if (quantity <= 0) {
+            throw new BusinessException(ErrorCode.QUANTITY_CAN_NOT_BE_MINUS);
+        }
+
+        if (productInventoryRepository.decreaseStock(productId, quantity) == 0) {
+            throw new BusinessException(ErrorCode.INVALID_USER_SELECT_QUANTITY);
+        }
+
+        ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+
+        return productInventory.getRemainQuantity();
+    }
+
+    @Transactional
+    public int rollbackStock(Long productId, int quantity){
         if (quantity <= 0) {
             throw new BusinessException(ErrorCode.QUANTITY_CAN_NOT_BE_MINUS);
         }
         if (productInventoryRepository.rollbackStock(productId, quantity) == 0) {
             throw new BusinessException(ErrorCode.INVALID_TOTAL_QUANTITY);
         }
+
+        ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+
+        return productInventory.getRemainQuantity();
     }
 
 
@@ -133,17 +191,57 @@ public class ProductService {
         return product;
     }
 
-    private GeneralProductInfoResult toResult(Product product) {
+    private ProductInfoResult toResult(Product product) {
         ProductInventory productInventory = productInventoryRepository.findByProductId(product.getId());
 
-        return GeneralProductInfoResult.of(GeneralProductInfoCommand.create(
+        return ProductInfoResult.of(
                 product.getName(), product.getDescription(), product.getImageUrl(), productInventory.getTotalQuantity(),
-                product.getPrice(), Set.copyOf(product.getPickUpAvailableDates()), product.getCategory(), product.getType()
-        ), product.getId(), productInventory.getRemainQuantity(), product.getType());
+                product.getPrice(), Set.copyOf(product.getPickUpAvailableDates()), product.getCategory(),
+                product.getId(), productInventory.getRemainQuantity(), product.getType(), product.getSellerId());
     }
 
     private Product getProduct(Long productId) {
         return productRepository.findById(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public ProductInfoResult getProductInfo(Long productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+
+        return ProductInfoResult.of(product.getName(), product.getDescription(), product.getImageUrl(),
+                productInventory.getTotalQuantity(), product.getPrice(), product.getPickUpAvailableDates(), product.getCategory(),
+                product.getId(), productInventory.getRemainQuantity(), product.getType(), product.getSellerId());
+    }
+
+
+    @Transactional(readOnly = true)
+    public List<ProductInfoResult> findProductListBySellerId(Long sellerId) {
+        List<Product> productList = productRepository.findAllBySellerId(sellerId);
+
+        return productList.stream()
+                .map(product -> {
+                    ProductInventory productInventory = productInventoryRepository.findByProductId(product.getId());
+                    return ProductInfoResult.of(product.getName(), product.getDescription(), product.getImageUrl(), productInventory.getTotalQuantity(),
+                            product.getPrice(), product.getPickUpAvailableDates(), product.getCategory(), product.getId(), productInventory.getRemainQuantity(),
+                            product.getType(), product.getSellerId());
+                })
+                .toList();
+
+    }
+
+    @Transactional(readOnly = true)
+    public Long getSellerIdByProductId(Long productId) {
+        return productRepository.findSellerIdById(productId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isGeneralProduct(Long productId) {
+        Product product = productRepository.findById(productId).orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        return product.getType() == Type.GENERAL;
     }
 }

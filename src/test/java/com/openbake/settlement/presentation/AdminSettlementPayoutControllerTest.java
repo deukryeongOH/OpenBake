@@ -1,8 +1,6 @@
 //package com.openbake.settlement.presentation;
 //
 //import com.openbake.common.exception.GlobalExceptionHandler;
-//import com.openbake.member.infrastructure.jwt.JwtAuthenticationFilter;
-//import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
 //import com.openbake.settlement.application.SettlementPayoutQueryService;
 //import com.openbake.settlement.application.SettlementPayoutResult;
 //import com.openbake.settlement.application.SettlementPayoutService;
@@ -44,10 +42,8 @@
 //     * 실제 필터 생성 대신 Mock Bean을 제공합니다.
 //     */
 //    @MockitoBean
-//    private JwtAuthenticationFilter jwtAuthenticationFilter;
 //
 //    @MockitoBean
-//    private JwtTokenProvider jwtTokenProvider;
 //
 //    @Test
 //    @DisplayName("정산 지급을 시작한다")

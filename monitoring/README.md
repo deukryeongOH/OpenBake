@@ -16,7 +16,7 @@ OpenBake Spring Boot
    Prometheus :9090
         │
         ▼
-    Grafana :3000
+    Grafana :3001
 ```
 
 ## 1. 사전 조건
@@ -63,7 +63,7 @@ chmod +x run-monitoring.sh verify-monitoring.sh
 
 ```text
 Prometheus http://localhost:9090
-Grafana    http://localhost:3000
+Grafana    http://localhost:3001
 ```
 
 Grafana에는 시작 시 자동으로 다음이 생성됩니다.
@@ -126,3 +126,22 @@ P95 ↑
 ## 8. 주의
 
 `scrape_interval: 1s`는 짧은 동시성 테스트의 순간 변화를 보기 위한 성능 테스트 환경 설정입니다. 운영 환경 설정으로 그대로 복사하지 않습니다.
+
+## 9. Phase 4 - Metric availability 확인
+
+`verify-monitoring.sh`는 Target UP뿐 아니라 병목 분석에 필요한 metric이 실제로 Prometheus에 존재하는지도 확인합니다.
+
+```bash
+./verify-monitoring.sh
+```
+
+별도로 확인하려면:
+
+```bash
+python3 verify-metrics.py \
+  --prometheus-url http://localhost:9090 \
+  --job openbake-core
+```
+
+Process CPU, JVM Heap, HTTP Server는 필수 확인 대상으로 처리합니다.
+Tomcat/Hikari/HTTP histogram은 애플리케이션 설정 및 실제 사용 여부에 따라 WARN이 날 수 있습니다.

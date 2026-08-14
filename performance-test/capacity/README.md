@@ -58,3 +58,100 @@ python3 capacity/analyze-capacity.py
 
 사용자 수 증가에 비해 throughput이 더 이상 증가하지 않거나, P95/P99가 급증하거나,
 Tomcat/Hikari/JVM 지표가 포화되는 구간을 Capacity Point 후보로 봅니다.
+
+---
+
+# Phase 4 - Observability Correlation
+
+Phase 4에서는 각 k6 run의 `metadata.env`에 기록된 시작/종료 시간을 기준으로 Prometheus 지표를 같이 저장합니다.
+
+Capacity scan은 기본적으로 다음 preflight를 먼저 수행합니다.
+
+```bash
+../monitoring/verify-monitoring.sh
+```
+
+그 후 각 step마다 다음 파일이 run 폴더에 생성됩니다.
+
+```text
+results/runs/<run-id>/
+├── console.txt
+├── summary.json
+├── metadata.env
+├── observability.json
+└── observability.md
+```
+
+수동으로 다시 수집하려면:
+
+```bash
+python3 capacity/collect-observability.py --overwrite
+```
+
+Prometheus 주소나 job이 다른 경우:
+
+```bash
+python3 capacity/collect-observability.py \
+  --prometheus-url http://localhost:9090 \
+  --job openbake-core \
+  --overwrite
+```
+
+통합 집계:
+
+```bash
+python3 capacity/analyze-capacity.py
+```
+
+생성 결과:
+
+```text
+capacity/capacity-summary.md
+capacity/capacity-repeat-summary.md
+```
+
+`bottleneck_candidates`는 원인 확정값이 아닙니다. 자원 포화 여부를 빠르게 분류하기 위한 후보 신호입니다.
+P95/P99가 악화되는데 CPU/Tomcat/Hikari/Heap 신호가 없다면 Lock 대기시간이나 DB lock처럼
+현재 Actuator metric만으로 보이지 않는 영역을 다음 계측 대상으로 잡습니다.
+
+## 반복성 확인
+
+단일 run은 JVM warm-up, cache, GC, 로컬 머신 상태에 영향을 받을 수 있습니다.
+Capacity 경계가 좁혀지면 같은 VU를 서로 다른 독립 Drop으로 최소 3회 정도 반복하고
+`capacity-repeat-summary.md`의 median과 min~max를 함께 봅니다.
+
+---
+
+# Phase 5 - Lock Contention Instrumentation
+
+Phase 5에서는 `DropLockFacade`의 ReentrantLock 내부를 Micrometer로 직접 계측합니다.
+먼저 루트의 `instrumentation/lock/README.md`에 따라 애플리케이션 패치를 적용하세요.
+
+패치 후 모니터링에서 lock metric을 필수로 검사하려면:
+
+```env
+REQUIRE_LOCK_METRICS=true
+```
+
+Capacity runner는 Phase 5 기준으로 기본적으로 custom lock metric을 요구합니다.
+필요한 경우에만 임시로 다음처럼 우회할 수 있습니다.
+
+```bash
+CAPACITY_REQUIRE_LOCK_METRICS=false ./capacity/run-lock-capacity-scan.sh
+```
+
+짧은 burst 테스트와 1초 Prometheus scrape를 고려해 관측 수집의 기본 rate window는 `5s`입니다.
+변경하려면:
+
+```bash
+PROMETHEUS_RATE_WINDOW=10s ./capacity/run-lock-capacity-scan.sh
+```
+
+결과 `capacity-summary.md`에는 다음이 추가됩니다.
+
+- Lock wait P95/P99
+- Lock hold P95
+- decreaseQuantity P95
+- waiters/holders
+- lock map size
+- `wait/P95`, `decrease/hold` 방향성 지표

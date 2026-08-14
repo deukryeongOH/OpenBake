@@ -18,15 +18,15 @@ echo "========================================"
 echo " OpenBake Monitoring Verification"
 echo "========================================"
 
-printf '\n[1/4] Prometheus health\n'
+printf '\n[1/5] Prometheus health\n'
 curl -fsS "${PROMETHEUS_URL}/-/ready" >/dev/null
 echo "OK: ${PROMETHEUS_URL}"
 
-printf '\n[2/4] Grafana health\n'
+printf '\n[2/5] Grafana health\n'
 curl -fsS "${GRAFANA_URL}/api/health" >/dev/null
 echo "OK: ${GRAFANA_URL}"
 
-printf '\n[3/4] Prometheus scrape targets\n'
+printf '\n[3/5] Prometheus scrape targets\n'
 TARGET_JSON="$(curl -fsS "${PROMETHEUS_URL}/api/v1/targets")"
 printf '%s' "$TARGET_JSON" | python3 -c '
 import json, sys
@@ -45,7 +45,7 @@ for target in targets:
         print(f"  error: {err}")
 '
 
-printf '\n[4/4] Required target verification\n'
+printf '\n[4/5] Required target verification\n'
 TARGET_JSON_ENV="$TARGET_JSON" REQUIRED_JOBS_ENV="$REQUIRED_PROMETHEUS_JOBS" python3 - <<'PY'
 import json, os
 required = [x.strip() for x in os.environ.get('REQUIRED_JOBS_ENV', '').split(',') if x.strip()]
@@ -66,6 +66,9 @@ for job in required:
 if failed:
     raise SystemExit(1)
 PY
+
+printf '\n[5/5] Core metric availability\n'
+python3 "$SCRIPT_DIR/verify-metrics.py" --prometheus-url "$PROMETHEUS_URL" --job openbake-core
 
 printf '\nGrafana dashboard:\n'
 echo "  ${GRAFANA_URL}/dashboards"

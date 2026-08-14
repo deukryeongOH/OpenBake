@@ -7,6 +7,7 @@ COPY gradle ./gradle
 COPY common/build.gradle common/build.gradle
 COPY member-service/build.gradle member-service/build.gradle
 COPY payment-service/build.gradle payment-service/build.gradle
+COPY api-gateway/build.gradle api-gateway/build.gradle
 RUN chmod +x gradlew && ./gradlew --version
 
 COPY src ./src

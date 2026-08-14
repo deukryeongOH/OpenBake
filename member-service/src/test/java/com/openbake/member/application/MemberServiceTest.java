@@ -5,7 +5,7 @@ import com.openbake.common.exception.AuthenticationFailedException;
 import com.openbake.common.exception.EntityNotFoundException;
 import com.openbake.common.security.Authorities;
 import com.openbake.common.security.CurrentMemberProvider;
-import com.openbake.common.security.jwt.AccessTokenRepository;
+import com.openbake.member.domain.AccessTokenRepository;
 import com.openbake.member.domain.AuthCredential;
 import com.openbake.member.domain.AuthProvider;
 import com.openbake.member.domain.Member;

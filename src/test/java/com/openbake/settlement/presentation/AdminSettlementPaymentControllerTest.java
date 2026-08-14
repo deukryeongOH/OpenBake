@@ -1,7 +1,5 @@
 //package com.openbake.settlement.presentation;
 //
-//import com.openbake.member.infrastructure.jwt.JwtAuthenticationFilter;
-//import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
 //import com.openbake.settlement.application.SettlementPaymentResult;
 //import com.openbake.settlement.application.SettlementPaymentService;
 //import org.junit.jupiter.api.DisplayName;
@@ -33,10 +31,8 @@
 //     * 테스트 컨텍스트 생성에 필요한 Mock입니다.
 //     */
 //    @MockitoBean
-//    private JwtAuthenticationFilter jwtAuthenticationFilter;
 //
 //    @MockitoBean
-//    private JwtTokenProvider jwtTokenProvider;
 //
 //    @Test
 //    @DisplayName("정산 지급 시작 결과를 반환한다")

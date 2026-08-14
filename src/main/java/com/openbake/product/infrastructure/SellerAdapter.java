@@ -7,7 +7,7 @@ import com.openbake.seller.application.CurrentSellerProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-@Component
+@Component("productSellerAdapter")
 @RequiredArgsConstructor
 public class SellerAdapter implements CurrentSellerPort {
 

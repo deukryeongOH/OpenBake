@@ -6,6 +6,8 @@ import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.order.application.port.DropPort;
+import com.openbake.product.domain.Product;
+import com.openbake.product.domain.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,17 +16,20 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DropClient implements DropPort {
     private final DropRepository dropRepository;
+    private final ProductRepository productRepository;
 
     @Override
     public DropInfo getDrop(Long dropId) {
         Drop drop = dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
+        Product product = productRepository.findById(drop.getProductId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 
         return new DropInfo(
                 drop.getId(),
-                drop.getSellerId(),
-                drop.getDropProduct().getName(),
-                drop.getDropProduct().getPrice()
+                product.getSellerId(),
+                product.getName(),
+                product.getPrice()
         );
     }
 }

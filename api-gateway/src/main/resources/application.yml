@@ -1,0 +1,72 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+jwt:
+  secret: ${JWT_SECRET}
+
+openbake:
+  security:
+    gateway-jwt-enabled: ${GATEWAY_JWT_ENABLED:false}
+    blacklist-timeout: ${BLACKLIST_TIMEOUT:300ms}
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: member-auth
+              uri: ${MEMBER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/auth/**
+              order: -100
+            - id: member-api
+              uri: ${MEMBER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/members/**
+              order: -90
+            - id: payment-webhook
+              uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/webhooks/pg/**
+              order: -80
+            - id: payment-api
+              uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/deposit/**
+              order: -70
+            - id: core-swagger-ui
+              uri: ${CORE_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/swagger-ui.html,/swagger-ui/**
+              order: -20
+            - id: core-api-docs
+              uri: ${CORE_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/v3/api-docs,/v3/api-docs/**
+              order: -10
+            - id: core-api
+              uri: ${CORE_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/api/**
+              order: 0
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 10s
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health, info

@@ -1,7 +1,5 @@
 package com.openbake.order.presentation;
 
-import com.openbake.common.security.jwt.JwtAuthenticationFilter;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.order.application.OrderService;
 import com.openbake.order.application.SellerOrderPageResult;
 import com.openbake.order.application.SellerOrderSummaryResult;
@@ -35,16 +33,6 @@ class SellerOrderControllerTest {
 
     @MockitoBean
     private OrderService orderService;
-
-    /*
-     * 현재 프로젝트의 @WebMvcTest에서 JWT Filter가 발견되므로
-     * 테스트 컨텍스트 생성에 필요한 Mock입니다.
-     */
-    @MockitoBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
 
     @Test
     @DisplayName("판매자 본인 판매내역 목록을 조회한다")

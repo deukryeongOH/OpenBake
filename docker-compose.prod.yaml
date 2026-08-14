@@ -1,0 +1,15 @@
+services:
+  backend:
+    image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-backend:latest
+
+  payment-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-payment-service:latest
+
+  api-gateway:
+    image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-api-gateway:latest
+
+  member-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-member-service:latest
+
+  elasticsearch:
+    image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-elasticsearch:latest

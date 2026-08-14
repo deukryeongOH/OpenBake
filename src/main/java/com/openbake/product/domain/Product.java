@@ -2,7 +2,7 @@ package com.openbake.product.domain;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.product.application.dto.GeneralProductInfoCommand;
+import com.openbake.product.application.dto.ProductInfoCommand;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -58,8 +58,12 @@ public class Product {
 
     @Builder
     public Product(String name, String description, String imageUrl, int price, Long sellerId, Set<LocalDate> pickUpAvailableDates, Category category, Type type) {
-        validateProductInfo(name, description, imageUrl, price, category, type);
+        validateProductInfo(name, description, imageUrl, price, category);
         validatePickUpDates(pickUpAvailableDates);
+
+        if (type == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "타입을 지정해주세요.");
+        }
 
         this.name = name;
         this.description = description;
@@ -72,8 +76,8 @@ public class Product {
         this.pickUpAvailableDates.addAll(pickUpAvailableDates);
     }
 
-    public void updateProduct(GeneralProductInfoCommand command) {
-        validateProductInfo(command.name(), command.description(), command.imageUrl(), command.price(), command.category(), command.type());
+    public void updateProduct(ProductInfoCommand command) {
+        validateProductInfo(command.name(), command.description(), command.imageUrl(), command.price(), command.category());
         validatePickUpDates(command.pickupDates());
 
         this.name = command.name();
@@ -82,11 +86,10 @@ public class Product {
         this.price = command.price();
         this.pickUpAvailableDates.clear();
         this.pickUpAvailableDates.addAll(command.pickupDates());
-        this.type = command.type();
         this.category = command.category();
     }
 
-    private void validateProductInfo(String name, String description, String imageUrl, int price, Category category, Type type) {
+    private void validateProductInfo(String name, String description, String imageUrl, int price, Category category) {
         if (name == null || name.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 입력해주세요.");
         }
@@ -101,9 +104,6 @@ public class Product {
         }
         if (category == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "카테고리를 지정해주세요.");
-        }
-        if (type == null) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "타입을 선택해주세요.");
         }
     }
 

@@ -6,6 +6,7 @@ import com.openbake.drop.domain.DropStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Set;
 
 public record DropInfoResponse(String name, String description, String imageUrl,
@@ -14,6 +15,6 @@ public record DropInfoResponse(String name, String description, String imageUrl,
                                Set<LocalDate> pickupDates) {
     public static DropInfoResponse of(DropInfoResult result){
         return new DropInfoResponse(result.name(), result.description(), result.imageUrl(), result.dropStart(), result.dropEnd(), result.limitQuantity(),
-                result.price(), result.totalQuantity(), result.remainQuantity(), result.dropStatus(), result.pickupDates());
+                result.price(), result.totalQuantity(), result.remainQuantity(), result.dropStatus(), new HashSet<>(result.pickUpAvailableDates()));
     }
 }

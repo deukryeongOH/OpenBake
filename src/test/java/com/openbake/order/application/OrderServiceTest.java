@@ -19,6 +19,7 @@ import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,7 @@ class OrderServiceTest {
     private PaymentPort paymentPort;
     @Mock
     private SellerPort sellerPort;
+
     @Mock
     private MemberPort memberPort;
     @Mock

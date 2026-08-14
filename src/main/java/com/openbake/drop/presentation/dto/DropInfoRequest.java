@@ -1,6 +1,7 @@
 package com.openbake.drop.presentation.dto;
 
 
+import com.openbake.product.domain.Category;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -10,7 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
 
-public record DropProductInfoRequest(
+public record DropInfoRequest(
         @NotBlank(message = "이름을 입력해주세요.")
         String name,
 
@@ -33,6 +34,9 @@ public record DropProductInfoRequest(
         int price,
 
         @Positive(message = "총 수량은 0보다 커야 합니다.")
-        int totalQuantity
+        int totalQuantity,
+
+        @NotNull(message = "카테고리를 선택해주세요.")
+        Category category
 ) {
 }

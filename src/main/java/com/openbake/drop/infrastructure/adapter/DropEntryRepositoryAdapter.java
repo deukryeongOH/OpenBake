@@ -35,4 +35,14 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
         return dropEntryJpaRepository.existsByDropIdAndMemberId(dropId, memberId);
     }
 
+    @Override
+    public int reserve(Long dropId, Long memberId, int selectQuantity) {
+        return dropEntryJpaRepository.reserve(dropId, memberId, selectQuantity);
+    }
+
+    @Override
+    public int fail(Long dropId, Long memberId) {
+        return dropEntryJpaRepository.fail(dropId, memberId);
+    }
+
 }

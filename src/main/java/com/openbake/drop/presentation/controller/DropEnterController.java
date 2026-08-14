@@ -24,7 +24,6 @@ import java.util.List;
 public class DropEnterController {
 
     private final DropEnterService dropEnterService;
-    private final CurrentMemberProvider provider;
 
     @Operation(
             summary = "드롭 입장 확정",
@@ -37,8 +36,7 @@ public class DropEnterController {
     @PostMapping("/{dropId}/confirm-entry")
     public ApiResponse<ConfirmEntryResponse> enterDrop(
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
-        Long memberId = provider.getId();
-        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId, memberId);
+        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId);
         return ApiResponse.ok(ConfirmEntryResponse.of(result));
     }
 
@@ -55,8 +53,7 @@ public class DropEnterController {
     @PostMapping("/{dropId}/enter") // 대기열 진입 할 때
     public ApiResponse<QueueRankResponse> enterQueue(
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
-        Long memberId = provider.getId();
-        QueueRankResult result = dropEnterService.enterQueue(dropId, memberId);
+        QueueRankResult result = dropEnterService.enterQueue(dropId);
         return ApiResponse.ok(QueueRankResponse.of(result));
     }
 
@@ -67,8 +64,7 @@ public class DropEnterController {
     @GetMapping("/{dropId}/queue/rank") // 내 대기열 순번 확인 (프론트에서 지속적으로 호출)
     public ApiResponse<QueueRankResponse> getQueueRank(
             @Parameter(description = "드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
-        Long memberId = provider.getId();
-        QueueRankResult result = dropEnterService.getRank(dropId, memberId);
+        QueueRankResult result = dropEnterService.getRank(dropId);
         return ApiResponse.ok(QueueRankResponse.of(result));
     }
 

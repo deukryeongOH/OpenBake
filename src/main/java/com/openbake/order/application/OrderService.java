@@ -19,6 +19,7 @@ import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -38,12 +39,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderService {
 
+
     private final OrderRepository orderRepository;
     //주문 대상 조회·결제 후 정리용.
     private final CartPort cartPort;
     private final PaymentPort paymentPort;
-    //판매자 인가 판정 + 상호명·주소 조회용.
     private final SellerPort sellerPort;
+
     //판매자 판매내역 조회 시 구매자 표시 이름 + 판매자 전화번호 조회용
     private final MemberPort memberPort;
     //재고 복구 요청(취소 시). 차감은 order 가 하지 않고 복구만 drop 에 요청한다.
@@ -96,11 +98,13 @@ public class OrderService {
 
         // 5. 스냅샷 값 — 장바구니의 dropId 로 드롭을 조회해 주문 시점 값을 복사한다.
         //    가격/상품명/판매자는 주문 시점에 고정(스냅샷)되어 이후 드롭이 바뀌어도 유지된다.
-        DropInfo drop = dropPort.getDrop(dropId);
-        Long sellerId = drop.sellerId();
+        DropInfo dropInfo = dropPort.getDrop(dropId);
+
+        Long sellerId = dropInfo.sellerId();
         //가격은 drop 이 int 라 BigDecimal 로 변환한다.
-        BigDecimal priceSnapshot = BigDecimal.valueOf(drop.price());
-        String dropNameSnapshot = drop.name();
+        BigDecimal priceSnapshot = BigDecimal.valueOf(dropInfo.price());
+        String dropNameSnapshot = dropInfo.name();
+
         BigDecimal totalAmount = priceSnapshot.multiply(BigDecimal.valueOf(quantity));
 
         // 구매자 이름 스냅샷

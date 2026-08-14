@@ -3,12 +3,15 @@ package com.openbake.product.infrastructure;
 import com.openbake.product.domain.Category;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.ProductRepository;
+import com.openbake.product.domain.Type;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
+
 
 @Repository
 @RequiredArgsConstructor
@@ -31,17 +34,25 @@ public class ProductRepositoryAdapter implements ProductRepository {
     }
 
     @Override
-    public Page<Product> findAllBySellerId(Long sellerId, Pageable pageable) {
-        return productJpaRepository.findAllBySellerId(sellerId, pageable);
+    public List<Product> findAllBySellerId(Long sellerId) {
+        return productJpaRepository.findAllBySellerId(sellerId);
+    }
+
+
+
+    @Override
+    public Long findSellerIdById(Long id) {
+        return productJpaRepository.findSellerIdById(id);
     }
 
     @Override
-    public Page<Product> findAll(Pageable pageable) {
-        return productJpaRepository.findAll(pageable);
+    public Page<Product> findAllBySellerIdAndType(Long sellerId, Type type, Pageable pageable) {
+        return productJpaRepository.findAllBySellerIdAndType(sellerId, type, pageable);
     }
 
     @Override
-    public Page<Product> searchByKeywordAndCategory(String keyword, Category category, Pageable pageable) {
-        return productJpaRepository.searchByKeywordAndCategory(keyword, category, pageable);
+    public Page<Product> findAllByType(Type type, Pageable pageable) {
+        return productJpaRepository.findAllByType(type, pageable);
     }
+
 }

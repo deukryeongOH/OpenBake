@@ -2,16 +2,12 @@ package com.openbake.drop.application.service;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
-import com.openbake.drop.application.dto.DropInfoResult;
-import com.openbake.drop.application.dto.DropProductInfoCommand;
-import com.openbake.drop.application.dto.DropProductInfoResult;
-import com.openbake.drop.application.dto.LocalDateCommand;
-import com.openbake.drop.application.dto.TimeSlotResult;
+import com.openbake.drop.application.dto.*;
 import com.openbake.drop.application.cache.TodayDropCache;
+import com.openbake.drop.application.port.CurrentSellerPort;
+import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.domain.entity.Drop;
-import com.openbake.drop.domain.entity.DropInventory;
-import com.openbake.drop.domain.repository.DropInventoryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -22,10 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,60 +26,38 @@ import java.util.stream.Collectors;
 public class DropService {
 
     private final DropRepository dropRepository;
-    private final DropInventoryRepository dropInventoryRepository;
     private final TodayDropCache todayDropCache;
+    private final CurrentSellerPort currentSellerPort;
+    private final ProductPort productPort;
 
     @Transactional
-    public DropProductInfoResult registerDropProduct(DropProductInfoCommand command, Long sellerId) {
+    public DropInfoResult registerDrop(DropInfoCommand command) {
+        Long sellerId = currentSellerPort.getCurrentSellerId();
+
         // 하루 5개 제한 검증 & 시간대 검증
         validateFiveDropPerDay(sellerId, command.dropStart());
         // 제한 수량, 총 수량 검증
-        validateLimitQuantityWithTotalQuantity(command.LimitQuantity(), command.totalQuantity());
+        validateLimitQuantityWithTotalQuantity(command.limitQuantity(), command.totalQuantity());
 
-        DropProduct dropProduct = createDropProduct(command);
+        DropInfoResult result = productPort.registerProduct(command);
 
-        Drop drop = createDrop(command, dropProduct, sellerId);
+        Drop drop = createDrop(result);
 
-        Drop savedDrop = dropRepository.save(drop);
-
-        DropInventory dropInventory = createDropInventory(savedDrop, command);
-
-        DropInventory savedDropInventory = dropInventoryRepository.save(dropInventory);
+        dropRepository.save(drop);
 
         // 자정 캐시가 오늘 새로 등록된 드롭을 놓치지 않도록 즉시 갱신
         todayDropCache.refresh();
 
-        return DropProductInfoResult.of(savedDrop, savedDropInventory);
+        return result;
     }
 
-
-    private DropInventory createDropInventory(Drop savedDrop, DropProductInfoCommand command) {
-        return DropInventory.builder()
-                .dropId(savedDrop.getId())
-                .totalQuantity(command.totalQuantity())
-                .remainQuantity(command.totalQuantity()) // 처음에는 총 수량 = 남은 수량
-                .build();
-    }
-
-
-    private Drop createDrop(DropProductInfoCommand command, DropProduct dropProduct, Long sellerId) {
+    private Drop createDrop(DropInfoResult result) {
         return Drop.builder()
                 .dropStatus(DropStatus.UPCOMING)
-                .pickUpAvailableDates(command.pickupDates())
-                .dropProduct(dropProduct)
-                .limitQuantity(command.LimitQuantity())
-                .dropStart(command.dropStart())
-                .dropEnd(command.dropEnd())
-                .sellerId(sellerId)
-                .build();
-    }
-
-    private DropProduct createDropProduct(DropProductInfoCommand command) {
-        return DropProduct.builder()
-                .name(command.name())
-                .description(command.description())
-                .imageUrl(command.image())
-                .price(command.price())
+                .productId(result.productId())
+                .limitQuantity(result.limitQuantity())
+                .dropStart(result.dropStart())
+                .dropEnd(result.dropEnd())
                 .build();
     }
 
@@ -103,9 +74,10 @@ public class DropService {
 
         validateSlotCapacity(dropList, dropStart);
 
-        LocalDateTime startOfDay = dropDate.atStartOfDay();
-        LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
-        if (dropRepository.existsBySellerIdAndDropStartBetween(sellerId, startOfDay, endOfDay)) {
+        boolean alreadyRegisteredToday = dropList.stream()
+                .anyMatch(drop -> productPort.getSellerIdByProductId(drop.getProductId()).equals(sellerId));
+
+        if (alreadyRegisteredToday) {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
@@ -121,10 +93,11 @@ public class DropService {
 
         validateSlotCapacity(dropList, dropStart);
 
-        LocalDateTime startOfDay = dropDate.atStartOfDay();
-        LocalDateTime endOfDay = dropDate.atTime(LocalTime.MAX);
         // 이미 판매자가 등록한 날짜로 수정하려고 하면 막아야함. (판매자는 하루에 1개의 드롭만 등록할 수 있다)
-        if (dropRepository.existsBySellerIdAndDropStartBetweenAndIdNot(sellerId, startOfDay, endOfDay, dropId)) {
+        boolean alreadyRegisteredToday = dropList.stream()
+                .anyMatch(drop -> productPort.getSellerIdByProductId(drop.getProductId()).equals(sellerId));
+
+        if (alreadyRegisteredToday) {
             throw new BusinessException(ErrorCode.DUPLICATE_DROP_DATE);
         }
     }
@@ -147,14 +120,12 @@ public class DropService {
 
     @Transactional
     public void changeDropStatusActive(Long dropId) {
-        Drop drop = findDrop(dropId);
-        drop.changeStatus(DropStatus.ACTIVE);
+        dropRepository.activeStatus(dropId);
     }
 
     @Transactional
     public void changeDropStatusCompleted(Long dropId) {
-        Drop drop = findDrop(dropId);
-        drop.changeStatus(DropStatus.COMPLETED);
+        dropRepository.completeStatus(dropId);
     }
 
     private Drop findDrop(Long dropId) {
@@ -166,25 +137,38 @@ public class DropService {
     // 새 HashSet으로 복사해둬야 한다. 그냥 참조만 넘기면 세션이 끝난 뒤(JSON 직렬화 시점)
     // 초기화를 시도하다 LazyInitializationException이 난다.
     @Transactional(readOnly = true)
-    public DropInfoResult getDropProductInfo(Long dropId) {
+    public DropInfoResult getDropInfo(Long dropId) {
         Drop findDrop = findDrop(dropId);
-        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
-        return DropInfoResult.of(findDrop.getDropProduct().getName(), findDrop.getDropProduct().getDescription(),
-                findDrop.getDropProduct().getImageUrl(), findDrop.getDropStart(), findDrop.getDropEnd(),
-                findDrop.getLimitQuantity(), findDrop.getDropProduct().getPrice(), dropInventory.getTotalQuantity(), dropInventory.getRemainQuantity(), findDrop.getDropStatus(), new HashSet<>(findDrop.getPickUpAvailableDate()));
+        DropProductInfoResult result = productPort.getProductInfo(findDrop.getProductId());
+        return DropInfoResult.of(findDrop.getDropStart(), findDrop.getDropEnd(), findDrop.getLimitQuantity(), findDrop.getDropStatus(),
+                result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId());
     }
 
     // 판매자 본인이 등록한 드롭 목록 조회
     @Transactional(readOnly = true)
-    public List<DropProductInfoResult> getMyDrops(Long sellerId) {
-        return dropRepository.findAllBySellerId(sellerId).stream()
-                .map(drop -> DropProductInfoResult.of(drop, dropInventoryRepository.findByDropId(drop.getId())))
-                .toList();
+    public List<DropInfoResult> getMyDrops() {
+        Long sellerId = currentSellerPort.getCurrentSellerId();
+
+        List<DropProductInfoResult> dropProductInfoResultList = productPort.findProductListBySellerId(sellerId);
+        List<DropInfoResult> dropInfoResultList = new ArrayList<>();
+
+        for (DropProductInfoResult result : dropProductInfoResultList) {
+            if (productPort.isGeneralProduct(result.productId())) {
+                continue;
+            }
+            Drop findDrop = dropRepository.findByProductId(result.productId());
+            dropInfoResultList.add(DropInfoResult.of(findDrop.getDropStart(), findDrop.getDropEnd(), findDrop.getLimitQuantity(), findDrop.getDropStatus(),
+                    result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(), result.totalQuantity(),
+                    result.remainQuantity(), result.sellerId(), result.productId()));
+        }
+
+        return dropInfoResultList;
     }
 
     // 오늘부터 days일 동안 예정된(UPCOMING/ACTIVE) 드롭 목록 조회. dropStart 오름차순.
     @Transactional(readOnly = true)
-    public List<DropProductInfoResult> getUpcomingDrops(int days) {
+    public List<DropInfoResult> getUpcomingDrops(int days) {
         validateDays(days);
 
         LocalDateTime from = LocalDate.now().atStartOfDay();
@@ -195,7 +179,12 @@ public class DropService {
                         from,
                         to
                 ).stream()
-                .map(drop -> DropProductInfoResult.of(drop, dropInventoryRepository.findByDropId(drop.getId())))
+                .map(drop -> {
+                    DropProductInfoResult result = productPort.getProductInfo(drop.getProductId());
+                    return DropInfoResult.of(drop.getDropStart(), drop.getDropEnd(), drop.getLimitQuantity(), drop.getDropStatus(),
+                            result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(), result.totalQuantity(),
+                            result.remainQuantity(), result.sellerId(), result.productId());
+                })
                 .toList();
     }
 
@@ -207,33 +196,37 @@ public class DropService {
 
     // 판매자 본인의 드롭 수정 (시작 전인 드롭만 가능)
     @Transactional
-    public DropProductInfoResult updateDropProduct(Long dropId, Long sellerId, DropProductInfoCommand command) {
+    public DropInfoResult updateDropProduct(Long dropId, DropInfoCommand command) {
+        Long sellerId = currentSellerPort.getCurrentSellerId();
+
         Drop drop = findDrop(dropId);
+
         validateOwner(drop, sellerId);
         validateEditable(drop);
         validateFiveDropPerDayExcludingSelf(dropId, sellerId, command.dropStart());
-        validateLimitQuantityWithTotalQuantity(command.LimitQuantity(), command.totalQuantity());
+        validateLimitQuantityWithTotalQuantity(command.limitQuantity(), command.totalQuantity());
 
-        DropProduct dropProduct = createDropProduct(command);
-        drop.update(dropProduct, command.pickupDates(), command.LimitQuantity(), command.dropStart(), command.dropEnd());
-
-        DropInventory dropInventory = dropInventoryRepository.findByDropId(dropId);
-        dropInventory.resetQuantity(command.totalQuantity());
+        DropProductInfoResult result = productPort.updateProduct(drop.getProductId(), command);
+        drop.update(result.productId(), command.limitQuantity(), command.dropStart(), command.dropEnd());
 
         // 오늘 드롭의 시작/마감 시각이 바뀌었을 수 있으므로 캐시를 즉시 갱신
         todayDropCache.refresh();
 
-        return DropProductInfoResult.of(drop, dropInventory);
+        return DropInfoResult.of(drop.getDropStart(), drop.getDropEnd(), drop.getLimitQuantity(), drop.getDropStatus(),
+                result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId());
     }
 
     // 판매자 본인의 드롭 삭제 (시작 전인 드롭만 가능)
     @Transactional
-    public void deleteDropProduct(Long dropId, Long sellerId) {
+    public void deleteProduct(Long dropId) {
+        Long sellerId = currentSellerPort.getCurrentSellerId();
+
         Drop drop = findDrop(dropId);
         validateOwner(drop, sellerId);
         validateEditable(drop);
 
-        dropInventoryRepository.delete(dropInventoryRepository.findByDropId(dropId));
+        productPort.deleteDropProduct(drop.getProductId());
         dropRepository.delete(drop);
 
         // 삭제된 드롭이 캐시에 남아 스케줄러가 존재하지 않는 드롭을 참조하지 않도록 즉시 갱신
@@ -241,7 +234,7 @@ public class DropService {
     }
 
     private void validateOwner(Drop drop, Long sellerId) {
-        if (!drop.getSellerId().equals(sellerId)) {
+        if (!productPort.getSellerIdByProductId(drop.getProductId()).equals(sellerId)) {
             throw new BusinessException(ErrorCode.DROP_OWNER_MISMATCH);
         }
     }

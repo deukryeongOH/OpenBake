@@ -19,17 +19,6 @@ import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
 import com.openbake.order.domain.OrderState;
-import com.openbake.drop.application.service.DropLockService;
-import com.openbake.drop.domain.entity.Drop;
-import com.openbake.drop.domain.repository.DropRepository;
-import com.openbake.order.application.port.PaymentPort;
-import com.openbake.order.application.port.dto.PaymentResult;
-import com.openbake.product.domain.Product;
-import com.openbake.product.domain.ProductRepository;
-import com.openbake.seller.application.CurrentSellerProvider;
-import com.openbake.seller.domain.Seller;
-import com.openbake.seller.domain.SellerRepository;
-import com.openbake.settlement.application.event.PurchaseConfirmedEvent;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,9 +44,7 @@ public class OrderService {
     //주문 대상 조회·결제 후 정리용.
     private final CartPort cartPort;
     private final PaymentPort paymentPort;
-    private final ProductRepository productRepository;
-    private final CurrentSellerProvider currentSellerProvider;
-    private final SellerRepository sellerRepository;
+    private final SellerPort sellerPort;
 
     //판매자 판매내역 조회 시 구매자 표시 이름 + 판매자 전화번호 조회용
     private final MemberPort memberPort;
@@ -111,14 +98,12 @@ public class OrderService {
 
         // 5. 스냅샷 값 — 장바구니의 dropId 로 드롭을 조회해 주문 시점 값을 복사한다.
         //    가격/상품명/판매자는 주문 시점에 고정(스냅샷)되어 이후 드롭이 바뀌어도 유지된다.
-        Drop drop = dropRepository.findById(dropId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
-        Product product = productRepository.findById(drop.getProductId()).orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        DropInfo dropInfo = dropPort.getDrop(dropId);
 
-        Long sellerId = product.getSellerId();
+        Long sellerId = dropInfo.sellerId();
         //가격은 drop 이 int 라 BigDecimal 로 변환한다.
-        BigDecimal priceSnapshot = BigDecimal.valueOf(product.getPrice());
-        String dropNameSnapshot = product.getName();
+        BigDecimal priceSnapshot = BigDecimal.valueOf(dropInfo.price());
+        String dropNameSnapshot = dropInfo.name();
 
         BigDecimal totalAmount = priceSnapshot.multiply(BigDecimal.valueOf(quantity));
 

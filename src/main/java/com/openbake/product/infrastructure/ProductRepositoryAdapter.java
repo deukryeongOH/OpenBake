@@ -55,8 +55,4 @@ public class ProductRepositoryAdapter implements ProductRepository {
         return productJpaRepository.findAllByType(type, pageable);
     }
 
-    @Override
-    public Page<Product> searchByKeywordAndCategory(String keyword, Category category, Pageable pageable) {
-        return productJpaRepository.searchByKeywordAndCategory(keyword, category, pageable);
-    }
 }

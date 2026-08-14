@@ -61,8 +61,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(Exception exception) {
-        return build(HttpStatus.CONFLICT, "DR020", "다른 요청과 동시에 처리되어 실패했습니다. 다시 시도해주세요.");
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(OptimisticLockingFailureException exception) {
+        ErrorCode errorCode = ErrorCode.OPTIMISTIC_LOCK_CONFLICT;
+        return build(errorCode.getStatus(), errorCode.getCode(), errorCode.getMessage());
     }
 
 

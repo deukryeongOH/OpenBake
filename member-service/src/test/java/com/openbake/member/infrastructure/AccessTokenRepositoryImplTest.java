@@ -1,6 +1,7 @@
 package com.openbake.member.infrastructure;
 
-import com.openbake.common.security.jwt.JwtProperties;
+import com.openbake.member.infrastructure.security.jwt.AccessTokenRepositoryImpl;
+import com.openbake.member.infrastructure.security.jwt.JwtProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,12 +29,12 @@ class AccessTokenRepositoryImplTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
 
-    private com.openbake.common.security.jwt.AccessTokenRepositoryImpl accessTokenRepository;
+    private AccessTokenRepositoryImpl accessTokenRepository;
 
     @BeforeEach
     void setUp() {
         JwtProperties jwtProperties = new JwtProperties("test-secret", 1_800_000L, 1_209_600_000L);
-        accessTokenRepository = new com.openbake.common.security.jwt.AccessTokenRepositoryImpl(redisTemplate, jwtProperties);
+        accessTokenRepository = new AccessTokenRepositoryImpl(redisTemplate, jwtProperties);
     }
 
     @Test

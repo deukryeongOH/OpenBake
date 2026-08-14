@@ -4,9 +4,61 @@ on:
   push:
     branches: [ develop ]
 
+env:
+  IMAGE_BASE: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be
+
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: backend
+            context: .
+            dockerfile: Dockerfile
+          - service: payment-service
+            context: .
+            dockerfile: payment-service/Dockerfile
+          - service: api-gateway
+            context: .
+            dockerfile: api-gateway/Dockerfile
+          - service: member-service
+            context: .
+            dockerfile: member-service/Dockerfile
+          - service: elasticsearch
+            context: ./elasticsearch
+            dockerfile: Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_BASE }}-${{ matrix.service }}:latest
+            ${{ env.IMAGE_BASE }}-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -14,9 +66,17 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: GITHUB_ACTOR,GHCR_TOKEN
+          command_timeout: 15m
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
             git fetch origin
             git checkout ${{ github.ref_name }}
             git pull origin ${{ github.ref_name }}
-            docker compose -f docker-compose.yaml up -d --build --remove-orphans
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            docker compose -f docker-compose.yaml -f docker-compose.prod.yaml pull
+            docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --remove-orphans
+            docker image prune -f
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

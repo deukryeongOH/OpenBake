@@ -17,6 +17,9 @@ spring:
       pageable:
         max-page-size: 20
 
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+
   jpa:
     hibernate:
       ddl-auto: update

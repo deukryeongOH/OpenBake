@@ -119,7 +119,11 @@ const businessDuration =
  * success==USER_COUNT가 이미 품절 발생 여부까지 검증합니다.
  */
 const thresholds = {
+    // checks는 기능 정합성만 검증하고, 응답시간은 Trend threshold로 분리합니다.
     checks: ['rate==1'],
+
+    // 200과 DR007 품절(400)은 responseCallback에서 정상 응답으로 취급합니다.
+    http_req_failed: ['rate==0'],
 
     drop_lock_unexpected: ['count==0'],
     drop_lock_timeout: ['count==0'],
@@ -297,10 +301,5 @@ export default function () {
         '락 획득 시스템 오류가 아니다':
             () =>
                 !isLockTimeout,
-
-        '응답 시간이 3초 이내이다':
-            (res) =>
-                res.status > 0 &&
-                res.timings.duration < 3000,
     });
 }

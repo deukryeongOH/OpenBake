@@ -1,12 +1,20 @@
 package com.openbake.order.application;
 
-import com.openbake.cart.domain.Cart;
-import com.openbake.cart.domain.CartItem;
-import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 // member-service 모듈이 분리됨에 따라 member-service 내에 Repository를 직접 참조하던 것을 FeignClient 사용
+import com.openbake.order.application.port.CartPort;
+import com.openbake.order.application.port.DropPort;
 import com.openbake.order.application.port.MemberPort;
+import com.openbake.order.application.port.PaymentPort;
+import com.openbake.order.application.port.ReservationPort;
+import com.openbake.order.application.port.SellerPort;
+import com.openbake.order.application.port.SettlementPort;
+import com.openbake.order.application.port.dto.CartInfo;
+import com.openbake.order.application.port.dto.DropInfo;
+import com.openbake.order.application.port.dto.PaymentResult;
+import com.openbake.order.application.port.dto.PurchaseConfirmedInfo;
+import com.openbake.order.application.port.dto.SellerInfo;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
 import com.openbake.order.domain.OrderRepository;
@@ -22,9 +30,9 @@ import com.openbake.seller.application.CurrentSellerProvider;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
 import com.openbake.settlement.application.event.PurchaseConfirmedEvent;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -44,21 +52,23 @@ public class OrderService {
 
 
     private final OrderRepository orderRepository;
-    private final CartRepository cartRepository;
+    //주문 대상 조회·결제 후 정리용.
+    private final CartPort cartPort;
     private final PaymentPort paymentPort;
     private final ProductRepository productRepository;
     private final CurrentSellerProvider currentSellerProvider;
     private final SellerRepository sellerRepository;
+
     //판매자 판매내역 조회 시 구매자 표시 이름 + 판매자 전화번호 조회용
     private final MemberPort memberPort;
-    //재고 복구 요청(취소 시). 차감은 order 가 하지 않고 복구만 drop 에 동기 호출한다.
-    private final DropLockService dropLockService;
+    //재고 복구 요청(취소 시). 차감은 order 가 하지 않고 복구만 drop 에 요청한다.
+    private final ReservationPort reservationPort;
     //주문 생성 스냅샷 소스(판매자/가격/상품명) 조회용.
-    private final DropRepository dropRepository;
+    private final DropPort dropPort;
     //결제 실패 시 재고 복구·장바구니 정리(별도 트랜잭션).
     private final OrderReservationReleaser reservationReleaser;
     //구매확정 이벤트 발행. 정산 리스너가 커밋 후 별도 트랜잭션에서 받는다.
-    private final ApplicationEventPublisher eventPublisher;
+    private final SettlementPort settlementPort;
 
     //목록 페이지 크기 상한. 명세서 기준 최대 50.
     private static final int MAX_PAGE_SIZE = 50;
@@ -82,7 +92,7 @@ public class OrderService {
         }
 
         // 2. 장바구니 조회 — 없으면 CART_NOT_FOUND
-        Cart cart = cartRepository.findByMemberId(memberId)
+        CartInfo cart = cartPort.findCart(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
         // 3. 만료 확인 — 선점 재고가 이미 복구됐을 수 있는 구간
@@ -91,14 +101,13 @@ public class OrderService {
         }
 
         // 4. 픽업 날짜 선택 확인
-        LocalDate pickupDate = cart.getPickupDate();
+        LocalDate pickupDate = cart.pickupDate();
         if (pickupDate == null) {
             throw new BusinessException(ErrorCode.PICKUP_DATE_NOT_SELECTED);
         }
 
-        CartItem item = cart.getItems();
-        Long dropId = item.getDropId();
-        int quantity = item.getQuantity();
+        Long dropId = cart.dropId();
+        int quantity = cart.quantity();
 
         // 5. 스냅샷 값 — 장바구니의 dropId 로 드롭을 조회해 주문 시점 값을 복사한다.
         //    가격/상품명/판매자는 주문 시점에 고정(스냅샷)되어 이후 드롭이 바뀌어도 유지된다.
@@ -110,16 +119,20 @@ public class OrderService {
         //가격은 drop 이 int 라 BigDecimal 로 변환한다.
         BigDecimal priceSnapshot = BigDecimal.valueOf(product.getPrice());
         String dropNameSnapshot = product.getName();
+
         BigDecimal totalAmount = priceSnapshot.multiply(BigDecimal.valueOf(quantity));
 
         // 구매자 이름 스냅샷
         String buyerName = memberPort.getMember(memberId).data().name();
 
-        // 판매자 전화번호 스냅샷
-        String sellerPhoneNumber = memberPort.getMember(sellerId).data().phoneNumber();
+        // 판매자 상호명 스냅샷 — 상호가 바뀌어도 주문 당시 이름이 내역에 남아야 한다.
+        //   주소·연락처는 스냅샷하지 않는다(지도·전화는 최신값이라야 동작한다).
+        String sellerName = sellerPort.findSeller(sellerId)
+                .map(SellerInfo::sellerName)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENTITY_NOT_FOUND));
 
         // 6. 주문 생성 — 결제에 넘길 orderId 가 필요하므로 즉시 flush 해 PK 를 확보한다.
-        Order order = Order.create(memberId, sellerId, buyerName, sellerPhoneNumber, pickupDate, totalAmount);
+        Order order = Order.create(memberId, sellerId, buyerName, sellerName, pickupDate, totalAmount);
         order.addItem(OrderItem.create(dropId, quantity, priceSnapshot, dropNameSnapshot));
         Order saved = orderRepository.save(order);
 
@@ -138,7 +151,7 @@ public class OrderService {
         }
 
         // 8. 장바구니 삭제 — 결제 성공 시. 재고는 복구하지 않는다(주문이 선점을 확정한 것이므로).
-        cartRepository.delete(cart);
+        cartPort.deleteCart(memberId);
 
         // 9. 결제 후 잔액 조회
         BigDecimal balanceAfter = paymentPort.getBalance(memberId).balance();
@@ -183,7 +196,7 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public SellerOrderPageResult getSellerOrders(String orderState, int page, int size) {
-        Long sellerId = currentSellerProvider.getSellerId()
+        Long sellerId = sellerPort.getCurrentSellerId()
                 .orElseThrow(() -> new BusinessException(ErrorCode.ACCESS_DENIED));
 
         int cappedSize = Math.min(size, MAX_PAGE_SIZE);
@@ -256,7 +269,7 @@ public class OrderService {
         // 재고 복구 — 선점했던 수량을 drop 에 되돌린다(동기 호출). 재고 소유는 drop 이다.
         // 차감은 order 가 하지 않았고(담기 시점에 drop 이 함), 복구만 예외 상황에서 요청한다.
         OrderItem item = order.getOrderItem();
-        dropLockService.rollbackStock(item.getDropId(), memberId);
+        reservationPort.rollbackStock(item.getDropId(), memberId);
 
         BigDecimal balanceAfter = paymentPort.getBalance(memberId).balance();
 
@@ -280,7 +293,7 @@ public class OrderService {
 
         // 판매자 판정 — 로그인한 판매자의 sellerId 와 주문의 sellerId 가 같아야 한다.
         //   member 에 seller role 이 없어 role 로는 판정할 수 없다.
-        Long sellerId = currentSellerProvider.getSellerId()
+        Long sellerId = sellerPort.getCurrentSellerId()
                 .orElseThrow(() -> new BusinessException(ErrorCode.ACCESS_DENIED));
         if (!sellerId.equals(order.getSellerId())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
@@ -345,7 +358,7 @@ public class OrderService {
     private void publishPurchaseConfirmed(Order order) {
         OrderItem item = order.getOrderItem();
 
-        eventPublisher.publishEvent(new PurchaseConfirmedEvent(
+        settlementPort.publishPurchaseConfirmed(new PurchaseConfirmedInfo(
                 //정산이 중복 수신을 걸러내는 멱등 키.
                 UUID.randomUUID().toString(),
                 order.getOrderId(),
@@ -379,13 +392,13 @@ public class OrderService {
         }
     }
 
-    //목록 항목 조립. dropName 은 스냅샷, sellerName 은 seller 조회.
+    //목록 항목 조립. dropName·sellerName 모두 주문 시점 스냅샷이라 건마다 조회하지 않는다.
     private OrderSummaryResult toSummary(Order order) {
         OrderItem item = order.getOrderItem();
         return new OrderSummaryResult(
                 order.getOrderId(),
                 item.getDropNameSnapshot(),
-                resolveSellerName(order.getSellerId()),
+                order.getSellerName(),
                 item.getQuantity(),
                 order.getTotalAmount(),
                 order.getOrderState(),
@@ -394,23 +407,35 @@ public class OrderService {
         );
     }
 
-    //판매자 상호명 조회. 판매자가 없으면 null.
-    private String resolveSellerName(Long sellerId) {
-        return sellerRepository.findById(sellerId)
-                .map(Seller::getBakeryName)
-                .orElse(null);
-    }
-
-    //주문 상세용 판매자 정보 조립. 지도 보기/전화하기 버튼을 위해 사업장 주소·연락처를 포함한다.
-    //연락처는 seller 가 직접 갖지 않고 연결된 member 의 phoneNumber 를 사용한다.
+    /**
+     * 주문 상세용 판매자 정보 조립. 지도 보기/전화하기 버튼을 위해 사업장 주소·연락처를 포함한다.
+     *
+     * 상호명은 주문 시점 스냅샷을 쓴다(상호가 바뀌어도 주문 당시 이름이 남아야 한다).
+     * 주소·연락처는 지금 값을 읽는다. 옛 주소로 길을 안내하거나 옛 번호로 전화를 걸면
+     * 버튼이 하는 일 자체가 실패하기 때문이다.
+     *
+     * sellers 는 삭제 경로가 없어 조회가 빈 값일 일은 사실상 없다. 그래도 빈 값이면
+     * 주소·연락처만 null 로 두고, 프론트는 값이 없는 버튼을 비활성화한다.
+     *
+     * 연락처는 seller 가 직접 갖지 않아 sellers.member_id 로 회원을 한 번 더 조회한다.
+     */
     private OrderDetailResult.SellerInfo resolveSellerInfo(Order order) {
-        return sellerRepository.findById(order.getSellerId())
+        return sellerPort.findSeller(order.getSellerId())
                 .map(seller -> new OrderDetailResult.SellerInfo(
                         order.getSellerId(),
-                        seller.getBakeryName(),
-                        seller.getBusinessAddress(),
-                        order.getSellerPhoneNumber()))
-                .orElse(new OrderDetailResult.SellerInfo(order.getSellerId(), null, null, null));
+                        order.getSellerName(),
+                        seller.address(),
+                        resolveSellerPhoneNumber(seller.memberId())))
+                .orElse(new OrderDetailResult.SellerInfo(
+                        order.getSellerId(), order.getSellerName(), null, null));
+    }
+
+    //판매자 연락처 조회. 연결된 회원이 없거나 번호를 등록하지 않았으면 null.
+    private String resolveSellerPhoneNumber(Long sellerMemberId) {
+        if (sellerMemberId == null) {
+            return null;
+        }
+        return memberPort.getMember(sellerMemberId).data().phoneNumber();
     }
 
     //판매자 판매내역 목록 항목 조립. dropId/dropName 은 스냅샷, buyerName 은 member 조회.

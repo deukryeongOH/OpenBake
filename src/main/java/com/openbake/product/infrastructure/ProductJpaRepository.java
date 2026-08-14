@@ -1,5 +1,6 @@
 package com.openbake.product.infrastructure;
 
+import com.openbake.product.domain.Category;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.Type;
 import org.springframework.data.domain.Page;
@@ -22,5 +23,6 @@ public interface ProductJpaRepository extends JpaRepository<Product, Long> {
     Page<Product> findAllBySellerIdAndType(Long sellerId, Type type, Pageable pageable);
 
     Page<Product> findAllByType(Type type, Pageable pageable);
+
 }
 

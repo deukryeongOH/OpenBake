@@ -39,9 +39,14 @@ public class Order {
     @Column(nullable = false)
     private String buyerName;
 
-    // 판매자 전화번호 스냅샷
-    @Column(nullable = false)
-    private String sellerPhoneNumber;
+    // 판매자 상호명 스냅샷.
+    // 상호가 바뀌면 과거 주문 내역의 가게 이름까지 소급해서 바뀌므로 주문 시점 값을 고정한다.
+    // dropNameSnapshot·priceSnapshot 과 같은 이유다. 목록 조회에서 건마다 판매자를
+    // 다시 읽지 않아도 되는 건 부수 효과.
+    // 연락처·주소는 스냅샷하지 않는다. 전화 걸기·지도 보기에 쓰이는 값이라
+    // 옛 값이 남으면 동작 자체가 실패한다. 조회 시점의 최신값을 쓴다.
+    @Column
+    private String sellerName;
 
     @Column(nullable = false)
     private LocalDate pickupDate;
@@ -64,13 +69,13 @@ public class Order {
     private LocalDateTime cancelAt;
 
     //정적 팩토리. 생성 시 결제완료(PAID) 상태로 시작한다.
-    public static Order create(Long memberId, Long sellerId, String buyerName, String sellerPhoneNumber,
+    public static Order create(Long memberId, Long sellerId, String buyerName, String sellerName,
             LocalDate pickupDate, BigDecimal totalAmount) {
         Order order = new Order();
         order.memberId = memberId;
         order.sellerId = sellerId;
         order.buyerName = buyerName;
-        order.sellerPhoneNumber = sellerPhoneNumber;
+        order.sellerName = sellerName;
         order.pickupDate = pickupDate;
         order.totalAmount = totalAmount;
         order.orderState = OrderState.PAID;

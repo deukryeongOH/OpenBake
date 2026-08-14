@@ -1,5 +1,6 @@
 package com.openbake.product.infrastructure;
 
+import com.openbake.product.domain.Category;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.ProductRepository;
 import com.openbake.product.domain.Type;
@@ -51,5 +52,10 @@ public class ProductRepositoryAdapter implements ProductRepository {
     @Override
     public Page<Product> findAllByType(Type type, Pageable pageable) {
         return productJpaRepository.findAllByType(type, pageable);
+    }
+
+    @Override
+    public Page<Product> searchByKeywordAndCategory(String keyword, Category category, Pageable pageable) {
+        return productJpaRepository.searchByKeywordAndCategory(keyword, category, pageable);
     }
 }

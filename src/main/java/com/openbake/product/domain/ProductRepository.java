@@ -22,4 +22,5 @@ public interface ProductRepository {
     Page<Product> findAllBySellerIdAndType(Long sellerId, Type type, Pageable pageable);
 
     Page<Product> findAllByType(Type type, Pageable pageable);
+
 }

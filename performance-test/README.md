@@ -313,3 +313,56 @@ lock 테스트
 ```
 
 현재 주요 성능 병목 후보는 **동시 요청 증가에 따른 재고 선점 Lock 대기 시간**입니다.
+---
+
+## 11. Phase 1 결과 저장 방식
+
+`enter`, `confirm`, `lock` 실행 결과는 이제 자동으로 다음 위치에 저장됩니다.
+
+```text
+results/runs/YYYYMMDD-HHMMSS-<test>-u<USER_COUNT>-drop<DROP_ID>/
+├── console.txt
+├── metadata.env
+└── summary.json
+```
+
+예:
+
+```bash
+./run-k6.sh lock
+```
+
+실행 후:
+
+```text
+results/runs/20260812-163000-lock-concurrency-u300-drop10/
+```
+
+`check`는 기능 정합성을 검증하고, 응답시간은 각 API의 P95/P99 Threshold로 별도 검증합니다.
+따라서 평균이나 단일 최대값 대신 기존 NFR 기준을 일관되게 비교할 수 있습니다.
+
+다음 단계에서는 Grafana와 서버 지표 확인을 먼저 추가하고, 이후 이 `summary.json`을 기준으로 200~500 사용자 구간의 Capacity Test를 추가합니다.
+
+---
+
+## Phase 2 - Prometheus/Grafana 연동
+
+Monitoring stack을 먼저 실행합니다.
+
+```bash
+cd ../monitoring
+cp .env.monitoring.example .env.monitoring
+./run-monitoring.sh
+./verify-monitoring.sh
+```
+
+선택적으로 k6 결과도 Prometheus에 실시간 전송할 수 있습니다.
+
+```env
+K6_PROMETHEUS_RW_ENABLED=true
+K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write
+K6_PROMETHEUS_RW_TREND_STATS='p(95),p(99),min,max'
+K6_PROMETHEUS_RW_PUSH_INTERVAL=1s
+```
+
+기본값은 `false`이며, `summary.json`과 `console.txt` 저장은 Remote Write 사용 여부와 무관하게 계속 유지됩니다.

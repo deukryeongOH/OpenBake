@@ -74,19 +74,6 @@ public class Drop {
         }
     }
 
-    private void validatePickUpDates(LocalDateTime dropEnd, Set<LocalDate> pickUpAvailableDates) {
-        if (pickUpAvailableDates == null || pickUpAvailableDates.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_PICKUP_DATE, "픽업 가능 날짜는 최소 하루 이상 필요합니다.");
-        }
-
-        LocalDate dropEndDate = dropEnd.toLocalDate();
-        boolean hasInvalidDate = pickUpAvailableDates.stream()
-                .anyMatch(date -> !date.isAfter(dropEndDate));
-
-        if (hasInvalidDate) {
-            throw new BusinessException(ErrorCode.INVALID_PICKUP_DATE); // 기본 메세지 사용
-        }
-    }
     // 대기열 진입용 시간 검증 (재고 조회 없이 시간만 체크)
     public boolean isAccessible(LocalDateTime now) {
         // 이미 마감 처리된 드롭은 시각과 상관없이 거부
@@ -95,10 +82,6 @@ public class Drop {
         }
         // DB 상태가 UPCOMING이어도 실시간 시각이 시작과 종료 사이라면 통과
         return !now.isBefore(this.dropStart) && !now.isAfter(this.dropEnd);
-    }
-
-    public void changeStatus(DropStatus dropStatus) {
-        this.dropStatus = dropStatus;
     }
 
     // 시작 전(UPCOMING)인 드롭만 판매자가 수정/삭제할 수 있다 (시작 후에는 대기열/재고 선점 데이터와 어긋날 수 있음)

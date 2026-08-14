@@ -120,14 +120,12 @@ public class DropService {
 
     @Transactional
     public void changeDropStatusActive(Long dropId) {
-        Drop drop = findDrop(dropId);
-        drop.changeStatus(DropStatus.ACTIVE);
+        dropRepository.activeStatus(dropId);
     }
 
     @Transactional
     public void changeDropStatusCompleted(Long dropId) {
-        Drop drop = findDrop(dropId);
-        drop.changeStatus(DropStatus.COMPLETED);
+        dropRepository.completeStatus(dropId);
     }
 
     private Drop findDrop(Long dropId) {

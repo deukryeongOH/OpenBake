@@ -61,4 +61,14 @@ public class DropRepositoryAdapter implements DropRepository {
     public Drop findByProductId(Long productId) {
         return dropJpaRepository.findByProductId(productId).orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
     }
+
+    @Override
+    public void activeStatus(Long dropId) {
+        dropJpaRepository.activeStatus(dropId);
+    }
+
+    @Override
+    public void completeStatus(Long dropId) {
+        dropJpaRepository.completeStatus(dropId);
+    }
 }

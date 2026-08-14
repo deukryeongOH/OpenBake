@@ -37,13 +37,11 @@ public class DropLockService {
         Long memberId = currentMemberPort.getCurrentMemberId();
         // 1인당 제한 수량과 선택 수량 검증
         checkLimitQuantityPerPerson(dropId, command.quantity());
-        // 남은 수량과 선택 수량 검증
-        checkSelectQuantity(dropId, command.quantity());
 
         decreaseQuantity(dropId, memberId, command.quantity());
     }
 
-    @Transactional
+//    @Transactional 지금은 불필요 나중 분산락 적용해 DropLockFacade에서 호출 시 적용
     public void decreaseQuantity(Long dropId, Long memberId, int selectQuantity) {
         Drop drop = findDrop(dropId);
         if(dropEntryRepository.reserve(dropId, memberId, selectQuantity) == 0){
@@ -51,7 +49,7 @@ public class DropLockService {
         } // 이 reserve를 실행하고 재고를 차감하기 전에 오류 발생해서 재고 차감을 못해도 한 트랜잭션 안에 있어 다 롤백 (but 추후에 FeignClient로 통신하게 되면 그땐 진짜 문제)
 
         if (productPort.decreaseQuantity(drop.getProductId(), selectQuantity) == 0) {
-            dropService.changeDropStatusCompleted(dropId);
+            dropService.changeDropStatusCompleted(dropId); // 위에서 dropEntryRepository.reserve 호출로 DB 값이 바뀌어 detached 상태라 drop을 바로 사용하지 않고 dropId를 통해 DB접근을 다시 해 Drop을 새로 받아 상태 변경을 하는게 맞음.
             queueManager.markSoldOut(dropId);
         }
     }

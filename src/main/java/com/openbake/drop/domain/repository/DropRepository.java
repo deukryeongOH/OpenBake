@@ -29,4 +29,7 @@ public interface DropRepository {
 
     Drop findByProductId(Long aLong);
 
+    void activeStatus(Long dropId);
+
+    void completeStatus(Long dropId);
 }

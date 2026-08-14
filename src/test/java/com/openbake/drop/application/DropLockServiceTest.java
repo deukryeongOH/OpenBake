@@ -146,7 +146,6 @@ class DropLockServiceTest {
         // given
         given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
-        given(productPort.getProductInfo(productId)).willReturn(productInfo(100));
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
         given(productPort.decreaseQuantity(productId, 3)).willReturn(97);
 
@@ -254,7 +253,7 @@ class DropLockServiceTest {
                 .dropEnd(LocalDateTime.of(2028, 7, 25, 10, 0))
                 .build();
         ReflectionTestUtils.setField(soldOutDrop, "id", dropId);
-        soldOutDrop.changeStatus(DropStatus.COMPLETED); // 품절로 인해 COMPLETED된 상태 재현
+        ReflectionTestUtils.setField(soldOutDrop, "dropStatus", DropStatus.COMPLETED); // 품절로 인해 COMPLETED된 상태 재현
 
         ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
@@ -288,7 +287,7 @@ class DropLockServiceTest {
         // 드롭 진행 시간은 항상 1시간이므로 dropStart/dropEnd를 함께 과거로 되돌린다
         ReflectionTestUtils.setField(endedDrop, "dropStart", now.minusHours(1).minusMinutes(1));
         ReflectionTestUtils.setField(endedDrop, "dropEnd", now.minusMinutes(1)); // 마감 시각을 과거로 조정
-        endedDrop.changeStatus(DropStatus.COMPLETED);
+        ReflectionTestUtils.setField(endedDrop, "dropStatus", DropStatus.COMPLETED);
 
         ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))

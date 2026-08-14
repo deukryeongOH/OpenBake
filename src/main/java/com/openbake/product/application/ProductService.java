@@ -124,11 +124,13 @@ public class ProductService {
 
     }
 
+    // delete Drop product
     @Transactional
     public void deleteDropProduct(Long productId) {
         deleteProduct(productId, Type.DROP);
     }
 
+    // delete General product
     @Transactional
     public void deleteGeneralProduct(Long productId) {
         deleteProduct(productId, Type.GENERAL);
@@ -147,7 +149,7 @@ public class ProductService {
         return productRepository.findAllByType(Type.GENERAL, pageable).map(this::toResult);
     }
 
-    @Transactional // 일반 상품 재고 차감
+    @Transactional
     public int decreaseStock(Long productId, int quantity) {
         if (quantity <= 0) {
             throw new BusinessException(ErrorCode.QUANTITY_CAN_NOT_BE_MINUS);

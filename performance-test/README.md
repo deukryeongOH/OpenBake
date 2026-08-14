@@ -366,3 +366,19 @@ K6_PROMETHEUS_RW_PUSH_INTERVAL=1s
 ```
 
 기본값은 `false`이며, `summary.json`과 `console.txt` 저장은 Remote Write 사용 여부와 무관하게 계속 유지됩니다.
+
+---
+
+## Phase 3 - Capacity Point 탐색
+
+모니터링이 정상 연결된 뒤 `capacity/README.md`를 따라 Lock capacity scan을 실행합니다.
+
+```bash
+cp capacity/capacity-plan.example.csv capacity/capacity-plan.csv
+# 각 단계의 독립 Drop ID 입력
+./capacity/run-lock-capacity-scan.sh
+python3 capacity/analyze-capacity.py
+```
+
+`lock-start`는 상태 변경 API이므로 같은 Drop/사용자를 장시간 반복 호출하지 않습니다.
+각 사용자 수 단계마다 사전 상태가 준비된 독립 Drop을 사용해 결과 오염을 방지합니다.

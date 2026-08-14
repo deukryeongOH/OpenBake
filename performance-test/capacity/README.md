@@ -1,0 +1,60 @@
+# Phase 3 - Lock Capacity Scan
+
+## 목적
+
+현재 `lock-start`는 재고 및 참여 상태를 변경하는 API이므로 같은 사용자가 장시간 반복 호출하는
+일반적인 `ramping-vus` 형태를 그대로 적용하면 비즈니스 상태 오류가 섞입니다.
+
+따라서 Phase 3의 첫 단계에서는 **독립적으로 준비된 Drop을 사용자 수별로 나누어 한 번씩 동시 요청**하고,
+200 → 250 → 300 → 350 → 400 → 450 → 500 구간에서 P95/P99, 오류, 서버 지표가 급변하는 지점을 찾습니다.
+
+이 단계는 `capacity point 탐색용 concurrent-step scan`입니다. 지속적인 정상 트래픽을 재현하는 Load Test는
+별도 Phase에서 반복 가능한 조회/전체 사용자 플로우와 함께 구성합니다.
+
+## 사전조건
+
+각 Capacity step마다 독립 Drop을 준비합니다.
+
+- 대상 사용자들이 `enter` 및 `confirm-entry`를 완료한 상태
+- `EXPECTED_SUCCESS` 이상을 처리할 수 있는 재고
+- 이전 step의 상태가 다음 step에 영향을 주지 않는 별도 Drop 또는 완전히 초기화된 Drop
+- `users.json`은 최대 step 이상의 사용자를 포함
+- Prometheus `openbake-core` Target이 UP
+- Grafana Dashboard에서 Core 지표 확인 가능
+
+## 실행
+
+```bash
+cd performance-test
+cp capacity/capacity-plan.example.csv capacity/capacity-plan.csv
+```
+
+`capacity-plan.csv`의 `drop_id`를 실제 테스트 Drop으로 변경합니다.
+
+```bash
+chmod +x capacity/run-lock-capacity-scan.sh
+./capacity/run-lock-capacity-scan.sh
+```
+
+결과 집계:
+
+```bash
+python3 capacity/analyze-capacity.py
+```
+
+생성 파일:
+
+- `capacity/capacity-summary.csv`
+- `capacity/capacity-summary.md`
+
+## 판정
+
+현재 Lock NFR:
+
+- P95 < 1500ms
+- P99 < 3000ms
+- Lock timeout = 0
+- Unexpected = 0
+
+사용자 수 증가에 비해 throughput이 더 이상 증가하지 않거나, P95/P99가 급증하거나,
+Tomcat/Hikari/JVM 지표가 포화되는 구간을 Capacity Point 후보로 봅니다.

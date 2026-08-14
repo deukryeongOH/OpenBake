@@ -18,9 +18,30 @@ if [[ ! -f "$ENV_FILE" ]]; then
     exit 1
 fi
 
+# CLI에서 USER_COUNT=300 ./run-k6.sh lock 처럼 전달한 값은
+# .env.k6보다 우선하도록 보존합니다. Capacity scan이 이 동작을 사용합니다.
+OVERRIDE_VARS=(
+    CORE_BASE_URL MEMBER_BASE_URL DROP_ID USER_COUNT START_INDEX QUANTITY
+    EXPECTED_SUCCESS EXPECTED_SOLD_OUT LOGIN_PATH TEST_PASSWORD TOKEN_PATH
+    EMAIL_FIELD PASSWORD_FIELD EMAIL_PREFIX EMAIL_DOMAIN OUTPUT_FILE REQUEST_TIMEOUT
+    K6_PROMETHEUS_RW_ENABLED K6_PROMETHEUS_RW_SERVER_URL
+    K6_PROMETHEUS_RW_TREND_STATS K6_PROMETHEUS_RW_PUSH_INTERVAL
+)
+declare -A CALLER_OVERRIDES=()
+for var in "${OVERRIDE_VARS[@]}"; do
+    if [[ -n "${!var+x}" ]]; then
+        CALLER_OVERRIDES["$var"]="${!var}"
+    fi
+done
+
 set -a
 source "$ENV_FILE"
 set +a
+
+for var in "${!CALLER_OVERRIDES[@]}"; do
+    printf -v "$var" '%s' "${CALLER_OVERRIDES[$var]}"
+    export "$var"
+done
 
 require_var() {
     local name="$1"

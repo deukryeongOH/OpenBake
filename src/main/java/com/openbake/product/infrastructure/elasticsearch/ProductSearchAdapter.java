@@ -58,7 +58,8 @@ public class ProductSearchAdapter implements ProductSearchPort {
             boolBuilder.must(Query.of(q -> q
                     .multiMatch(m -> m
                             .query(keyword)
-                            .fields("name", "description")
+                            .fields("name^3", "description")
+                            .fuzziness("AUTO")
                     )
             ));
         }

@@ -6,11 +6,32 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  packages: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     services:
+      elasticsearch:
+        image: ghcr.io/prgrms-be-adv-devcourse/openbake-elasticsearch:9.0.3
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 9200:9200
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms256m -Xmx256m"
+        options: >-
+          --health-cmd "curl -f http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 30s
+
       redis:
         image: redis:7
         ports:

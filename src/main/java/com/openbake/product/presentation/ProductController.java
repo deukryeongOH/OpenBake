@@ -1,6 +1,7 @@
 package com.openbake.product.presentation;
 
 import com.openbake.common.response.ApiResponse;
+import com.openbake.product.application.ProductSearchService;
 import com.openbake.product.application.ProductService;
 import com.openbake.product.application.dto.ProductInfoCommand;
 import com.openbake.product.application.dto.ProductInfoResult;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ProductController {
     private final ProductService productService;
+    private final ProductSearchService productSearchService;
 
     @PostMapping("/register")
     public ApiResponse<ProductInfoResponse> registerGeneralProduct(@Valid @RequestBody ProductInfoRequest request){
@@ -63,10 +65,11 @@ public class ProductController {
     // 홈 화면에 상품 리스트 보여주기 + 검색
     @GetMapping("/product-list")
     public ApiResponse<PagedModel<ProductInfoResponse>> getGeneralProductList(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String category,
             @PageableDefault(size = 20, sort = "category", direction = Sort.Direction.ASC) Pageable pageable
             ){
-        Page<ProductInfoResult> productPage = productService.getProductList(pageable);
-
+        Page<ProductInfoResult> productPage = productSearchService.search(keyword, category, pageable);
 
         return ApiResponse.ok(new PagedModel<>(productPage.map(ProductInfoResponse::of)));
     }

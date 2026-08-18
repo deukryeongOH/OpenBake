@@ -5,7 +5,6 @@ import com.openbake.common.exception.ErrorCode;
 import com.openbake.product.application.dto.ProductInfoCommand;
 import com.openbake.product.application.dto.ProductInfoResult;
 import com.openbake.product.domain.*;
-
 import com.openbake.product.application.event.ProductIndexEvent;
 import com.openbake.product.application.port.CurrentSellerPort;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +44,7 @@ public class ProductService {
                 .build();
 
         ProductInventory productInventory = ProductInventory.builder()
+                .productId(product.getId())
                 .remainQuantity(command.totalQuantity())
                 .totalQuantity(command.totalQuantity())
                 .build();
@@ -172,6 +172,12 @@ public class ProductService {
 
         ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
 
+        if (productInventory.getRemainQuantity() == 0) {
+            Product product = getProduct(productId);
+            product.markSoldOut();
+            eventPublisher.publishEvent(ProductIndexEvent.saved(product));
+        }
+
         return productInventory.getRemainQuantity();
     }
 
@@ -185,6 +191,12 @@ public class ProductService {
         }
 
         ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+        Product product = getProduct(productId);
+
+        if (product.getStatus() == ProductStatus.SOLD_OUT && productInventory.getRemainQuantity() > 0) {
+            product.markSelling();
+            eventPublisher.publishEvent(ProductIndexEvent.saved(product));
+        }
 
         return productInventory.getRemainQuantity();
     }
@@ -217,8 +229,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ProductInfoResult getProductInfo(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        Product product = getProduct(productId);
 
         ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
 
@@ -250,8 +261,20 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public boolean isGeneralProduct(Long productId) {
-        Product product = productRepository.findById(productId).orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        Product product = getProduct(productId);
 
         return product.getType() == Type.GENERAL;
+    }
+
+    @Transactional
+    public void updateImageUrl(Long productId, String imageUrl) {
+        if (imageUrl == null) {
+            throw new BusinessException(ErrorCode.IMAGE_NOT_FOUND);
+        }
+        Product product = getProduct(productId);
+        product.updateImageUrl(imageUrl);
+
+        productRepository.save(product);
+
     }
 }

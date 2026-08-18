@@ -74,6 +74,7 @@ public enum ErrorCode {
     QUANTITY_CAN_NOT_BE_MINUS(HttpStatus.BAD_REQUEST, "PR003", "선택 수량은 음수가 될 수 없습니다."),
     PRODUCT_INVENTORY_NOT_FOUND(HttpStatus.NOT_FOUND, "PR004", "인벤토리가 없습니다."),
     INVALID_PRODUCT_TYPE(HttpStatus.BAD_REQUEST, "PR005", "상품 타입 불일치"),
+    IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "PR006", "상품 이미지를 업로드 해주세요."),
 
     //cart - CA
     CART_ALREADY_EXISTS(HttpStatus.CONFLICT, "CA001", "이미 장바구니에 담긴 상품이 있습니다."),

@@ -44,6 +44,10 @@ public class Product {
     @Column(nullable = false)
     private Category category; // 상품 카테고리
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ProductStatus status = ProductStatus.SELLING; // 상품 상태 (판매중/품절)
+
     @ElementCollection(fetch = FetchType.LAZY)
     @BatchSize(size = 20)
     @CollectionTable(
@@ -119,5 +123,17 @@ public class Product {
         if (hasPastDate) {
             throw new BusinessException(ErrorCode.INVALID_PICKUP_DATE, "픽업 가능 날짜는 오늘 이후여야 합니다.");
         }
+    }
+
+    public void updateImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    public void markSoldOut() {
+        this.status = ProductStatus.SOLD_OUT;
+    }
+
+    public void markSelling() {
+        this.status = ProductStatus.SELLING;
     }
 }

@@ -3,6 +3,7 @@ package com.openbake.product.infrastructure.elasticsearch;
 import com.openbake.product.application.port.ProductSearchPort;
 import com.openbake.product.domain.Category;
 import com.openbake.product.domain.Product;
+import com.openbake.product.domain.ProductStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
@@ -55,9 +56,19 @@ public class ProductSearchAdapter implements ProductSearchPort {
     public List<String> autocomplete(String prefix, int size) {
         NativeQuery query = NativeQuery.builder()
                 .withQuery(Query.of(q -> q
-                        .match(m -> m
-                                .field("name.autocomplete")
-                                .query(prefix)
+                        .bool(b -> b
+                                .must(m -> m
+                                        .match(mt -> mt
+                                                .field("name.autocomplete")
+                                                .query(prefix)
+                                        )
+                                )
+                                .filter(f -> f
+                                        .term(t -> t
+                                                .field("status")
+                                                .value(ProductStatus.SELLING.name())
+                                        )
+                                )
                         )
                 ))
                 .withPageable(Pageable.ofSize(size))
@@ -74,6 +85,14 @@ public class ProductSearchAdapter implements ProductSearchPort {
 
     private NativeQuery buildSearchQuery(String keyword, Category category, Pageable pageable) {
         BoolQuery.Builder boolBuilder = new BoolQuery.Builder();
+
+        // 판매중 상품만 필터링
+        boolBuilder.filter(Query.of(q -> q
+                .term(t -> t
+                        .field("status")
+                        .value(ProductStatus.SELLING.name())
+                )
+        ));
 
         if (keyword != null && !keyword.isBlank()) {
             boolBuilder.must(Query.of(q -> q

@@ -2,6 +2,7 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 import { getUserForVu, users } from './k6-users.js';
+import { getAuthHeaders } from './k6-auth.js';
 
 const CORE_BASE_URL =
     __ENV.CORE_BASE_URL ?? 'http://localhost:8080';
@@ -195,7 +196,7 @@ export default function () {
             headers: {
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${user.token}`,
+                ...getAuthHeaders(user),
             },
 
             /*

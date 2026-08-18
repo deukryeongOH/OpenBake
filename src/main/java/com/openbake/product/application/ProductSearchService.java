@@ -54,6 +54,14 @@ public class ProductSearchService {
         return new PageImpl<>(results, pageable, totalHits);
     }
 
+    @Transactional(readOnly = true)
+    public List<String> autocomplete(String prefix) {
+        if (prefix == null || prefix.isBlank()) {
+            return List.of();
+        }
+        return productSearchPort.autocomplete(prefix, 10);
+    }
+
     private ProductInfoResult toResult(Product product) {
         ProductInventory inventory = productInventoryRepository.findByProductId(product.getId());
 

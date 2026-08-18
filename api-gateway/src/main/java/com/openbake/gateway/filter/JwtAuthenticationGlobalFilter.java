@@ -10,6 +10,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -56,6 +57,12 @@ public class JwtAuthenticationGlobalFilter
             GatewayFilterChain chain
     ) {
         if (!isApiRequest(exchange)) {
+            return chain.filter(exchange);
+        }
+
+        // CORS preflight는 인증 개념이 없는 브라우저 자체 요청이라 무조건 통과시킨다.
+        // 실제 CORS 허용 여부는 CorsWebFilter(globalcors 설정)가 별도로 판단한다.
+        if (exchange.getRequest().getMethod() == HttpMethod.OPTIONS) {
             return chain.filter(exchange);
         }
 

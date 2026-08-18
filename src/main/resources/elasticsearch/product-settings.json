@@ -1,10 +1,33 @@
 {
   "analysis": {
+    "tokenizer": {
+      "nori_tokenizer_mixed": {
+        "type": "nori_tokenizer",
+        "decompound_mode": "mixed"
+      }
+    },
+    "filter": {
+      "synonym_filter": {
+        "type": "synonym",
+        "synonyms": [
+          "빵, 브레드, bread",
+          "케이크, 케잌, cake",
+          "크루아상, 크로와상, croissant",
+          "쿠키, 과자, cookie",
+          "타르트, tart",
+          "마카롱, macaron",
+          "초콜릿, 초코, chocolate",
+          "딸기, 스트로베리, strawberry",
+          "바닐라, 바닐라빈, vanilla",
+          "크림, cream"
+        ]
+      }
+    },
     "analyzer": {
       "nori_analyzer": {
         "type": "custom",
-        "tokenizer": "nori_tokenizer",
-        "filter": ["lowercase"]
+        "tokenizer": "nori_tokenizer_mixed",
+        "filter": ["lowercase", "synonym_filter"]
       }
     }
   }

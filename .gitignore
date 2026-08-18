@@ -56,6 +56,7 @@ Thumbs.db
 
 ### local ###
 run-local.sh
+scripts/setup-test-data.sh
 .gstack
 bmad-output
 

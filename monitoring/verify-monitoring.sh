@@ -5,8 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env.monitoring"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
 GRAFANA_URL="${GRAFANA_URL:-http://localhost:3001}"
-REQUIRE_LOCK_METRICS_PRESET="${REQUIRE_LOCK_METRICS-}"
-REQUIRE_LOCK_METRICS_WAS_SET="${REQUIRE_LOCK_METRICS+x}"
 
 if [[ -f "$ENV_FILE" ]]; then
     set -a
@@ -15,11 +13,6 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 REQUIRED_PROMETHEUS_JOBS="${REQUIRED_PROMETHEUS_JOBS:-openbake-core}"
-if [[ "$REQUIRE_LOCK_METRICS_WAS_SET" == "x" ]]; then
-    REQUIRE_LOCK_METRICS="$REQUIRE_LOCK_METRICS_PRESET"
-else
-    REQUIRE_LOCK_METRICS="${REQUIRE_LOCK_METRICS:-false}"
-fi
 
 echo "========================================"
 echo " OpenBake Monitoring Verification"
@@ -75,11 +68,7 @@ if failed:
 PY
 
 printf '\n[5/5] Core metric availability\n'
-VERIFY_METRIC_ARGS=(--prometheus-url "$PROMETHEUS_URL" --job openbake-core)
-if [[ "$REQUIRE_LOCK_METRICS" == "true" ]]; then
-    VERIFY_METRIC_ARGS+=(--require-lock-metrics)
-fi
-python3 "$SCRIPT_DIR/verify-metrics.py" "${VERIFY_METRIC_ARGS[@]}"
+python3 "$SCRIPT_DIR/verify-metrics.py" --prometheus-url "$PROMETHEUS_URL" --job openbake-core
 
 printf '\nGrafana dashboard:\n'
 echo "  ${GRAFANA_URL}/dashboards"

@@ -97,9 +97,6 @@ const lockSuccess =
 const soldOut =
     new Counter('drop_lock_sold_out');
 
-const lockTimeout =
-    new Counter('drop_lock_timeout');
-
 const invalidState =
     new Counter('drop_lock_invalid_state');
 
@@ -123,11 +120,10 @@ const thresholds = {
     // checks는 기능 정합성만 검증하고, 응답시간은 Trend threshold로 분리합니다.
     checks: ['rate==1'],
 
-    // 200과 DR007 품절(400)은 responseCallback에서 정상 응답으로 취급합니다.
+    // 200과 기대 가능한 재고 부족 400은 responseCallback에서 정상 응답으로 취급합니다.
     http_req_failed: ['rate==0'],
 
     drop_lock_unexpected: ['count==0'],
-    drop_lock_timeout: ['count==0'],
     drop_lock_invalid_state: ['count==0'],
 
     drop_lock_success: [
@@ -214,10 +210,9 @@ export default function () {
             },
 
             /*
-             * 서버 lock 대기 시간이 최대 3초이므로
-             * HTTP timeout은 그보다 크게 둡니다.
+             * DB row contention과 connection 대기를 포함한 상한입니다.
              */
-            timeout: '6s',
+            timeout: '10s',
         },
     );
 
@@ -233,39 +228,19 @@ export default function () {
 
     const isSoldOut =
         response.status === 400 &&
-        errorCode === 'DR007';
+        (errorCode === 'DR007' || errorCode === 'DR018');
 
     const isInvalidState =
         errorCode === 'DR013' ||
         errorCode === 'DR014' ||
         errorCode === 'DR011';
 
-    /*
-     * 모든 500을 lock timeout으로 분류하지 않습니다.
-     * DR012만 lock timeout으로 집계합니다.
-     */
-    const isLockTimeout =
-        errorCode === 'DR012';
 
     if (isSuccess) {
         lockSuccess.add(1);
 
     } else if (isSoldOut) {
         soldOut.add(1);
-
-    } else if (isLockTimeout) {
-        lockTimeout.add(1);
-
-        console.error(
-            [
-                'LOCK_TIMEOUT',
-                `memberId=${user.memberId}`,
-                `status=${response.status}`,
-                `code=${errorCode}`,
-                `duration=${response.timings.duration}ms`,
-                `body=${response.body}`,
-            ].join(', '),
-        );
 
     } else if (isInvalidState) {
         invalidState.add(1);
@@ -295,12 +270,9 @@ export default function () {
     }
 
     check(response, {
-        '재고 선점 성공 또는 정상 품절이다':
+        '재고 선점 성공 또는 정상 재고 부족이다':
             () =>
                 isSuccess || isSoldOut,
 
-        '락 획득 시스템 오류가 아니다':
-            () =>
-                !isLockTimeout,
     });
 }

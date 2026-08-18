@@ -9,7 +9,6 @@ RESULTS_ROOT="${RESULTS_ROOT:-$PERF_DIR/results/runs}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
 PROMETHEUS_JOB="${PROMETHEUS_JOB:-openbake-core}"
 CAPACITY_VERIFY_MONITORING="${CAPACITY_VERIFY_MONITORING:-true}"
-CAPACITY_REQUIRE_LOCK_METRICS="${CAPACITY_REQUIRE_LOCK_METRICS:-true}"
 COLLECT_OBSERVABILITY="${COLLECT_OBSERVABILITY:-true}"
 OBSERVABILITY_SETTLE_SECONDS="${OBSERVABILITY_SETTLE_SECONDS:-2}"
 PROMETHEUS_PRIME_SECONDS="${PROMETHEUS_PRIME_SECONDS:-6}"
@@ -88,7 +87,7 @@ if [[ "$CAPACITY_VERIFY_MONITORING" == "true" ]]; then
     if [[ -x "$VERIFY_SCRIPT" ]]; then
         echo
         echo "==> Monitoring preflight"
-        PROMETHEUS_URL="$PROMETHEUS_URL" REQUIRE_LOCK_METRICS="$CAPACITY_REQUIRE_LOCK_METRICS" "$VERIFY_SCRIPT"
+        PROMETHEUS_URL="$PROMETHEUS_URL" "$VERIFY_SCRIPT"
     else
         echo "WARN: monitoring/verify-monitoring.sh를 찾지 못해 preflight를 건너뜁니다."
     fi
@@ -96,14 +95,13 @@ fi
 
 echo
 echo "========================================"
-echo " OpenBake Lock Capacity Scan"
+echo " OpenBake Stock Reservation Capacity Scan"
 echo "========================================"
 echo "Plan       : $PLAN_FILE"
 echo "Users      : $actual_users"
 echo "Results    : $RESULTS_ROOT"
 echo "Prometheus : $PROMETHEUS_URL"
 echo "Job        : $PROMETHEUS_JOB"
-echo "Lock metric: required=$CAPACITY_REQUIRE_LOCK_METRICS"
 echo "Rate window: $PROMETHEUS_RATE_WINDOW"
 echo
 
@@ -187,12 +185,6 @@ echo
 echo "==> Capacity 결과 집계"
 python3 "$SCRIPT_DIR/analyze-capacity.py"
 
-DECISION_SCRIPT="$PERF_DIR/experiments/optimization-decision.py"
-if [[ -f "$DECISION_SCRIPT" ]]; then
-    echo
-    echo "==> Phase 6 optimization decision gate"
-    python3 "$DECISION_SCRIPT"
-fi
 
 echo
 echo "========================================"

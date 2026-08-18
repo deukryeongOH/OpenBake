@@ -119,39 +119,3 @@ P95/P99가 악화되는데 CPU/Tomcat/Hikari/Heap 신호가 없다면 Lock 대�
 단일 run은 JVM warm-up, cache, GC, 로컬 머신 상태에 영향을 받을 수 있습니다.
 Capacity 경계가 좁혀지면 같은 VU를 서로 다른 독립 Drop으로 최소 3회 정도 반복하고
 `capacity-repeat-summary.md`의 median과 min~max를 함께 봅니다.
-
----
-
-# Phase 5 - Lock Contention Instrumentation
-
-Phase 5에서는 `DropLockFacade`의 ReentrantLock 내부를 Micrometer로 직접 계측합니다.
-먼저 루트의 `instrumentation/lock/README.md`에 따라 애플리케이션 패치를 적용하세요.
-
-패치 후 모니터링에서 lock metric을 필수로 검사하려면:
-
-```env
-REQUIRE_LOCK_METRICS=true
-```
-
-Capacity runner는 Phase 5 기준으로 기본적으로 custom lock metric을 요구합니다.
-필요한 경우에만 임시로 다음처럼 우회할 수 있습니다.
-
-```bash
-CAPACITY_REQUIRE_LOCK_METRICS=false ./capacity/run-lock-capacity-scan.sh
-```
-
-짧은 burst 테스트와 1초 Prometheus scrape를 고려해 관측 수집의 기본 rate window는 `5s`입니다.
-변경하려면:
-
-```bash
-PROMETHEUS_RATE_WINDOW=10s ./capacity/run-lock-capacity-scan.sh
-```
-
-결과 `capacity-summary.md`에는 다음이 추가됩니다.
-
-- Lock wait P95/P99
-- Lock hold P95
-- decreaseQuantity P95
-- waiters/holders
-- lock map size
-- `wait/P95`, `decrease/hold` 방향성 지표

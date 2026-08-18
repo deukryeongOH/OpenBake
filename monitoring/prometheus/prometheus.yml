@@ -7,16 +7,16 @@ scrape_configs:
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets:
-          - "${OPENBAKE_CORE_TARGET}"
+          - "192.168.115.116:8080"
 
   - job_name: "openbake-member"
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets:
-          - "${OPENBAKE_MEMBER_TARGET}"
+          - "192.168.115.116:8081"
 
   - job_name: "openbake-payment"
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets:
-          - "${OPENBAKE_PAYMENT_TARGET}"
+          - "192.168.115.116:8082"

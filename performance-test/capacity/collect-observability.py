@@ -174,51 +174,7 @@ def expressions(job: str, rate_window: str) -> dict[str, dict[str, Any]]:
                 f'1000 * histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{{job="{j}"}}[{rw}])))',
             ],
         },
-        # Phase 5 custom lock metrics. These remain Available=N until the application patch is applied.
-        "lock_wait_p95_ms": {
-            "label": "Drop Lock Wait P95 (ms)",
-            "candidates": [
-                f'1000 * histogram_quantile(0.95, sum by (le) (rate(openbake_drop_lock_wait_seconds_bucket{{job="{j}",result="acquired"}}[{rw}])))'
-            ],
-        },
-        "lock_wait_p99_ms": {
-            "label": "Drop Lock Wait P99 (ms)",
-            "candidates": [
-                f'1000 * histogram_quantile(0.99, sum by (le) (rate(openbake_drop_lock_wait_seconds_bucket{{job="{j}",result="acquired"}}[{rw}])))'
-            ],
-        },
-        "lock_hold_p95_ms": {
-            "label": "Drop Lock Hold P95 (ms)",
-            "candidates": [
-                f'1000 * histogram_quantile(0.95, sum by (le) (rate(openbake_drop_lock_hold_seconds_bucket{{job="{j}"}}[{rw}])))'
-            ],
-        },
-        "lock_decrease_p95_ms": {
-            "label": "decreaseQuantity P95 (ms)",
-            "candidates": [
-                f'1000 * histogram_quantile(0.95, sum by (le) (rate(openbake_drop_lock_decrease_seconds_bucket{{job="{j}"}}[{rw}])))'
-            ],
-        },
-        "lock_waiters": {
-            "label": "Drop Lock Waiters",
-            "candidates": [f'sum(openbake_drop_lock_waiters{{job="{j}"}})'],
-        },
-        "lock_holders": {
-            "label": "Drop Lock Holders",
-            "candidates": [f'sum(openbake_drop_lock_holders{{job="{j}"}})'],
-        },
-        "lock_map_size": {
-            "label": "Drop Lock Map Size",
-            "candidates": [f'sum(openbake_drop_lock_map_size{{job="{j}"}})'],
-        },
-        "lock_timeout_rate": {
-            "label": "Drop Lock Timeout/sec",
-            "candidates": [f'sum(rate(openbake_drop_lock_timeout_total{{job="{j}"}}[{rw}]))'],
-        },
-        "lock_interrupted_rate": {
-            "label": "Drop Lock Interrupted/sec",
-            "candidates": [f'sum(rate(openbake_drop_lock_interrupted_total{{job="{j}"}}[{rw}]))'],
-        },
+
     }
 
 

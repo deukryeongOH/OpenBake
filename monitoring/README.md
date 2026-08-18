@@ -171,5 +171,5 @@ Drop Lock Holders
 Drop Lock Map Size
 ```
 
-Timer histogram은 실제 `lock-start` 요청이 한 번 이상 실행된 후 보이는지 확인하세요.
+재고 선점 테스트에서는 HTTP/Tomcat/Hikari/JVM 지표를 함께 확인하세요.
 Grafana `OpenBake Performance Overview` 하단에는 Phase 5 lock 전용 패널이 추가되어 있습니다.

@@ -2,7 +2,7 @@ package com.openbake.product.presentation;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.product.application.ProductService;
-import com.openbake.product.application.S3ImageService;
+import com.openbake.product.application.port.S3ImagePort;
 import com.openbake.product.application.dto.PresignedUploadResult;
 import com.openbake.product.application.dto.ProductInfoCommand;
 import com.openbake.product.application.dto.ProductInfoResult;
@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ProductController {
     private final ProductService productService;
-    private final S3ImageService s3ImageService;
+    private final S3ImagePort s3ImagePort;
 
     @Operation(
             summary = "일반 상품 등록",
@@ -48,7 +48,7 @@ public class ProductController {
 
         ProductInfoResult result = productService.registerGeneralProduct(command);// 상품 등록하고
 
-        String imageUrl = s3ImageService.promote(request.imageUrl(), result.productId()); // S3에 업로드
+        String imageUrl = s3ImagePort.promote(request.imageUrl(), result.productId()); // S3에 업로드
 
         productService.updateImageUrl(result.productId(), imageUrl); // S3에 올린 이미지 경로로 업데이트
 
@@ -128,7 +128,7 @@ public class ProductController {
     })
     @PostMapping("/image-upload-url") // 서버에 접근해서 S3 버킷의 presigned Url을 얻기 위한 Controller
     public ApiResponse<PresignedUploadResult> uploadImageS3(@Valid @RequestBody ImageUploadUrlRequest request){
-        PresignedUploadResult result = s3ImageService.issueUploadUrl(request.contentType());
+        PresignedUploadResult result = s3ImagePort.issueUploadUrl(request.contentType());
         return ApiResponse.ok(result);
     }
 

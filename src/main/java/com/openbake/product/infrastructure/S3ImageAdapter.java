@@ -1,10 +1,14 @@
-package com.openbake.product.application;
+package com.openbake.product.infrastructure;
 
+import com.openbake.common.exception.BusinessException;
+import com.openbake.common.exception.ErrorCode;
 import com.openbake.product.application.dto.PresignedUploadResult;
+import com.openbake.product.application.port.S3ImagePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
@@ -14,7 +18,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class S3ImageService {
+public class S3ImageAdapter implements S3ImagePort {
     private final S3Presigner s3Presigner;
     private final S3Client s3Client;
 
@@ -37,8 +41,15 @@ public class S3ImageService {
 
     public String promote(String tmpKey, Long productId) {
         String finalKey = "products/" + productId + "/" + tmpKey.substring(tmpKey.lastIndexOf("/") + 1);
-        s3Client.copyObject(b -> b.sourceBucket(bucket).sourceKey(tmpKey)
-                .destinationBucket(bucket).destinationKey(finalKey));
+
+        try {
+            s3Client.copyObject(b -> b.sourceBucket(bucket).sourceKey(tmpKey)
+                    .destinationBucket(bucket).destinationKey(finalKey));
+        } catch (NoSuchKeyException e) {
+            throw new BusinessException(ErrorCode.IMAGE_NOT_FOUND);
+        }
+
+        s3Client.deleteObject(b -> b.bucket(bucket).key(tmpKey));
 
         return finalKey;
     }

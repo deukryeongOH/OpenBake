@@ -46,9 +46,12 @@ public class ProductDocument {
     @Field(type = FieldType.Long)
     private Long sellerId;
 
+    @Field(type = FieldType.Keyword)
+    private String status;
+
     @Builder
     public ProductDocument(Long id, String name, String description, String category,
-                           String type, int price, Long sellerId) {
+                           String type, int price, Long sellerId, String status) {
         this.id = id;
         this.name = name;
         this.description = description;
@@ -56,6 +59,7 @@ public class ProductDocument {
         this.type = type;
         this.price = price;
         this.sellerId = sellerId;
+        this.status = status;
     }
 
     public static ProductDocument from(Product product) {
@@ -67,6 +71,7 @@ public class ProductDocument {
                 .type(product.getType().name())
                 .price(product.getPrice())
                 .sellerId(product.getSellerId())
+                .status(product.getStatus().name())
                 .build();
     }
 }

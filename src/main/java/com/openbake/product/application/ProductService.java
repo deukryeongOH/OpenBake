@@ -173,6 +173,12 @@ public class ProductService {
 
         ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
 
+        if (productInventory.getRemainQuantity() == 0) {
+            Product product = getProduct(productId);
+            product.markSoldOut();
+            eventPublisher.publishEvent(ProductIndexEvent.saved(product));
+        }
+
         return productInventory.getRemainQuantity();
     }
 
@@ -186,6 +192,12 @@ public class ProductService {
         }
 
         ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+        Product product = getProduct(productId);
+
+        if (product.getStatus() == ProductStatus.SOLD_OUT && productInventory.getRemainQuantity() > 0) {
+            product.markSelling();
+            eventPublisher.publishEvent(ProductIndexEvent.saved(product));
+        }
 
         return productInventory.getRemainQuantity();
     }

@@ -131,11 +131,6 @@ oauth:
       jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
       client-id: ${GOOGLE_CLIENT_ID}
 
-jwt:
-  secret: ${JWT_SECRET}
-  access-token-expiration: 1800000    # 30분 (ms)
-  refresh-token-expiration: 1209600000 # 14일 (ms)
-
 seller:
   settlement:
     # Base64로 인코딩된 AES-256(32바이트) 키. `openssl rand -base64 32`로 생성.
@@ -157,3 +152,4 @@ cloud:
     credentials:
       access-key: ${AWS_ACCESS_KEY}
       secret-key: ${AWS_SECRET_KEY}
+

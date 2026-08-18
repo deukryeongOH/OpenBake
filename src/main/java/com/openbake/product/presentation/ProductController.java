@@ -1,6 +1,7 @@
 package com.openbake.product.presentation;
 
 import com.openbake.common.response.ApiResponse;
+import com.openbake.product.application.ProductSearchService;
 import com.openbake.product.application.ProductService;
 import com.openbake.product.application.port.S3ImagePort;
 import com.openbake.product.application.dto.PresignedUploadResult;
@@ -14,6 +15,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,7 +34,8 @@ import org.springframework.web.bind.annotation.*;
 public class ProductController {
     private final ProductService productService;
     private final S3ImagePort s3ImagePort;
-
+    private final ProductSearchService productSearchService;
+  
     @Operation(
             summary = "일반 상품 등록",
             description = "판매자가 일반 상품을 등록합니다. imageUrl에는 미리 /image-upload-url로 발급받아 S3에 업로드한 임시 키를 넣어야 하며, 등록 시 서버가 해당 이미지를 최종 경로로 옮긴 뒤 상품에 반영합니다."
@@ -108,13 +112,20 @@ public class ProductController {
             summary = "일반 상품 목록 조회",
             description = "홈 화면에 노출할 일반 상품 목록을 카테고리 순으로 페이지 단위 조회합니다."
     )
+    @GetMapping("/autocomplete")
+    public ApiResponse<List<String>> autocomplete(@RequestParam String keyword) {
+        List<String> suggestions = productSearchService.autocomplete(keyword);
+        return ApiResponse.ok(suggestions);
+    }
+
     // 홈 화면에 상품 리스트 보여주기 + 검색
     @GetMapping("/product-list")
     public ApiResponse<PagedModel<ProductInfoResponse>> getGeneralProductList(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String category,
             @PageableDefault(size = 20, sort = "category", direction = Sort.Direction.ASC) Pageable pageable
             ){
-        Page<ProductInfoResult> productPage = productService.getProductList(pageable);
-
+        Page<ProductInfoResult> productPage = productSearchService.search(keyword, category, pageable);
 
         return ApiResponse.ok(new PagedModel<>(productPage.map(ProductInfoResponse::of)));
     }

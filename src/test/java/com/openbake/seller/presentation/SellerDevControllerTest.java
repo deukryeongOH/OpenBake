@@ -1,8 +1,6 @@
 package com.openbake.seller.presentation;
 
 import com.openbake.common.exception.EntityNotFoundException;
-import com.openbake.common.security.jwt.AccessTokenRepository;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.seller.application.AccountVerificationCodeResult;
 import com.openbake.seller.application.SellerService;
 import org.junit.jupiter.api.DisplayName;
@@ -33,12 +31,6 @@ class SellerDevControllerTest {
 
     @MockitoBean
     private SellerService sellerService;
-
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
-
-    @MockitoBean
-    private AccessTokenRepository accessTokenRepository;
 
     @Test
     @DisplayName("local/dev 프로파일에서는 목업 인증 코드를 조회할 수 있다")

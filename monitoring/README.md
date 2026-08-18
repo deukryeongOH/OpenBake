@@ -145,3 +145,31 @@ python3 verify-metrics.py \
 
 Process CPU, JVM Heap, HTTP Server는 필수 확인 대상으로 처리합니다.
 Tomcat/Hikari/HTTP histogram은 애플리케이션 설정 및 실제 사용 여부에 따라 WARN이 날 수 있습니다.
+
+## Phase 5 - Drop Lock custom metrics
+
+`instrumentation/lock` 패치를 Core에 적용한 후 `.env.monitoring`에 다음을 설정할 수 있습니다.
+
+```env
+REQUIRE_LOCK_METRICS=true
+```
+
+그 다음:
+
+```bash
+./verify-monitoring.sh
+```
+
+에서 다음 metric까지 확인합니다.
+
+```text
+Drop Lock Wait Histogram
+Drop Lock Hold Histogram
+Drop Lock decreaseQuantity Histogram
+Drop Lock Waiters
+Drop Lock Holders
+Drop Lock Map Size
+```
+
+Timer histogram은 실제 `lock-start` 요청이 한 번 이상 실행된 후 보이는지 확인하세요.
+Grafana `OpenBake Performance Overview` 하단에는 Phase 5 lock 전용 패널이 추가되어 있습니다.

@@ -187,6 +187,13 @@ echo
 echo "==> Capacity 결과 집계"
 python3 "$SCRIPT_DIR/analyze-capacity.py"
 
+DECISION_SCRIPT="$PERF_DIR/experiments/optimization-decision.py"
+if [[ -f "$DECISION_SCRIPT" ]]; then
+    echo
+    echo "==> Phase 6 optimization decision gate"
+    python3 "$DECISION_SCRIPT"
+fi
+
 echo
 echo "========================================"
 echo " Capacity Scan Finished"

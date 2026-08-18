@@ -790,6 +790,262 @@
           "sort": "none"
         }
       }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Drop Lock wait P95 / P99",
+      "description": "Phase 5 server-side ReentrantLock wait histogram. result=acquired만 표시합니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(openbake_drop_lock_wait_seconds_bucket{job=~\"$job\",result=\"acquired\"}[$__rate_interval])))",
+          "legendFormat": "wait P95",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(openbake_drop_lock_wait_seconds_bucket{job=~\"$job\",result=\"acquired\"}[$__rate_interval])))",
+          "legendFormat": "wait P99",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Drop Lock hold / decreaseQuantity P95",
+      "description": "Lock을 잡고 있는 시간과 그 안의 decreaseQuantity 시간을 비교합니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(openbake_drop_lock_hold_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
+          "legendFormat": "hold P95",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(openbake_drop_lock_decrease_seconds_bucket{job=~\"$job\"}[$__rate_interval])))",
+          "legendFormat": "decrease P95",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Drop Lock waiters / holders",
+      "description": "현재 lock 대기/보유 thread 수입니다. Drop ID를 label로 사용하지 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(openbake_drop_lock_waiters{job=~\"$job\"})",
+          "legendFormat": "waiters",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(openbake_drop_lock_holders{job=~\"$job\"})",
+          "legendFormat": "holders",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Drop Lock timeout / interrupted rate",
+      "description": "서버 내부 lock 획득 timeout/interrupted counter의 초당 증가율입니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 45,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(openbake_drop_lock_timeout_total{job=~\"$job\"}[$__rate_interval]))",
+          "legendFormat": "timeout/sec",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(openbake_drop_lock_interrupted_total{job=~\"$job\"}[$__rate_interval]))",
+          "legendFormat": "interrupted/sec",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Drop Lock map size",
+      "description": "ConcurrentHashMap에 유지 중인 Drop별 ReentrantLock 개수입니다. Phase 5에서는 cleanup하지 않고 관측만 합니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 45,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(openbake_drop_lock_map_size{job=~\"$job\"})",
+          "legendFormat": "lock map size",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
     }
   ],
   "refresh": "5s",
@@ -860,6 +1116,6 @@
   "timezone": "browser",
   "title": "OpenBake Performance Overview",
   "uid": "openbake-performance-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

@@ -37,8 +37,8 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 12
+      start_period: 60s
     networks:
       - openbake-net
 
@@ -74,6 +74,8 @@ services:
       SETTLEMENT_ENCRYPTION_KEY: ${SETTLEMENT_ENCRYPTION_KEY}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       ELASTICSEARCH_URIS: http://elasticsearch:9200
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
+      AWS_SECRET_KEY: ${AWS_SECRET_KEY}
     depends_on:
       postgres:
         condition: service_healthy

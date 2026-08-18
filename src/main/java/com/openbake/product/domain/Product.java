@@ -120,4 +120,8 @@ public class Product {
             throw new BusinessException(ErrorCode.INVALID_PICKUP_DATE, "픽업 가능 날짜는 오늘 이후여야 합니다.");
         }
     }
+
+    public void updateImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
 }

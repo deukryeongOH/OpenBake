@@ -15,4 +15,6 @@ public interface ProductSearchPort {
     void index(Product product);
 
     void deleteIndex(Long productId);
+
+    List<String> autocomplete(String prefix, int size);
 }

@@ -147,3 +147,13 @@ feign:
       member-service:
         connect-timeout: 1000
         read-timeout: 2000
+
+cloud:
+  aws:
+    active: true
+    s3:
+      bucket: ${S3_BUCKET_NAME:team06-s3-bakerysite6}
+      region: ${S3_REGION:ap-northeast-2}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}

@@ -8,6 +8,8 @@ import com.openbake.product.application.dto.ProductInfoResult;
 import com.openbake.product.presentation.dto.ProductInfoRequest;
 import com.openbake.product.presentation.dto.ProductInfoResponse;
 
+import java.util.List;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -61,6 +63,12 @@ public class ProductController {
         return ApiResponse.ok(new PagedModel<>(productList.map(ProductInfoResponse::of)));
     }
 
+
+    @GetMapping("/autocomplete")
+    public ApiResponse<List<String>> autocomplete(@RequestParam String keyword) {
+        List<String> suggestions = productSearchService.autocomplete(keyword);
+        return ApiResponse.ok(suggestions);
+    }
 
     // 홈 화면에 상품 리스트 보여주기 + 검색
     @GetMapping("/product-list")

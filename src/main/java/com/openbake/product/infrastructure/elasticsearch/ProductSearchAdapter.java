@@ -51,6 +51,27 @@ public class ProductSearchAdapter implements ProductSearchPort {
         productSearchRepository.deleteById(productId);
     }
 
+    @Override
+    public List<String> autocomplete(String prefix, int size) {
+        NativeQuery query = NativeQuery.builder()
+                .withQuery(Query.of(q -> q
+                        .match(m -> m
+                                .field("name.autocomplete")
+                                .query(prefix)
+                        )
+                ))
+                .withPageable(Pageable.ofSize(size))
+                .build();
+
+        SearchHits<ProductDocument> searchHits = elasticsearchOperations.search(query, ProductDocument.class);
+
+        return searchHits.getSearchHits().stream()
+                .map(SearchHit::getContent)
+                .map(ProductDocument::getName)
+                .distinct()
+                .toList();
+    }
+
     private NativeQuery buildSearchQuery(String keyword, Category category, Pageable pageable) {
         BoolQuery.Builder boolBuilder = new BoolQuery.Builder();
 

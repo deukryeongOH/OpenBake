@@ -24,6 +24,11 @@ public class ProductRepositoryAdapter implements ProductRepository {
     }
 
     @Override
+    public List<Product> fallbackSearch(String keyword, Category category, Pageable pageable) {
+        return productJpaRepository.fallbackSearch(keyword, category, pageable);
+    }
+
+    @Override
     public Optional<Product> findById(Long productId) {
         return productJpaRepository.findById(productId);
     }

@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ProductRepository {
     void save(Product product);
 
+    List<Product> fallbackSearch(String keyword, Category category, Pageable pageable);
+
     Optional<Product> findById(Long productId);
 
     void delete(Product product);

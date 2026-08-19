@@ -74,13 +74,13 @@ def env(name: str, default: str = "", required: bool = False) -> str:
 
 
 def api(
-    method: str,
-    path: str,
-    *,
-    service: str,
-    auth: dict[str, Any] | None = None,
-    body: dict[str, Any] | None = None,
-    allow_status: set[int] | None = None,
+        method: str,
+        path: str,
+        *,
+        service: str,
+        auth: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+        allow_status: set[int] | None = None,
 ) -> tuple[int, dict[str, Any] | None]:
     base_url = (
         env("MEMBER_BASE_URL", required=True)
@@ -439,13 +439,28 @@ def create_drop(user_count: int) -> int:
     drop_id = int(drop_id_raw)
 
     if env("PERF_ACTIVATE_NOW", "true").lower() == "true":
+        # 성능테스트 직후 바로 enter를 실행할 수 있도록 현재 시간을 기준으로
+        # 넉넉한 활성 구간을 강제로 만든다. DB의 NOW()를 사용하므로
+        # WSL/호스트와 PostgreSQL 간 시스템 시간 차이에도 영향을 덜 받는다.
+        timezone = env("PERF_TIMEZONE", "Asia/Seoul")
+
         db_scalar(
             "UPDATE drops SET "
-            "drop_start=NOW() - INTERVAL '1 minute', "
-            "drop_end=NOW() + INTERVAL '59 minutes', "
+            f"drop_start=(NOW() AT TIME ZONE '{timezone}') - INTERVAL '5 minutes', "
+            f"drop_end=(NOW() AT TIME ZONE '{timezone}') + INTERVAL '2 hours', "
             "drop_status='ACTIVE' "
             f"WHERE id={drop_id} RETURNING id;"
         )
+
+        active_window = db_scalar(
+            "SELECT "
+            "drop_start::text || ' | ' || "
+            "drop_end::text || ' | now=' || "
+            f"(NOW() AT TIME ZONE '{timezone}')::text || "
+            "' | status=' || drop_status "
+            f"FROM drops WHERE id={drop_id};"
+        )
+        print(f"[PERF] Drop 즉시 활성화 완료: {active_window}")
         restart_backend()
 
     # local은 직접 서비스 주소, server는 공개 gateway 주소가 두 값 모두에 들어간다.

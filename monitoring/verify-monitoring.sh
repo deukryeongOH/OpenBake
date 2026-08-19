@@ -12,7 +12,8 @@ if [[ -f "$ENV_FILE" ]]; then
     set +a
 fi
 
-REQUIRED_PROMETHEUS_JOBS="${REQUIRED_PROMETHEUS_JOBS:-openbake-core}"
+# 세 서비스 모두 scrape하는 구성이므로 기본값도 세 서비스를 모두 검증합니다.
+REQUIRED_PROMETHEUS_JOBS="${REQUIRED_PROMETHEUS_JOBS:-openbake-core,openbake-member,openbake-payment}"
 
 echo "========================================"
 echo " OpenBake Monitoring Verification"

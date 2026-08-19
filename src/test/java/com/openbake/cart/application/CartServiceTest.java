@@ -51,9 +51,14 @@ class CartServiceTest {
     }
 
     private ProductInfo product(int remainQuantity) {
+        return product(false, remainQuantity);
+    }
+
+    //soldOut: product 가 품절로 내린 상태인지. 재고 수량과는 별개다.
+    private ProductInfo product(boolean soldOut, int remainQuantity) {
         return new ProductInfo(
                 PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000,
-                "https://cdn.openbake.com/products/7.jpg",
+                "https://cdn.openbake.com/products/7.jpg", true, soldOut,
                 Set.of(PICKUP_DATE), remainQuantity
         );
     }
@@ -167,6 +172,19 @@ class CartServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("판매자가 품절로 내린 상품은 재고가 남아 있어도 담을 수 없다")
+    void addItem_rejectsSoldOutStatus() {
+        // given — 품절 상태지만 재고 숫자는 남아있다. 재고가 아니라 상태로 막혀야 한다.
+        when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(product(true, 10)));
+
+        // when & then
+        assertThatThrownBy(() -> cartService.addItem(MEMBER_ID, PRODUCT_ID, 1, PICKUP_DATE))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CART_PRODUCT_SOLD_OUT);
     }
 
     @Test
@@ -400,7 +418,7 @@ class CartServiceTest {
         when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
         when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(product(10)));
         when(productPort.findProduct(8L)).thenReturn(Optional.of(
-                new ProductInfo(8L, SELLER_ID, "다른 빵", 5000, "img", Set.of(PICKUP_DATE), 10)));
+                new ProductInfo(8L, SELLER_ID, "다른 빵", 5000, "img", true, false, Set.of(PICKUP_DATE), 10)));
         when(sellerPort.findSeller(SELLER_ID))
                 .thenReturn(Optional.of(new SellerInfo(SELLER_ID, "오픈베이크 베이커리")));
 
@@ -454,20 +472,39 @@ class CartServiceTest {
     }
 
     @Test
-    @DisplayName("재고가 0이면 SOLD_OUT 으로 비활성 처리한다")
+    @DisplayName("상품이 품절 상태면 SOLD_OUT 으로 비활성 처리한다")
     void getCart_marksSoldOut() {
-        // given
+        // given — 재고가 0이 되면 product 가 상태를 SOLD_OUT 으로 바꾼다. cart 는 그 값을 그대로 쓴다.
         Cart cart = persistedCart();
         cart.addItem(CartItem.create(PRODUCT_ID, "오픈베이크 베이커리", 1, PICKUP_DATE, 12000));
 
         when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
-        when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(product(0)));
+        when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(product(true, 0)));
 
         // when
         CartDetailResult result = cartService.getCart(MEMBER_ID);
 
         // then
         assertThat(result.items().getFirst().status()).isEqualTo(CartItemStatus.SOLD_OUT);
+    }
+
+    @Test
+    @DisplayName("상태가 아직 SELLING 이면 재고가 0이어도 SOLD_OUT 이 아니라 INSUFFICIENT_STOCK 이다")
+    void getCart_marksInsufficientStockWhenStatusStillSelling() {
+        // given — 품절 판정은 product 가 한다. cart 는 재고로 품절을 추론하지 않는다.
+        Cart cart = persistedCart();
+        cart.addItem(CartItem.create(PRODUCT_ID, "오픈베이크 베이커리", 1, PICKUP_DATE, 12000));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+        when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(product(false, 0)));
+
+        // when
+        CartDetailResult result = cartService.getCart(MEMBER_ID);
+
+        // then
+        CartDetailResult.Item item = result.items().getFirst();
+        assertThat(item.status()).isEqualTo(CartItemStatus.INSUFFICIENT_STOCK);
+        assertThat(item.orderable()).isFalse();
     }
 
     @Test
@@ -479,7 +516,7 @@ class CartServiceTest {
 
         LocalDate otherDate = PICKUP_DATE.plusDays(3);
         ProductInfo info = new ProductInfo(
-                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img", Set.of(otherDate), 10);
+                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img", true, false, Set.of(otherDate), 10);
 
         when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
         when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(info));
@@ -504,7 +541,7 @@ class CartServiceTest {
 
         LocalDate added = PICKUP_DATE.plusDays(1);
         ProductInfo info = new ProductInfo(
-                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img",
+                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img", true, false,
                 Set.of(PICKUP_DATE, added), 10);
 
         when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
@@ -520,9 +557,9 @@ class CartServiceTest {
     }
 
     @Test
-    @DisplayName("픽업일을 아직 고르지 않은 항목은 픽업일 때문에 비활성되지 않는다")
-    void getCart_doesNotJudgeNullPickUpDate() {
-        // given — 필수 여부는 order 가 판단한다. cart 는 관여하지 않는다.
+    @DisplayName("픽업일을 아직 고르지 않은 항목은 주문 대상이 될 수 없다")
+    void getCart_marksNullPickUpDateUnselected() {
+        // given — 담을 때는 픽업일이 없어도 되지만 주문으로는 넘길 수 없다.
         Cart cart = persistedCart();
         cart.addItem(CartItem.create(PRODUCT_ID, "오픈베이크 베이커리", 1, null, 12000));
 
@@ -533,7 +570,32 @@ class CartServiceTest {
         CartDetailResult result = cartService.getCart(MEMBER_ID);
 
         // then
-        assertThat(result.items().getFirst().status()).isEqualTo(CartItemStatus.ORDERABLE);
+        CartDetailResult.Item item = result.items().getFirst();
+        assertThat(item.status()).isEqualTo(CartItemStatus.PICKUP_DATE_UNSELECTED);
+        assertThat(item.orderable()).isFalse();
+        //주문할 수 없는 항목이므로 합계에도 들어가지 않는다.
+        assertThat(result.totalAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("품절이면 픽업일 미선택보다 품절을 사유로 내려준다")
+    void getCart_prefersSoldOutOverUnselectedPickUpDate() {
+        // given — 사유가 겹칠 때는 사용자가 바로 고칠 수 없는 쪽을 먼저 알려야 한다.
+        Cart cart = persistedCart();
+        cart.addItem(CartItem.create(PRODUCT_ID, "오픈베이크 베이커리", 1, null, 12000));
+
+        ProductInfo soldOut = new ProductInfo(
+                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img", true, true,
+                Set.of(PICKUP_DATE), 10
+        );
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+        when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(soldOut));
+
+        // when
+        CartDetailResult result = cartService.getCart(MEMBER_ID);
+
+        // then
+        assertThat(result.items().getFirst().status()).isEqualTo(CartItemStatus.SOLD_OUT);
     }
 
     @Test
@@ -547,7 +609,7 @@ class CartServiceTest {
         LocalDate near = LocalDate.now().plusDays(1);
         LocalDate far = LocalDate.now().plusDays(5);
         ProductInfo info = new ProductInfo(
-                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img",
+                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img", true, false,
                 Set.of(far, past, near), 10
         );
 
@@ -607,7 +669,7 @@ class CartServiceTest {
         when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
         when(productPort.findProduct(PRODUCT_ID)).thenReturn(Optional.of(product(10)));
         when(productPort.findProduct(8L)).thenReturn(Optional.of(
-                new ProductInfo(8L, SELLER_ID, "품절된 빵", 5000, "img", Set.of(PICKUP_DATE), 0)));
+                new ProductInfo(8L, SELLER_ID, "품절된 빵", 5000, "img", true, false, Set.of(PICKUP_DATE), 0)));
 
         // when
         CartDetailResult result = cartService.getCart(MEMBER_ID);
@@ -657,12 +719,12 @@ class CartServiceTest {
     @Test
     @DisplayName("품절이면서 픽업일도 사라졌으면 품절이 먼저다")
     void getCart_soldOutTakesPrecedenceOverPickUpDate() {
-        // given — 재고 0 + 고른 픽업일도 선택 가능일에서 빠진 상태
+        // given — 품절 + 고른 픽업일도 선택 가능일에서 빠진 상태
         Cart cart = persistedCart();
         cart.addItem(CartItem.create(PRODUCT_ID, "오픈베이크 베이커리", 1, PICKUP_DATE, 12000));
 
         ProductInfo info = new ProductInfo(
-                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img",
+                PRODUCT_ID, SELLER_ID, "말차 크루아상", 12000, "img", true, true,
                 Set.of(PICKUP_DATE.plusDays(3)), 0);
 
         when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));

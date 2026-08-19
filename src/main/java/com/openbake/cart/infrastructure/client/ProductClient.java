@@ -6,6 +6,8 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.ProductInventoryRepository;
 import com.openbake.product.domain.ProductRepository;
+import com.openbake.product.domain.ProductStatus;
+import com.openbake.product.domain.Type;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -37,6 +39,9 @@ public class ProductClient implements ProductPort {
                         product.getName(),
                         product.getPrice(),
                         product.getImageUrl(),
+                        //product 의 enum 은 여기서 판정으로 바꿔 내보낸다. 밖으로 나가지 않는다.
+                        product.getType() == Type.GENERAL,
+                        product.getStatus() == ProductStatus.SOLD_OUT,
                         //pickUpAvailableDates 는 지연 로딩 컬렉션이다. 참조를 그대로 넘기면
                         //세션이 끝난 뒤 초기화를 시도하다 터지므로 여기서 복사해서 내보낸다.
                         new HashSet<>(product.getPickUpAvailableDates()),

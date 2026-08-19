@@ -73,7 +73,7 @@ public record CartDetailResponse(
             @Schema(description = "지금 주문할 수 있는지. false면 프론트가 항목과 주문 버튼을 비활성 처리.", example = "true")
             boolean orderable,
 
-            @Schema(description = "주문 불가 사유. ORDERABLE / PRODUCT_DELETED / SOLD_OUT / INSUFFICIENT_STOCK / PICKUP_DATE_UNAVAILABLE", example = "ORDERABLE")
+            @Schema(description = "주문 불가 사유. ORDERABLE / PRODUCT_DELETED / SOLD_OUT / INSUFFICIENT_STOCK / PICKUP_DATE_UNSELECTED / PICKUP_DATE_UNAVAILABLE", example = "ORDERABLE")
             CartItemStatus status
     ) {
 

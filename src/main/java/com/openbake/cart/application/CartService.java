@@ -45,7 +45,7 @@ public class CartService {
      * 픽업 날짜는 담을 때 고르지 않아도 된다(주문으로 넘어갈 때 필수).
      * 이미 담은 상품이면 수량을 합치고, 픽업 날짜를 이번에 골랐다면 그 값으로 덮어쓴다.
      *
-     * 재고 검사는 요청 수량이 아니라 <b>합산 후 수량</b>으로 한다.
+     * 재고 검사는 요청 수량이 아니라 합산 후 수량으로 한다.
      * 이미 3개 담긴 상품에 2개를 더할 때 봐야 할 값은 5다.
      */
     @Transactional
@@ -53,6 +53,16 @@ public class CartService {
         //상품이 없으면(삭제됐으면) 담을 수 없다.
         ProductInfo product = productPort.findProduct(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        if (!product.generalType()) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
+        }
+
+        //품절은 상품 자체가 팔리는지의 전제라, 수량·재고를 보기 전에 먼저 막는다.
+        //재고가 모자란 것(CA009)과는 사유가 다르므로 별도 코드(CA011)로 안내한다.
+        if (product.soldOut()) {
+            throw new BusinessException(ErrorCode.CART_PRODUCT_SOLD_OUT);
+        }
 
         //픽업 날짜를 골랐다면 상품의 픽업 가능일에 실제로 있는지 확인한다.
         //화면 목록은 서버가 내려주지만 요청 본문은 클라이언트가 만든 값이다(위조/stale 방어).
@@ -92,7 +102,8 @@ public class CartService {
      *
      * 장바구니가 없어도 200 으로 빈 목록을 내려준다. 장바구니 페이지는 비어 있어도 열려야 한다.
      * 가격·재고는 조회 시점에 product 에서 다시 읽는다(스냅샷 아님).
-     * 상품이 삭제됐거나 재고가 모자란 항목은 orderable=false 로 내려 프론트가 비활성 처리한다.
+     * 상품이 삭제됐거나, 재고가 모자라거나, 픽업일이 선택되지 않았거나 더 이상 유효하지 않은 항목은
+     * orderable=false 로 내려 프론트가 비활성 처리한다.
      */
     @Transactional(readOnly = true)
     public CartDetailResult getCart(Long memberId) {
@@ -268,16 +279,20 @@ public class CartService {
     }
 
     private CartItemStatus resolveStatus(ProductInfo product, CartItem item, List<LocalDate> pickUpDates) {
-        if (product.isSoldOut()) {
+        if (product.soldOut()) {
             return CartItemStatus.SOLD_OUT;
         }
         if (product.remainQuantity() < item.getQuantity()) {
             return CartItemStatus.INSUFFICIENT_STOCK;
         }
+        //픽업일은 담을 때 고르지 않아도 되지만 주문으로는 넘길 수 없다.
+        //orderable 은 '지금 주문에 포함해도 통과하는가'를 뜻하므로 미선택도 비활성으로 내린다.
+        if (item.getPickUpDate() == null) {
+            return CartItemStatus.PICKUP_DATE_UNSELECTED;
+        }
         //판매자가 픽업 가능일에서 그 날짜를 지웠거나, 고른 날짜가 지나버린 경우다.
         //선택 가능 목록은 최신으로 내려가므로 사용자는 그중에서 다시 고르면 된다.
-        //아직 고르지 않은(null) 경우는 여기서 판단하지 않는다. 필수 여부는 주문 단계에서 order 가 본다.
-        if (item.getPickUpDate() != null && !pickUpDates.contains(item.getPickUpDate())) {
+        if (!pickUpDates.contains(item.getPickUpDate())) {
             return CartItemStatus.PICKUP_DATE_UNAVAILABLE;
         }
         return CartItemStatus.ORDERABLE;

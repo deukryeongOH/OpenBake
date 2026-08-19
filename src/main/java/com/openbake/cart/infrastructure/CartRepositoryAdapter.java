@@ -8,8 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -27,7 +25,7 @@ public class CartRepositoryAdapter implements CartRepository {
             return cartJpaRepository.saveAndFlush(cart);
         } catch (DataIntegrityViolationException e) {
             //carts.member_id UNIQUE 위반.
-            //더블클릭 등으로 두 요청이 기존 장바구니 조회를 함께 통과한 경우다.
+            //장바구니가 없던 회원이 담기를 더블클릭해 두 요청이 함께 조회를 통과한 경우다.
             //선검사만으로는 동시 요청을 막을 수 없어 DB 제약이 최종 방어선이 된다.
             throw new BusinessException(ErrorCode.CART_ALREADY_EXISTS);
         }
@@ -44,27 +42,7 @@ public class CartRepositoryAdapter implements CartRepository {
     }
 
     @Override
-    public List<Cart> findAllByExpiresAtLessThanEqual(LocalDateTime now) {
-        return cartJpaRepository.findAllByExpiresAtLessThanEqual(now);
-    }
-
-    @Override
     public void delete(Cart cart) {
         cartJpaRepository.delete(cart);
-    }
-
-    /**
-     * delete 는 삭제를 예약만 하고 SQL 을 커밋 시점까지 미룬다.
-     * flush 로 DELETE 를 먼저 내보내야 뒤따르는 INSERT 가 UNIQUE 제약에 걸리지 않는다.
-     */
-    @Override
-    public void deleteImmediately(Cart cart) {
-        cartJpaRepository.delete(cart);
-        cartJpaRepository.flush();
-    }
-
-    @Override
-    public void deleteAll(List<Cart> carts) {
-        cartJpaRepository.deleteAll(carts);
     }
 }

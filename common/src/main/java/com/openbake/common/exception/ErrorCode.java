@@ -88,6 +88,7 @@ public enum ErrorCode {
     CART_INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "CA009", "남은 재고보다 많은 수량을 담을 수 없습니다."),
     //장바구니에는 픽업 날짜가 null 인 채로 담길 수 있다. 필수 여부는 주문 단계에서 order 가 본다.
     CART_PICKUP_DATE_NOT_SELECTED(HttpStatus.CONFLICT, "CA010", "픽업 날짜를 선택해야 합니다."),
+    CART_PRODUCT_SOLD_OUT(HttpStatus.CONFLICT, "CA011", "품절된 상품입니다."),
 
     //order - OR
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "OR001", "존재하지 않는 주문입니다."),

@@ -96,7 +96,7 @@ Dashboard  : OpenBake Performance Overview
 
 ## 6. k6 -> Prometheus Remote Write (선택)
 
-`.env.k6`에서 아래를 설정합니다.
+`.env.k6.local`에서 아래를 설정합니다.
 
 ```env
 K6_PROMETHEUS_RW_ENABLED=true

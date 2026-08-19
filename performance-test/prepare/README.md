@@ -107,7 +107,7 @@ cd ..
 ./run-k6.sh lock
 ```
 
-`prepare-drop.sh server`가 실행되면 `.env.k6`도 자동으로:
+`prepare-drop.sh server`가 실행되면 `.env.k6.local`도 자동으로:
 
 ```env
 CORE_BASE_URL=<SERVER_BASE_URL>

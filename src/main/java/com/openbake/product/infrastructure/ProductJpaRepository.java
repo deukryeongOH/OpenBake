@@ -13,6 +13,14 @@ import java.util.List;
 
 public interface ProductJpaRepository extends JpaRepository<Product, Long> {
 
+    @Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.pickUpAvailableDates "
+         + "WHERE p.status = com.openbake.product.domain.ProductStatus.SELLING "
+         + "AND (:keyword IS NULL OR p.name LIKE %:keyword%) "
+         + "AND (:category IS NULL OR p.category = :category)")
+    List<Product> fallbackSearch(@Param("keyword") String keyword,
+                                @Param("category") Category category,
+                                Pageable pageable);
+
     @Query(value = "Select p From Product p WHERE p.sellerId = :sellerId")
     Page<Product> findAllBySellerId(@Param("sellerId") Long sellerId, Pageable pageable);
 

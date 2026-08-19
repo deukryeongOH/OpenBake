@@ -78,8 +78,12 @@ settlement:
       zone: Asia/Seoul
 
 openbake:
-  # 장바구니는 재고를 선점하지 않으므로 만료 개념이 없다(ttl / expiration-delay 제거).
-  # 담아둔 항목은 사용자가 지울 때까지 남고, 재고 확보는 결제 시점에만 일어난다.
+
+  # ES 재색인 배치 — RDB↔ES 드리프트 보정 안전망
+  # 매일 새벽 3시 실행. 트래픽이 적은 시간대.
+  reindex:
+    cron: "0 0 3 * * *"
+
   member-service:
     url: ${MEMBER_SERVICE_URL:http://localhost:8081}
 
@@ -96,6 +100,8 @@ management:
           - info
           - metrics
           - prometheus
+          - circuitbreakers
+          - circuitbreakerevents
   endpoint:
     health:
       show-details: always
@@ -133,6 +139,18 @@ feign:
       member-service:
         connect-timeout: 1000
         read-timeout: 2000
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      elasticsearch:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
 
 cloud:
   aws:

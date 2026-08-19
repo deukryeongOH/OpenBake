@@ -1,0 +1,218 @@
+diff --git a/src/main/java/com/openbake/drop/application/DropLockFacade.java b/src/main/java/com/openbake/drop/application/DropLockFacade.java
+--- a/src/main/java/com/openbake/drop/application/DropLockFacade.java
++++ b/src/main/java/com/openbake/drop/application/DropLockFacade.java
+@@ -16,6 +16,7 @@
+ public class DropLockFacade {
+ 
+     private final DropLockService dropLockService;
++    private final DropLockMetrics dropLockMetrics;
+     private final ConcurrentHashMap<Long, ReentrantLock> lockConcurrentHashMap = new ConcurrentHashMap<>();
+ 
+     public void reserveStock(Long dropId, Long memberId, int quantity) {
+@@ -25,31 +26,69 @@
+         dropLockService.checkEntryStatus(dropId, memberId);
+ 
+         ReentrantLock lock = lockConcurrentHashMap.computeIfAbsent(dropId, d -> new ReentrantLock());
++        dropLockMetrics.updateLockMapSize(lockConcurrentHashMap.size());
+ 
+-        long waitStart = System.currentTimeMillis();
+         boolean getLock = false;
+-        try{
+-            // 3초 동안 락 획득 시도 ( 동시 요청 폭주 시 쓰레드 락 대기 시간 제한함.)
++        boolean waitMetricClosed = false;
++        long waitStartNanos = System.nanoTime();
++        long holdStartNanos = 0L;
++
++        dropLockMetrics.beginWait();
++
++        try {
++            // 3초 동안 락 획득 시도 (동시 요청 폭주 시 쓰레드 락 대기 시간 제한)
+             getLock = lock.tryLock(3, TimeUnit.SECONDS);
+-            log.info("lock wait: {}ms", System.currentTimeMillis() - waitStart);
++            long waitNanos = System.nanoTime() - waitStartNanos;
+ 
+             if (!getLock) {
++                dropLockMetrics.endWaitTimeout(waitNanos);
++                waitMetricClosed = true;
++                dropLockMetrics.markTimeout();
++
++                log.debug(
++                        "drop lock timeout: dropId={}, waitMs={}",
++                        dropId,
++                        TimeUnit.NANOSECONDS.toMillis(waitNanos)
++                );
++
+                 throw new BusinessException(ErrorCode.LOCK_ACQUISITION_FAILED);
+             }
+ 
++            dropLockMetrics.endWaitAcquired(waitNanos);
++            waitMetricClosed = true;
++            dropLockMetrics.beginHold();
++            holdStartNanos = System.nanoTime();
++
++            log.debug(
++                    "drop lock acquired: dropId={}, waitMs={}",
++                    dropId,
++                    TimeUnit.NANOSECONDS.toMillis(waitNanos)
++            );
++
+             // 락을 획득했으니 재고 차감
+-            dropLockService.decreaseQuantity(dropId, memberId, quantity);
++            long decreaseStartNanos = System.nanoTime();
++            try {
++                dropLockService.decreaseQuantity(dropId, memberId, quantity);
++            } finally {
++                dropLockMetrics.recordDecrease(System.nanoTime() - decreaseStartNanos);
++            }
+ 
+         } catch (InterruptedException e) {
++            if (!waitMetricClosed) {
++                dropLockMetrics.endWaitInterrupted(System.nanoTime() - waitStartNanos);
++            }
++            dropLockMetrics.markInterrupted();
+             Thread.currentThread().interrupt();
+             throw new BusinessException(ErrorCode.LOCK_ACQUISITION_FAILED);
+         } finally {
+             // 현재 쓰레드가 락을 잡고 있는 경우에만 unlock 해제
+             if (getLock && lock.isHeldByCurrentThread()) {
++                if (holdStartNanos != 0L) {
++                    dropLockMetrics.endHold(System.nanoTime() - holdStartNanos);
++                }
+                 lock.unlock();
+             }
+         }
+ //        dropLockService.confirmEventPublisher(dropId, memberId, quantity); 세미에서는 모놀리식 동기 호출로 진행
+-
+     }
+ }
+diff --git a/src/main/java/com/openbake/drop/application/DropLockMetrics.java b/src/main/java/com/openbake/drop/application/DropLockMetrics.java
+new file mode 100644
+--- /dev/null
++++ b/src/main/java/com/openbake/drop/application/DropLockMetrics.java
+@@ -0,0 +1,126 @@
++package com.openbake.drop.application;
++
++import io.micrometer.core.instrument.Counter;
++import io.micrometer.core.instrument.Gauge;
++import io.micrometer.core.instrument.MeterRegistry;
++import io.micrometer.core.instrument.Timer;
++import org.springframework.stereotype.Component;
++
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicInteger;
++
++/**
++ * Drop 재고 선점의 ReentrantLock 구간을 서버 내부에서 직접 계측합니다.
++ *
++ * dropId/memberId를 metric tag로 넣지 않습니다.
++ * 드롭/회원 ID는 값의 종류가 계속 늘어나는 high-cardinality 값이기 때문에
++ * Prometheus time-series 수를 불필요하게 증가시킬 수 있습니다.
++ */
++@Component
++public class DropLockMetrics {
++
++    private final Timer waitAcquired;
++    private final Timer waitTimeout;
++    private final Timer waitInterrupted;
++    private final Timer hold;
++    private final Timer decrease;
++
++    private final Counter timeout;
++    private final Counter interrupted;
++
++    private final AtomicInteger waiters = new AtomicInteger();
++    private final AtomicInteger holders = new AtomicInteger();
++    private final AtomicInteger lockMapSize = new AtomicInteger();
++
++    public DropLockMetrics(MeterRegistry registry) {
++        this.waitAcquired = waitTimer(registry, "acquired");
++        this.waitTimeout = waitTimer(registry, "timeout");
++        this.waitInterrupted = waitTimer(registry, "interrupted");
++
++        this.hold = Timer.builder("openbake.drop.lock.hold")
++                .description("Time spent holding the per-drop ReentrantLock")
++                .publishPercentileHistogram()
++                .register(registry);
++
++        this.decrease = Timer.builder("openbake.drop.lock.decrease")
++                .description("Time spent executing decreaseQuantity while the lock is held")
++                .publishPercentileHistogram()
++                .register(registry);
++
++        this.timeout = Counter.builder("openbake.drop.lock.timeout")
++                .description("Number of lock acquisition timeouts")
++                .register(registry);
++
++        this.interrupted = Counter.builder("openbake.drop.lock.interrupted")
++                .description("Number of interrupted lock acquisition attempts")
++                .register(registry);
++
++        Gauge.builder("openbake.drop.lock.waiters", waiters, AtomicInteger::get)
++                .description("Threads currently waiting to acquire a drop lock")
++                .register(registry);
++
++        Gauge.builder("openbake.drop.lock.holders", holders, AtomicInteger::get)
++                .description("Threads currently holding a drop lock")
++                .register(registry);
++
++        Gauge.builder("openbake.drop.lock.map.size", lockMapSize, AtomicInteger::get)
++                .description("Number of per-drop ReentrantLock objects retained in the lock map")
++                .register(registry);
++    }
++
++    private Timer waitTimer(MeterRegistry registry, String result) {
++        return Timer.builder("openbake.drop.lock.wait")
++                .description("Time spent waiting to acquire the per-drop ReentrantLock")
++                .tag("result", result)
++                .publishPercentileHistogram()
++                .register(registry);
++    }
++
++    public void beginWait() {
++        waiters.incrementAndGet();
++    }
++
++    public void endWaitAcquired(long nanos) {
++        decrementNonNegative(waiters);
++        waitAcquired.record(nanos, TimeUnit.NANOSECONDS);
++    }
++
++    public void endWaitTimeout(long nanos) {
++        decrementNonNegative(waiters);
++        waitTimeout.record(nanos, TimeUnit.NANOSECONDS);
++    }
++
++    public void endWaitInterrupted(long nanos) {
++        decrementNonNegative(waiters);
++        waitInterrupted.record(nanos, TimeUnit.NANOSECONDS);
++    }
++
++    public void markTimeout() {
++        timeout.increment();
++    }
++
++    public void markInterrupted() {
++        interrupted.increment();
++    }
++
++    public void beginHold() {
++        holders.incrementAndGet();
++    }
++
++    public void endHold(long nanos) {
++        hold.record(nanos, TimeUnit.NANOSECONDS);
++        decrementNonNegative(holders);
++    }
++
++    public void recordDecrease(long nanos) {
++        decrease.record(nanos, TimeUnit.NANOSECONDS);
++    }
++
++    public void updateLockMapSize(int size) {
++        lockMapSize.set(size);
++    }
++
++    private static void decrementNonNegative(AtomicInteger value) {
++        value.updateAndGet(current -> Math.max(0, current - 1));
++    }
++}

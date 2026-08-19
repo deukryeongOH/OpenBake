@@ -17,9 +17,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 일반 상품 장바구니.
@@ -206,8 +208,7 @@ public class CartService {
         ProductInfo product = productPort.findProduct(item.getProductId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        //픽업일이 있는지 없는지는 cart 가 판단하지 않는다.
-        //장바구니에는 픽업일이 null 인 채로 담겨 있어도 되고, 필수인지는 주문 단계에서 order 가 본다.
+        //장바구니에는 픽업일이 null 인 채로 담겨 있어도 된다
         //여기서는 요청으로 들어온 날짜가 상품의 픽업 가능일인지만 확인한다.
         validatePickUpDate(product, pickUpDate);
 
@@ -242,6 +243,65 @@ public class CartService {
     @Transactional(readOnly = true)
     public boolean hasCart(Long memberId) {
         return cartRepository.existsByMemberId(memberId);
+    }
+
+    /**
+     * 주문할 항목을 골라서 읽는다. 사용자가 장바구니 화면에서 체크한 것들이다.
+     *
+     * cartItemId 는 클라이언트가 만든 값이라 믿을 수 없다. auto-increment 라 남의 항목 번호를
+     * 찍어 보낼 수 있으므로, 회원의 장바구니를 먼저 잡고 그 안에서만 찾는다.
+     * 전역에서 cartItemId 로 조회하지 않는 것이 방어의 핵심이다.
+     *
+     * 하나라도 장바구니에 없으면 통째로 거부한다. 위조이거나 화면이 낡았다는 신호이고,
+     * 사용자가 고른 것 중 일부만 조용히 빠진 채 결제되면 안 되기 때문이다.
+     * "남의 것"과 "존재하지 않음"을 구분하지 않는다. 구분하면 그 id 가 있다는 정보가 새어나간다.
+     */
+    @Transactional(readOnly = true)
+    public List<CartOrderItem> findItemsForOrder(Long memberId, List<Long> cartItemIds) {
+        if (cartItemIds == null || cartItemIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        //같은 항목을 두 번 보내도 수량이 두 배가 되면 안 된다. 담긴 수량이 곧 주문 수량이다.
+        Set<Long> requested = new HashSet<>(cartItemIds);
+
+        Cart cart = getCart0(memberId);
+        List<CartOrderItem> found = cart.getItems().stream()
+                .filter(item -> requested.contains(item.getCartItemId()))
+                .map(CartOrderItem::from)
+                .toList();
+
+        if (found.size() != requested.size()) {
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+        return found;
+    }
+
+    /**
+     * 고른 항목만 장바구니에서 뺀다. 주문이 결제까지 끝난 뒤의 뒷정리다.
+     *
+     * <b>멱등하다.</b> 장바구니에 없는 cartItemId 는 조용히 무시한다.
+     * 이 메서드는 결제가 성공한 뒤에 불리므로, 여기서 예외를 던지면 성공한 결제까지 롤백된다.
+     * 사용자가 다른 탭에서 항목을 먼저 지운 정도로 주문이 무효가 되면 안 된다.
+     * 이미 없다는 것은 목표 상태가 이미 달성됐다는 뜻이지 실패가 아니다.
+     *
+     * 남의 cartItemId 를 넣어도 안전하다. 회원 본인의 장바구니 안에서만 지우므로 매칭되지 않는다.
+     *
+     * 항목만 지우고 carts 행은 남긴다. 재고를 선점하지 않았으므로 복구할 것도 없다.
+     */
+    @Transactional
+    public void removeItems(Long memberId, List<Long> cartItemIds) {
+        if (cartItemIds == null || cartItemIds.isEmpty()) {
+            return;
+        }
+        Set<Long> targets = new HashSet<>(cartItemIds);
+
+        cartRepository.findByMemberId(memberId).ifPresent(cart -> {
+            //순회 중 컬렉션을 건드리지 않도록 지울 대상을 먼저 모은다.
+            List<CartItem> removals = cart.getItems().stream()
+                    .filter(item -> targets.contains(item.getCartItemId()))
+                    .toList();
+            removals.forEach(cart::removeItem);
+        });
     }
 
     //판매자를 못 찾으면 null. 상호명은 표시용이라 조회 자체를 실패시키지 않는다.

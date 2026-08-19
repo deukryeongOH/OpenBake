@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -1023,5 +1024,165 @@ class CartServiceTest {
         assertThat(cart.getItems())
                 .extracting(CartItem::getProductId)
                 .containsExactlyInAnyOrder(8L, PRODUCT_ID);
+    }
+
+    // ---------- 주문 연동 ----------
+
+    //cartItemId 는 실제로는 JPA 가 채운다. 주문은 이 값으로 항목을 지목하므로 테스트에서 직접 심는다.
+    private CartItem persistedItem(Long cartItemId, Long productId, int quantity, LocalDate pickUpDate) {
+        CartItem item = CartItem.create(productId, "오픈베이크 베이커리", quantity, pickUpDate, 12000);
+        ReflectionTestUtils.setField(item, "cartItemId", cartItemId);
+        return item;
+    }
+
+    @Test
+    @DisplayName("주문할 항목만 골라 담긴 수량과 픽업일을 그대로 내려준다")
+    void findItemsForOrder_returnsSelectedItems() {
+        // given — 셋 중 둘만 고른다.
+        Cart cart = persistedCart();
+        cart.addItem(persistedItem(101L, PRODUCT_ID, 2, PICKUP_DATE));
+        cart.addItem(persistedItem(102L, 8L, 3, PICKUP_DATE.plusDays(1)));
+        cart.addItem(persistedItem(103L, 9L, 1, PICKUP_DATE));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+
+        // when
+        List<CartOrderItem> result = cartService.findItemsForOrder(MEMBER_ID, List.of(101L, 102L));
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result)
+                .extracting(CartOrderItem::cartItemId)
+                .containsExactlyInAnyOrder(101L, 102L);
+        //수량과 픽업일은 요청이 아니라 장바구니에 담긴 값이다.
+        assertThat(result)
+                .extracting(CartOrderItem::productId, CartOrderItem::quantity, CartOrderItem::pickUpDate)
+                .containsExactlyInAnyOrder(
+                        tuple(PRODUCT_ID, 2, PICKUP_DATE),
+                        tuple(8L, 3, PICKUP_DATE.plusDays(1)));
+    }
+
+    @Test
+    @DisplayName("장바구니에 없는 cartItemId 가 섞이면 통째로 거부한다")
+    void findItemsForOrder_rejectsUnknownItemId() {
+        // given — 999 는 남의 항목이거나 이미 지워진 항목이다. 둘을 구분하지 않는다.
+        Cart cart = persistedCart();
+        cart.addItem(persistedItem(101L, PRODUCT_ID, 2, PICKUP_DATE));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+
+        // when & then — 고른 것 중 일부만 조용히 빠진 채 결제되면 안 되므로 전부 거부한다.
+        assertThatThrownBy(() -> cartService.findItemsForOrder(MEMBER_ID, List.of(101L, 999L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CART_ITEM_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("같은 cartItemId 를 두 번 보내도 한 번만 내려간다")
+    void findItemsForOrder_deduplicates() {
+        // given — 중복을 그대로 두면 주문 수량이 두 배가 된다.
+        Cart cart = persistedCart();
+        cart.addItem(persistedItem(101L, PRODUCT_ID, 2, PICKUP_DATE));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+
+        // when
+        List<CartOrderItem> result = cartService.findItemsForOrder(MEMBER_ID, List.of(101L, 101L));
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().quantity()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("고른 항목이 없으면 주문할 수 없다")
+    void findItemsForOrder_rejectsEmptySelection() {
+        // when & then
+        assertThatThrownBy(() -> cartService.findItemsForOrder(MEMBER_ID, List.of()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    @Test
+    @DisplayName("장바구니가 없으면 주문할 항목도 없다")
+    void findItemsForOrder_rejectsWhenCartAbsent() {
+        // given
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> cartService.findItemsForOrder(MEMBER_ID, List.of(101L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CART_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("주문된 항목만 지우고 나머지는 장바구니에 남는다")
+    void removeItems_removesOnlySelected() {
+        // given
+        Cart cart = persistedCart();
+        cart.addItem(persistedItem(101L, PRODUCT_ID, 2, PICKUP_DATE));
+        cart.addItem(persistedItem(102L, 8L, 3, PICKUP_DATE));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+
+        // when
+        cartService.removeItems(MEMBER_ID, List.of(101L));
+
+        // then
+        assertThat(cart.getItems())
+                .extracting(CartItem::getCartItemId)
+                .containsExactly(102L);
+    }
+
+    @Test
+    @DisplayName("전부 주문해도 장바구니 행은 남는다")
+    void removeItems_keepsCart() {
+        // given
+        Cart cart = persistedCart();
+        cart.addItem(persistedItem(101L, PRODUCT_ID, 2, PICKUP_DATE));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+
+        // when
+        cartService.removeItems(MEMBER_ID, List.of(101L));
+
+        // then
+        assertThat(cart.getItems()).isEmpty();
+        assertThat(cart.getCartId()).isEqualTo(31L);
+    }
+
+    @Test
+    @DisplayName("이미 없는 항목이 섞여도 예외 없이 나머지를 지운다")
+    void removeItems_isIdempotent() {
+        // given — 결제 성공 뒤에 불리므로 여기서 예외가 나면 성공한 결제까지 롤백된다.
+        Cart cart = persistedCart();
+        cart.addItem(persistedItem(101L, PRODUCT_ID, 2, PICKUP_DATE));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+
+        // when — 999 는 사용자가 다른 탭에서 먼저 지웠거나 남의 항목이다.
+        cartService.removeItems(MEMBER_ID, List.of(101L, 999L));
+
+        // then
+        assertThat(cart.getItems()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("남의 cartItemId 로는 아무것도 지워지지 않는다")
+    void removeItems_ignoresForeignItemId() {
+        // given — 본인 장바구니 안에서만 지우므로 매칭 자체가 되지 않는다.
+        Cart cart = persistedCart();
+        cart.addItem(persistedItem(101L, PRODUCT_ID, 2, PICKUP_DATE));
+
+        when(cartRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(cart));
+
+        // when
+        cartService.removeItems(MEMBER_ID, List.of(999L));
+
+        // then
+        assertThat(cart.getItems()).hasSize(1);
     }
 }

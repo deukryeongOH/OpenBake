@@ -239,6 +239,47 @@ services:
       test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
     networks: [ openbake-net ]
 
+  ai-postgres:
+    image: postgres:17
+    container_name: openbake-ai-postgres
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_DB: openbake_ai
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - openbake-ai-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME}" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [ openbake-net ]
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    container_name: openbake-ai-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      AI_DB_URL: jdbc:postgresql://ai-postgres:5432/openbake_ai
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8083/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks: [ openbake-net ]
+
 networks:
   openbake-net:
     driver: bridge
@@ -249,4 +290,5 @@ volumes:
   certbot-etc:
   openbake-payment-pg-data:
   openbake-member-pg-data:
+  openbake-ai-pg-data:
   openbake-es-data:

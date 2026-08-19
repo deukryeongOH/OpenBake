@@ -1,0 +1,22 @@
+server:
+  port: 8083   # AI 추천 서비스 전용 포트
+
+spring:
+  application:
+    name: ai-service
+  datasource:
+    url: ${AI_DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

@@ -53,6 +53,29 @@ public class ProductSearchAdapter implements ProductSearchPort {
     }
 
     @Override
+    public void indexAll(List<Product> products) {
+        List<ProductDocument> documents = products.stream()
+                .map(ProductDocument::from)
+                .toList();
+        productSearchRepository.saveAll(documents);
+    }
+
+    @Override
+    public List<Long> findAllIndexedIds() {
+        NativeQuery query = NativeQuery.builder()
+                .withQuery(Query.of(q -> q.matchAll(m -> m)))
+                .withFields("_id")
+                .withPageable(Pageable.ofSize(10000))
+                .build();
+
+        SearchHits<ProductDocument> searchHits = elasticsearchOperations.search(query, ProductDocument.class);
+        return searchHits.getSearchHits().stream()
+                .map(SearchHit::getContent)
+                .map(ProductDocument::getId)
+                .toList();
+    }
+
+    @Override
     public List<String> autocomplete(String prefix, int size) {
         NativeQuery query = NativeQuery.builder()
                 .withQuery(Query.of(q -> q

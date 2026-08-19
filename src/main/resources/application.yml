@@ -89,6 +89,11 @@ openbake:
     # 이전 실행이 끝난 뒤부터 세는 fixedDelay 라 실행이 겹치지 않는다.
     expiration-delay: PT5M
 
+  # ES 재색인 배치 — RDB↔ES 드리프트 보정 안전망
+  # 매일 새벽 3시 실행. 트래픽이 적은 시간대.
+  reindex:
+    cron: "0 0 3 * * *"
+
   member-service:
     url: ${MEMBER_SERVICE_URL:http://localhost:8081}
 
@@ -150,11 +155,11 @@ resilience4j:
     instances:
       elasticsearch:
         sliding-window-type: COUNT_BASED
-        sliding-window-size: 5
-        minimum-number-of-calls: 3
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
         failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 2
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
         register-health-indicator: true
 
 cloud:

@@ -11,7 +11,7 @@
     - 이제 `check`는 상태/비즈니스 결과만 검증하고, 응답시간은 P95/P99 threshold만 사용합니다.
 2. `drop-enter`에 `http_req_failed: rate==0`을 추가했습니다.
 3. `drop-lock`에도 `http_req_failed: rate==0`을 추가했습니다.
-    - 정상 품절 `DR007`은 기존 `responseCallback`에서 기대 가능한 400으로 처리합니다.
+    - 정상 재고 부족 `DR018`(기존 DR007 응답도 호환 처리)은 기존 `responseCallback`에서 기대 가능한 400으로 처리합니다.
     - invalid state/lock timeout/unexpected는 사용자 정의 Counter threshold가 실패를 잡습니다.
 4. `run-k6.sh`가 실행마다 결과 디렉터리를 자동 생성합니다.
 5. 실행 결과를 `console.txt`, `summary.json`, `metadata.env`로 함께 저장합니다.

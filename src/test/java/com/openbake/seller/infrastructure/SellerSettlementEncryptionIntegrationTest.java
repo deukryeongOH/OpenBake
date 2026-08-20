@@ -1,5 +1,6 @@
 package com.openbake.seller.infrastructure;
 
+import com.openbake.product.infrastructure.elasticsearch.ProductSearchRepository;
 import com.openbake.seller.domain.Seller;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -7,7 +8,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,11 +18,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Seller의 정산 계좌 정보가 DB에는 암호문으로 저장되고,
  * 엔티티 조회 시에는 평문으로 복호화되는지 실제 영속성 컨텍스트/DB를 통해 검증한다.
+ *
+ * 검증 대상은 JPA 영속화와 암호화 컨버터뿐이지만 @SpringBootTest 가 전체 컨텍스트를 올리므로
+ * Elasticsearch 빈까지 함께 생성된다. SimpleElasticsearchRepository 는 생성 시점에 실제로 접속을 시도해,
+ * 로컬에 ES 가 떠 있지 않으면 이 테스트가 컨텍스트 로딩 단계에서 실패한다.
+ * 이 테스트는 검색과 무관하므로 해당 빈들을 대체해 외부 의존성을 끊는다.
  */
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
 class SellerSettlementEncryptionIntegrationTest {
+
+    @MockitoBean
+    private ProductSearchRepository productSearchRepository;
+
+    @MockitoBean
+    private ElasticsearchOperations elasticsearchOperations;
 
     @Autowired
     private SellerJpaRepository sellerJpaRepository;

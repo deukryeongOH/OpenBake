@@ -4,34 +4,27 @@ WORKDIR /app
 
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle ./gradle
-
 COPY common/build.gradle common/build.gradle
 COPY member-service/build.gradle member-service/build.gradle
 COPY payment-service/build.gradle payment-service/build.gradle
 COPY api-gateway/build.gradle api-gateway/build.gradle
 COPY ai-service/build.gradle ai-service/build.gradle
-
 RUN chmod +x gradlew && ./gradlew --version
 
-COPY api-gateway/src api-gateway/src
-
-RUN ./gradlew :api-gateway:bootJar -x test --no-daemon
-
+COPY common/src ./common/src
+COPY ai-service/src ./ai-service/src
+RUN ./gradlew :ai-service:bootJar -x test --no-daemon
 
 # ---- Run stage ----
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
 ENV TZ=Asia/Seoul
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
-  && echo $TZ > /etc/timezone
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-COPY --from=builder \
-  /app/api-gateway/build/libs/*.jar \
-  app.jar
+COPY --from=builder /app/ai-service/build/libs/*.jar app.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod
-
-EXPOSE 8080
+EXPOSE 8083
 
 ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-jar", "app.jar"]

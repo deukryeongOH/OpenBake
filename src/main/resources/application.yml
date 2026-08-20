@@ -44,6 +44,19 @@ spring:
     job:
       enabled: false
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "existing schema before flyway"
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+
 # ── ddl-auto 정책 (팀 결정 대기 중) ─────────────────────────
 # 강의는 create + H2 인메모리 (재시작마다 초기화되는 강의용 세팅).
 # 우리는 PostgreSQL을 5명이 공유하므로 그대로 쓸 수 없음.

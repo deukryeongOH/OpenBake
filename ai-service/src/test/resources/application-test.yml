@@ -23,6 +23,14 @@ OPENAI_API_KEY: test-key
 
 openbake:
   ai:
+    interaction:
+      view-suppression: PT5M
+      interaction-retention: P90D
+      consumed-event-retention: P90D
+      deletion-marker-retention: P35D
+      cleanup-batch-size: 1000
+      cleanup-cron: "-"
+      recommendation-cache-key-prefix: "recommendation:member:"
     embedding:
       model: text-embedding-3-small
       dimensions: 1536

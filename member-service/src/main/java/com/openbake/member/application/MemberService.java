@@ -16,6 +16,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 @Service
 @RequiredArgsConstructor
 public class MemberService {
@@ -26,6 +28,7 @@ public class MemberService {
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessTokenRepository accessTokenRepository;
+    private final MemberWithdrawnOutboxWriter memberWithdrawnOutboxWriter;
 
     @Transactional(readOnly = true)
     public MemberResult getMemberById(Long id) {
@@ -96,6 +99,7 @@ public class MemberService {
         authCredential.withdraw();
         refreshTokenRepository.deleteByMemberId(id);
         accessTokenRepository.blacklistByMemberId(id);
+        memberWithdrawnOutboxWriter.write(id, Instant.now());
     }
 
 }

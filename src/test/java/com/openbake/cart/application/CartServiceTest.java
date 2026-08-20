@@ -9,6 +9,7 @@ import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.interaction.application.InteractionOutboxWriter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class CartServiceTest {
@@ -43,12 +45,14 @@ class CartServiceTest {
     private ProductPort productPort;
     @Mock
     private SellerPort sellerPort;
+    @Mock
+    private InteractionOutboxWriter interactionOutboxWriter;
 
     private CartService cartService;
 
     @BeforeEach
     void setUp() {
-        cartService = new CartService(cartRepository, productPort, sellerPort);
+        cartService = new CartService(cartRepository, productPort, sellerPort, interactionOutboxWriter);
     }
 
     private ProductInfo product(int remainQuantity) {
@@ -102,6 +106,7 @@ class CartServiceTest {
         assertThat(result.quantity()).isEqualTo(2);
         assertThat(result.pickUpDate()).isEqualTo(PICKUP_DATE);
         assertThat(created.getItems()).hasSize(1);
+        verify(interactionOutboxWriter).cartAdded(MEMBER_ID, PRODUCT_ID, 2);
     }
 
     @Test

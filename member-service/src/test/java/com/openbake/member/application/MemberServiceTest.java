@@ -56,6 +56,9 @@ class MemberServiceTest {
     @Mock
     private AccessTokenRepository accessTokenRepository;
 
+    @Mock
+    private MemberWithdrawnOutboxWriter memberWithdrawnOutboxWriter;
+
     @InjectMocks
     private MemberService memberService;
 
@@ -298,6 +301,7 @@ class MemberServiceTest {
         assertThat(credential.getPasswordHash()).isNull();
         verify(refreshTokenRepository).deleteByMemberId(1L);
         verify(accessTokenRepository).blacklistByMemberId(1L);
+        verify(memberWithdrawnOutboxWriter).write(org.mockito.ArgumentMatchers.eq(1L), any());
     }
 
     @Test

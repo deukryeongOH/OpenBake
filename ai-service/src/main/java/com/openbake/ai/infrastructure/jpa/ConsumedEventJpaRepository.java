@@ -26,4 +26,16 @@ public interface ConsumedEventJpaRepository extends JpaRepository<ConsumedEvent,
             @Param("eventType") String eventType,
             @Param("occurredAt") Instant occurredAt,
             @Param("consumedAt") Instant consumedAt);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM consumed_events
+            WHERE event_id IN (
+                SELECT event_id FROM consumed_events
+                WHERE consumed_at < :cutoff
+                ORDER BY consumed_at
+                LIMIT :batchSize
+            )
+            """, nativeQuery = true)
+    int deleteBatchBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 }

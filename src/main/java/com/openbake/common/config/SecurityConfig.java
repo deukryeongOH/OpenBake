@@ -27,6 +27,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/sellers/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/sellers/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/products/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/drops/*/info").permitAll()
                         /** 2. 관리자 전용 내부 API: 현재는 정산만 사용중 */
                         .requestMatchers("/internal/v1/**").hasRole("ADMIN")
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()

@@ -16,6 +16,11 @@ spring:
     enabled: true
   elasticsearch:
     uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:500ms}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     consumer:
@@ -28,6 +33,14 @@ spring:
 
 openbake:
   ai:
+    interaction:
+      view-suppression: PT5M
+      interaction-retention: P90D
+      consumed-event-retention: P90D
+      deletion-marker-retention: P35D
+      cleanup-batch-size: 1000
+      cleanup-cron: "0 20 4 * * *"
+      recommendation-cache-key-prefix: "recommendation:member:"
     embedding:
       model: text-embedding-3-small
       dimensions: 1536

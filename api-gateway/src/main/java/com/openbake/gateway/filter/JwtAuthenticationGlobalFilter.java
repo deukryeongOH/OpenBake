@@ -70,6 +70,14 @@ public class JwtAuthenticationGlobalFilter
             return chain.filter(exchange);
         }
 
+        boolean optionalAuthentication =
+                publicEndpoints.isOptionallyAuthenticated(exchange.getRequest());
+
+        if (optionalAuthentication
+                && exchange.getRequest().getHeaders().getOrEmpty(HttpHeaders.AUTHORIZATION).isEmpty()) {
+            return chain.filter(exchange);
+        }
+
         TokenExtraction tokenExtraction =
                 extractBearerToken(
                         exchange.getRequest().getHeaders()

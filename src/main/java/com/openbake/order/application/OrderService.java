@@ -56,6 +56,7 @@ public class OrderService {
     private final OrderReservationReleaser reservationReleaser;
     //구매확정 이벤트 발행. 정산 리스너가 커밋 후 별도 트랜잭션에서 받는다.
     private final SettlementPort settlementPort;
+    private final PurchaseConfirmedOutboxWriter purchaseConfirmedOutboxWriter;
 
     //목록 페이지 크기 상한. 명세서 기준 최대 50.
     private static final int MAX_PAGE_SIZE = 50;
@@ -332,6 +333,11 @@ public class OrderService {
 
         // 정산으로 구매확정 이벤트를 발행한다.
         publishPurchaseConfirmed(order);
+
+        OrderItem item = order.getOrderItem();
+        purchaseConfirmedOutboxWriter.write(
+                order.getMemberId(), item.getDropId(), item.getQuantity(), order.getOrderId(),
+                order.getConfirmAt().atZone(ZoneId.systemDefault()).toInstant());
     }
 
     /**

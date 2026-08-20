@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "MEMBER_SERVICE_URL=http://member.test:8081",
         "PAYMENT_SERVICE_URL=http://payment.test:8082",
         "CORE_SERVICE_URL=http://core.test:8080",
+        "AI_SERVICE_URL=http://ai.test:8083",
         "jwt.secret=openbake-test-secret-must-be-at-least-32-bytes"
 })
 class RouteConfigurationTest {
@@ -39,6 +40,7 @@ class RouteConfigurationTest {
                         "member-api",
                         "payment-webhook",
                         "payment-api",
+                        "ai-recommendation",
                         "core-swagger-ui",
                         "core-api-docs",
                         "core-api"
@@ -46,6 +48,12 @@ class RouteConfigurationTest {
                 routes.keySet()
         );
 
+        assertRoute(
+                routes,
+                "ai-recommendation",
+                "http://ai.test:8083",
+                -30
+        );
         assertRoute(
                 routes,
                 "member-auth",
@@ -111,6 +119,10 @@ class RouteConfigurationTest {
                 "/api/v1/deposit/account"
         ));
         assertTrue(matches(
+                routes.get("ai-recommendation"),
+                "/api/v1/recommendations"
+        ));
+        assertTrue(matches(
                 routes.get("core-swagger-ui"),
                 "/swagger-ui.html"
         ));
@@ -130,6 +142,8 @@ class RouteConfigurationTest {
                 routes.get("core-api"),
                 "/api/v1/sellers/1"
         ));
+        assertTrue(routes.get("ai-recommendation").getOrder()
+                < routes.get("core-api").getOrder());
     }
 
     @Test

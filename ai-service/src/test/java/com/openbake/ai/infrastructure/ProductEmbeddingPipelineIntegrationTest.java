@@ -59,6 +59,8 @@ import tools.jackson.databind.ObjectMapper;
         "DB_USERNAME=unused",
         "DB_PASSWORD=unused",
         "KAFKA_BOOTSTRAP_SERVERS=unused:9092",
+        "CORE_SERVICE_URL=http://127.0.0.1:1",
+        "AI_SERVICE_TOKEN=${random.uuid}",
         "spring.data.redis.host=127.0.0.1",
         "spring.data.redis.port=1",
         "spring.data.redis.timeout=100ms",

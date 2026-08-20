@@ -58,6 +58,11 @@ spring:
               predicates:
                 - Path=/api/v1/deposit/**
               order: -70
+            - id: ai-recommendation
+              uri: ${AI_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/v1/recommendations/**
+              order: -30
             - id: core-swagger-ui
               uri: ${CORE_SERVICE_URL:http://localhost:8080}
               predicates:

@@ -30,6 +30,10 @@ seller:
   settlement:
     encryption-key: vda+GapT+dotms8HmcaQVkp9gbhfDH2YIteyLm2DTWw=
 
+openbake:
+  security:
+    ai-service-token: ${AI_SERVICE_TOKEN:${random.uuid}}
+
 # S3 Config가 spring 빈에 등록되기 위해 추가(SellerSettlementEncryptionIntegrationTest 테스트 통과하기 위해 추가)
 cloud:
   aws:

@@ -28,6 +28,9 @@ jobs:
           - service: member-service
             context: .
             dockerfile: member-service/Dockerfile
+          - service: ai-service
+            context: .
+            dockerfile: ai-service/Dockerfile
           - service: elasticsearch
             context: ./elasticsearch
             dockerfile: Dockerfile

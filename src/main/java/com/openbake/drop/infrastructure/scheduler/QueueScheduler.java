@@ -3,6 +3,7 @@ package com.openbake.drop.infrastructure.scheduler;
 import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.service.DropEnterService;
 import com.openbake.drop.application.service.DropService;
+import com.openbake.drop.application.service.DropStockSyncService;
 import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.application.cache.TodayDropCache;
 import jakarta.annotation.PostConstruct;
@@ -23,6 +24,7 @@ public class QueueScheduler {
     private final DropService dropService;
     private final DropEnterService dropEnterService;
     private final TodayDropCache todayDropCache;
+    private final DropStockSyncService dropStockSyncService;
 
     // 서버 기동 시 당일 드롭 정보를 1회 캐싱 (자정 스케줄을 못 탄 채로 기동될 수 있으므로)
     @PostConstruct
@@ -44,6 +46,7 @@ public class QueueScheduler {
             if (now.isAfter(drop.dropEnd())) {
                 if (drop.tryMarkEnded()) {
                     dropService.changeDropStatusCompleted(drop.dropId());
+                    dropStockSyncService.finalizeStock(drop);
                 }
                 queueManager.finishDrop(drop.dropId());
                 continue;
@@ -55,9 +58,24 @@ public class QueueScheduler {
 
             if (drop.tryMarkStarted()) {
                 dropService.changeDropStatusActive(drop.dropId());
+                // 재고 카운터가 없으면 요청이 전부 fail-closed 로 거부되므로 ACTIVE 전환과 같은 시점에 워밍업한다.
+                dropStockSyncService.warmUp(drop);
             }
 
             queueManager.allowEntries(drop.dropId(), ENTRIES_PER_TICK);
+        }
+    }
+
+    // 진행 중인 드롭의 Redis 재고를 DB에 반영한다. 드롭당 UPDATE 1회라 경합이 없다.
+    @Scheduled(fixedRate = 2000)
+    public void syncDropStock() {
+        LocalDateTime now = LocalDateTime.now();
+        for (CachedDrop drop : todayDropCache.get()) {
+            if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())) {
+                continue;
+            }
+
+            dropStockSyncService.sync(drop);
         }
     }
 

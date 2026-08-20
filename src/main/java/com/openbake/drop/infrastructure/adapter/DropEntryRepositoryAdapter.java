@@ -45,4 +45,9 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
         return dropEntryJpaRepository.fail(dropId, memberId);
     }
 
+    @Override
+    public int sumReservedQuantity(Long dropId) {
+        return dropEntryJpaRepository.sumReservedQuantity(dropId);
+    }
+
 }

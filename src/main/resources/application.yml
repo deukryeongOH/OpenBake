@@ -13,6 +13,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # 재고 선점은 fail-closed 정책이라, 응답이 없으면 거부해야 성립한다.
+      # 타임아웃이 없으면 거부 대신 톰캣 스레드가 묶인다.
+      timeout: ${REDIS_TIMEOUT:500ms}
     web:
       pageable:
         max-page-size: 20

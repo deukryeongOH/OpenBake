@@ -451,7 +451,7 @@ class MonthlySettlementServiceTest {
         assertThat(line.getOrderItemId())
                 .isEqualTo(2001L);
 
-        assertThat(line.getDropId())
+        assertThat(line.getProductId())
                 .isEqualTo(3001L);
 
         assertThat(line.getProductNameSnapshot())
@@ -570,7 +570,7 @@ class MonthlySettlementServiceTest {
             Long orderId,
             Long orderItemId,
             Long sellerId,
-            Long dropId,
+            Long productId,
             String productName,
             Integer quantity,
             String grossAmount
@@ -581,7 +581,7 @@ class MonthlySettlementServiceTest {
                         orderId,
                         orderItemId,
                         sellerId,
-                        dropId,
+                        productId,
                         productName,
                         quantity,
                         new BigDecimal(grossAmount),

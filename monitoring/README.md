@@ -96,7 +96,7 @@ Dashboard  : OpenBake Performance Overview
 
 ## 6. k6 -> Prometheus Remote Write (선택)
 
-`.env.k6`에서 아래를 설정합니다.
+`.env.k6.local`에서 아래를 설정합니다.
 
 ```env
 K6_PROMETHEUS_RW_ENABLED=true
@@ -173,3 +173,108 @@ Drop Lock Map Size
 
 재고 선점 테스트에서는 HTTP/Tomcat/Hikari/JVM 지표를 함께 확인하세요.
 Grafana `OpenBake Performance Overview` 하단에는 Phase 5 lock 전용 패널이 추가되어 있습니다.
+
+
+# OpenBake Monitoring - Local / Server 공용 개선본
+
+## 문제 원인
+
+기존 `run-monitoring.sh`는 일반 Linux 서버에서 `host.docker.internal`을 기본 target으로 사용합니다.
+
+하지만 서버의 Core/Member/Payment는 다음처럼 Docker 내부 포트만 열려 있습니다.
+
+- `openbake-backend` -> `8080/tcp`
+- `openbake-member-service` -> `8081/tcp`
+- `openbake-payment` -> `8082/tcp`
+
+호스트에 `8080/8081/8082`가 publish되지 않았기 때문에 서버의 Prometheus 컨테이너에서
+`host.docker.internal:8080`으로 접근하면 connection refused가 발생합니다.
+
+## 개선 내용
+
+`run-monitoring.sh`가 local/server를 구분합니다.
+
+### auto 모드 (기본/권장)
+
+```bash
+./run-monitoring.sh
+```
+
+판정 순서:
+
+1. `localhost:8080`에 Core가 있으면 `local`
+2. 그렇지 않고 `openbake-backend` 컨테이너가 실행 중이면 `server`
+
+따라서 기존 로컬에서는 별도 인자 없이 계속 사용할 수 있고,
+현재 Docker 서버에서도 별도 인자 없이 자동으로 server 모드가 선택됩니다.
+
+명시 실행도 가능합니다.
+
+```bash
+./run-monitoring.sh local
+./run-monitoring.sh server
+```
+
+## local 모드
+
+기존 로컬 동작을 보존합니다.
+
+- WSL이면 WSL IPv4 자동 탐지
+- Core 8080
+- Member 8081
+- Payment 8082
+
+Prometheus는 호스트에서 bootRun 중인 애플리케이션을 scrape합니다.
+
+## server 모드
+
+Prometheus target:
+
+- `openbake-backend:8080`
+- `openbake-member-service:8081`
+- `openbake-payment:8082`
+
+그리고 `openbake-backend`의 실제 Docker network를 자동으로 찾은 후
+`openbake-prometheus`를 그 network에 추가 연결합니다.
+
+애플리케이션의 8080/8081/8082 포트를 외부에 publish할 필요가 없습니다.
+
+## 적용 파일
+
+- `monitoring/run-monitoring.sh`
+- `monitoring/verify-monitoring.sh`
+- `monitoring/.env.monitoring.example`
+- `monitoring/prometheus/prometheus.yml.template`
+
+기존 `.env.monitoring`의 비밀번호/환경값은 덮어쓰지 않는 것을 권장합니다.
+
+기존 `.env.monitoring`을 유지해도 새 스크립트는
+`LOCAL_*`, `SERVER_*`, `CORE_CONTAINER` 등의 값을 지원합니다.
+
+## 실행
+
+```bash
+cd monitoring
+
+chmod +x run-monitoring.sh verify-monitoring.sh
+
+./run-monitoring.sh
+./verify-monitoring.sh
+```
+
+서버에서 정상이라면 다음과 같이 보여야 합니다.
+
+```text
+Profile     : server
+Core        : openbake-backend:8080
+Member      : openbake-member-service:8081
+Payment     : openbake-payment:8082
+```
+
+그리고 검증 결과:
+
+```text
+OK: openbake-core = UP
+OK: openbake-member = UP
+OK: openbake-payment = UP
+```

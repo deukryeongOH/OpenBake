@@ -16,7 +16,10 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PERF_DIR = SCRIPT_DIR.parent
-K6_ENV = PERF_DIR / ".env.k6"
+
+
+def k6_env_path(profile: str) -> Path:
+    return PERF_DIR / f".env.k6.{profile}"
 
 
 def load_env_file(path: Path, override: bool = False) -> None:
@@ -37,7 +40,7 @@ def configure(profile: str) -> None:
     # 공통 → 프로파일 순서. 프로파일 파일이 공통값을 덮어쓴다.
     load_env_file(SCRIPT_DIR / ".env.perf")
     load_env_file(SCRIPT_DIR / f".env.{profile}", override=True)
-    load_env_file(K6_ENV)
+    load_env_file(k6_env_path(profile))
 
     os.environ["PERF_PROFILE"] = profile
 
@@ -346,8 +349,9 @@ def find_free_registration_slot(seller_id: int) -> datetime:
     raise RuntimeError("등록 가능한 Drop 슬롯을 찾지 못했습니다.")
 
 
-def update_k6_env(values: dict[str, str]) -> None:
-    lines = K6_ENV.read_text(encoding="utf-8").splitlines() if K6_ENV.exists() else []
+def update_k6_env(profile: str, values: dict[str, str]) -> None:
+    k6_env = k6_env_path(profile)
+    lines = k6_env.read_text(encoding="utf-8").splitlines() if k6_env.exists() else []
     pending = dict(values)
     output: list[str] = []
 
@@ -365,7 +369,8 @@ def update_k6_env(values: dict[str, str]) -> None:
         output += ["", "# prepare-drop 자동 설정"]
         output += [f"{k}={v}" for k, v in pending.items()]
 
-    K6_ENV.write_text("\n".join(output) + "\n", encoding="utf-8")
+    k6_env.write_text("\n".join(output) + "\n", encoding="utf-8")
+    print(f"[PERF] k6 환경파일 업데이트: {k6_env}")
 
 
 def restart_backend() -> None:
@@ -464,14 +469,17 @@ def create_drop(user_count: int) -> int:
         restart_backend()
 
     # local은 직접 서비스 주소, server는 공개 gateway 주소가 두 값 모두에 들어간다.
-    update_k6_env({
-        "CORE_BASE_URL": env("CORE_BASE_URL", required=True),
-        "MEMBER_BASE_URL": env("MEMBER_BASE_URL", required=True),
-        "DROP_ID": str(drop_id),
-        "USER_COUNT": str(user_count),
-        "EXPECTED_SUCCESS": str(user_count),
-        "EXPECTED_SOLD_OUT": "0",
-    })
+    update_k6_env(
+        env("PERF_PROFILE", required=True),
+        {
+            "CORE_BASE_URL": env("CORE_BASE_URL", required=True),
+            "MEMBER_BASE_URL": env("MEMBER_BASE_URL", required=True),
+            "DROP_ID": str(drop_id),
+            "USER_COUNT": str(user_count),
+            "EXPECTED_SUCCESS": str(user_count),
+            "EXPECTED_SOLD_OUT": "0",
+        }
+    )
 
     print()
     print("========================================")

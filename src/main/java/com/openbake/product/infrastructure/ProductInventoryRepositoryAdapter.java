@@ -42,4 +42,15 @@ public class ProductInventoryRepositoryAdapter implements ProductInventoryReposi
     public int decreaseStock(Long productId, int quantity) {
         return productInventoryJpaRepository.decreaseStock(productId, quantity);
     }
+
+    @Override
+    public int syncRemainQuantity(Long productId, int remainQuantity) {
+        return productInventoryJpaRepository.syncRemainQuantity(productId, remainQuantity);
+    }
+
+    @Override
+    public int findTotalQuantity(Long productId) {
+        return productInventoryJpaRepository.findTotalQuantity(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_INVENTORY_NOT_FOUND));
+    }
 }

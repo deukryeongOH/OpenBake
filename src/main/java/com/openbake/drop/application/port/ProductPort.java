@@ -21,6 +21,11 @@ public interface ProductPort {
 
     int rollbackQuantity(Long productId, int selectQuantity);
 
+    // Redis 카운터 값을 product_inventory 에 반영 (절대값 대입, 멱등)
+    void syncRemainQuantity(Long productId, int remainQuantity);
+
+    int getTotalQuantity(Long productId);
+
     Long getSellerIdByProductId(Long productId);
 
     boolean isGeneralProduct(Long aLong);

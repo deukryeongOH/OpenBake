@@ -67,6 +67,7 @@ public enum ErrorCode {
     TIMESLOT_NOT_CONTAINS(HttpStatus.BAD_REQUEST, "DR019", "선택한 시간은 타임 슬롯에 없는 시간입니다."),
     NOT_RESERVED_STATUS(HttpStatus.BAD_REQUEST, "DR020", "재고를 선점한 상태가 아닙니다."),
     OPTIMISTIC_LOCK_CONFLICT(HttpStatus.CONFLICT, "DR021", "다른 요청과 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
+    STOCK_NOT_INITIALIZED(HttpStatus.SERVICE_UNAVAILABLE, "DR022", "재고가 준비되지 않았습니다. 잠시 후 다시 시도해주세요."),
 
     // product - PR
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PR001", "존재하지 않는 일반 상품입니다."),

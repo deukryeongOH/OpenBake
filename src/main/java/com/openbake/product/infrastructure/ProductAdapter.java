@@ -97,4 +97,14 @@ public class ProductAdapter implements ProductPort {
     public boolean isGeneralProduct(Long productId) {
         return productService.isGeneralProduct(productId);
     }
+
+    @Override
+    public void syncRemainQuantity(Long productId, int remainQuantity) {
+        productService.syncRemainQuantity(productId, remainQuantity);
+    }
+
+    @Override
+    public int getTotalQuantity(Long productId) {
+        return productService.getTotalQuantity(productId);
+    }
 }

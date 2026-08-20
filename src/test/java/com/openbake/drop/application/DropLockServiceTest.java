@@ -1,10 +1,12 @@
 package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
+import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.application.dto.DropReserveCommand;
 import com.openbake.drop.application.port.CurrentMemberPort;
 import com.openbake.drop.application.port.ProductPort;
+import com.openbake.drop.application.port.StockReservationPort;
 import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.application.service.DropLockService;
 import com.openbake.drop.application.service.DropService;
@@ -58,6 +60,9 @@ class DropLockServiceTest {
     @Mock
     private CurrentMemberPort currentMemberPort;
 
+    @Mock
+    private StockReservationPort stockReservationPort;
+
     @InjectMocks
     private DropLockService dropLockService;
 
@@ -98,14 +103,16 @@ class DropLockServiceTest {
         // given
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
-        given(productPort.decreaseQuantity(productId, 3)).willReturn(97);
+        given(stockReservationPort.reserve(dropId, 3)).willReturn(97L);
 
         // when
         dropLockService.decreaseQuantity(dropId, memberId, 3);
 
         // then
         verify(dropEntryRepository).reserve(dropId, memberId, 3);
-        verify(productPort).decreaseQuantity(productId, 3);
+        verify(stockReservationPort).reserve(dropId, 3);
+        // 재고 차감이 Redis 로 옮겨갔으므로 DB 단일 row UPDATE 는 더 이상 호출되지 않는다
+        verify(productPort, never()).decreaseQuantity(any(), anyInt());
         verify(dropService, never()).changeDropStatusCompleted(any());
         verify(queueManager, never()).markSoldOut(any());
     }
@@ -122,6 +129,7 @@ class DropLockServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         verifyNoInteractions(productPort);
+        verifyNoInteractions(stockReservationPort);
     }
 
     @Test
@@ -130,7 +138,7 @@ class DropLockServiceTest {
         // given
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 5)).willReturn(1);
-        given(productPort.decreaseQuantity(productId, 5)).willReturn(0);
+        given(stockReservationPort.reserve(dropId, 5)).willReturn(0L);
 
         // when
         dropLockService.decreaseQuantity(dropId, memberId, 5);
@@ -141,20 +149,51 @@ class DropLockServiceTest {
     }
 
     @Test
+    @DisplayName("재고 카운터가 초기화되지 않았으면 선점을 거부한다(fail-closed)")
+    void decreaseQuantity_StockNotInitialized_Rejects() {
+        // given
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
+        given(stockReservationPort.reserve(dropId, 3)).willReturn((long) StockReservationPort.NOT_INITIALIZED);
+
+        // when & then
+        assertThatThrownBy(() -> dropLockService.decreaseQuantity(dropId, memberId, 3))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining(ErrorCode.STOCK_NOT_INITIALIZED.getMessage());
+
+        verify(dropService, never()).changeDropStatusCompleted(any());
+    }
+
+    @Test
+    @DisplayName("재고가 부족하면 품절 예외를 던진다")
+    void decreaseQuantity_OutOfStock_Throws() {
+        // given
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
+        given(stockReservationPort.reserve(dropId, 3)).willReturn((long) StockReservationPort.OUT_OF_STOCK);
+
+        // when & then
+        assertThatThrownBy(() -> dropLockService.decreaseQuantity(dropId, memberId, 3))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining(ErrorCode.DROP_OUT_OF_STOCK.getMessage());
+
+    }
+
+    @Test
     @DisplayName("재고 선점 성공 - 사전 검증을 통과하면 재고를 차감한다")
     void reserveStock_Success() {
         // given
         given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
-        given(productPort.decreaseQuantity(productId, 3)).willReturn(97);
+        given(stockReservationPort.reserve(dropId, 3)).willReturn(97L);
 
         // when
         dropLockService.reserveStock(dropId, DropReserveCommand.create(3));
 
         // then
         verify(dropEntryRepository).reserve(dropId, memberId, 3);
-        verify(productPort).decreaseQuantity(productId, 3);
+        verify(stockReservationPort).reserve(dropId, 3);
     }
 
     @Test
@@ -169,7 +208,7 @@ class DropLockServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         verifyNoInteractions(dropEntryRepository);
-        verify(productPort, never()).decreaseQuantity(any(), anyInt());
+        verifyNoInteractions(stockReservationPort);
     }
 
     @Test
@@ -213,14 +252,16 @@ class DropLockServiceTest {
                 .willReturn(Optional.of(enteredEntry));
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
-        given(productPort.rollbackQuantity(productId, 5)).willReturn(5);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(stockReservationPort.rollback(dropId, 5, 100)).willReturn(5L);
 
         // when
         dropLockService.rollbackStock(dropId, memberId);
 
         // then
         verify(dropEntryRepository).fail(dropId, memberId);
-        verify(productPort).rollbackQuantity(productId, 5);
+        verify(stockReservationPort).rollback(dropId, 5, 100);
+        verify(productPort, never()).rollbackQuantity(any(), anyInt());
     }
 
     @Test
@@ -260,7 +301,8 @@ class DropLockServiceTest {
                 .willReturn(Optional.of(enteredEntry));
         given(dropRepository.findById(dropId)).willReturn(Optional.of(soldOutDrop));
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
-        given(productPort.rollbackQuantity(productId, 5)).willReturn(5);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(stockReservationPort.rollback(dropId, 5, 100)).willReturn(5L);
 
         // when
         dropLockService.rollbackStock(dropId, memberId);
@@ -294,7 +336,8 @@ class DropLockServiceTest {
                 .willReturn(Optional.of(enteredEntry));
         given(dropRepository.findById(dropId)).willReturn(Optional.of(endedDrop));
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
-        given(productPort.rollbackQuantity(productId, 5)).willReturn(5);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(stockReservationPort.rollback(dropId, 5, 100)).willReturn(5L);
 
         // when
         dropLockService.rollbackStock(dropId, memberId);
@@ -313,7 +356,8 @@ class DropLockServiceTest {
                 .willReturn(Optional.of(enteredEntry));
         given(dropRepository.findById(dropId)).willReturn(Optional.of(drop)); // status = ACTIVE
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
-        given(productPort.rollbackQuantity(productId, 3)).willReturn(100);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(stockReservationPort.rollback(dropId, 3, 100)).willReturn(100L);
 
         // when
         dropLockService.rollbackStock(dropId, memberId);

@@ -26,4 +26,10 @@ public interface DropEntryJpaRepository extends JpaRepository<DropEntry, Long> {
     @Query("Update DropEntry e SET e.entryStatus = 'FAILED' " + "WHERE e.dropId = :dropId AND e.memberId = :memberId" +
             " AND e.entryStatus = 'RESERVED'")
     int fail(@Param("dropId") Long dropId,@Param("memberId") Long memberId);
+
+    // Redis 재고 카운터의 초기값 계산용. 드롭 시작 시점(합계 0)과 카운터 유실 후 복구 시점 모두
+    // 같은 식으로 정확한 잔여 수량을 얻기 위해 선점 합계를 집계한다.
+    @Query("SELECT COALESCE(SUM(e.selectQuantity), 0) FROM DropEntry e " +
+            "WHERE e.dropId = :dropId AND e.entryStatus = 'RESERVED'")
+    int sumReservedQuantity(@Param("dropId") Long dropId);
 }

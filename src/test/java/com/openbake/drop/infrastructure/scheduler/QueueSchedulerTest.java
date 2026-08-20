@@ -2,6 +2,7 @@ package com.openbake.drop.infrastructure.scheduler;
 
 import com.openbake.drop.application.service.DropEnterService;
 import com.openbake.drop.application.service.DropService;
+import com.openbake.drop.application.service.DropStockSyncService;
 import com.openbake.drop.application.queue.InMemoryQueueManager;
 import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.cache.TodayDropCache;
@@ -40,15 +41,19 @@ class QueueSchedulerTest {
     @Mock
     private TodayDropCache todayDropCache;
 
+    @Mock
+    private DropStockSyncService dropStockSyncService;
+
     @InjectMocks
     private QueueScheduler queueScheduler;
 
     private final Long dropId = 1L;
+    private static final Long PRODUCT_ID = 100L;
 
     // started/ended가 이미 마킹된 상태로 만들고 싶으면 alreadyStarted/alreadyEnded를 true로 넘긴다
     // (tryMarkStarted/tryMarkEnded가 compareAndSet(false, true)라 이미 true면 항상 false를 반환한다)
     private static CachedDrop cachedDrop(Long dropId, LocalDateTime start, LocalDateTime end, boolean alreadyStarted, boolean alreadyEnded) {
-        return new CachedDrop(LocalDate.now(), dropId, start, end, new AtomicBoolean(alreadyStarted), new AtomicBoolean(alreadyEnded));
+        return new CachedDrop(LocalDate.now(), dropId, PRODUCT_ID, start, end, new AtomicBoolean(alreadyStarted), new AtomicBoolean(alreadyEnded));
     }
 
     @Test
@@ -243,6 +248,87 @@ class QueueSchedulerTest {
 
         // then
         verify(dropEnterService).failExpiredEntries(dropId, Set.of());
+    }
+
+    @Test
+    @DisplayName("드롭 시작 첫 tick에는 Active 전환과 함께 재고 카운터를 워밍업한다")
+    void processQueue_JustAfterDropStart_WarmsUpStock() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        CachedDrop drop = cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30), false, false);
+        given(todayDropCache.get()).willReturn(List.of(drop));
+
+        // when
+        queueScheduler.processQueue();
+
+        // then
+        verify(dropStockSyncService).warmUp(drop);
+    }
+
+    @Test
+    @DisplayName("이미 시작된 드롭은 tick마다 워밍업을 반복하지 않는다")
+    void processQueue_AlreadyStarted_DoesNotWarmUpAgain() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusMinutes(1), now.plusMinutes(30), true, false)
+        ));
+
+        // when
+        queueScheduler.processQueue();
+
+        // then
+        verify(dropStockSyncService, never()).warmUp(any());
+    }
+
+    @Test
+    @DisplayName("마감 첫 tick에는 재고를 최종 확정한다")
+    void processQueue_AfterDropEnd_FinalizesStockOnce() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        CachedDrop drop = cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1), true, false);
+        given(todayDropCache.get()).willReturn(List.of(drop));
+
+        // when
+        queueScheduler.processQueue();
+
+        // then
+        verify(dropStockSyncService).finalizeStock(drop);
+    }
+
+    @Test
+    @DisplayName("이미 마감 처리된 드롭은 재고 확정을 반복하지 않는다")
+    void processQueue_AlreadyEnded_DoesNotFinalizeAgain() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        given(todayDropCache.get()).willReturn(List.of(
+                cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1), true, true)
+        ));
+
+        // when
+        queueScheduler.processQueue();
+
+        // then
+        verify(dropStockSyncService, never()).finalizeStock(any());
+    }
+
+    @Test
+    @DisplayName("진행 중인 드롭만 주기 동기화 대상이다")
+    void syncDropStock_OnlySyncsDropsInsideWindow() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        CachedDrop upcoming = cachedDrop(2L, now.plusMinutes(10), now.plusHours(1), false, false);
+        CachedDrop active = cachedDrop(3L, now.minusMinutes(1), now.plusMinutes(30), true, false);
+        CachedDrop ended = cachedDrop(4L, now.minusHours(2), now.minusMinutes(1), true, true);
+        given(todayDropCache.get()).willReturn(List.of(upcoming, active, ended));
+
+        // when
+        queueScheduler.syncDropStock();
+
+        // then
+        verify(dropStockSyncService).sync(active);
+        verify(dropStockSyncService, never()).sync(upcoming);
+        verify(dropStockSyncService, never()).sync(ended);
     }
 
     @Test

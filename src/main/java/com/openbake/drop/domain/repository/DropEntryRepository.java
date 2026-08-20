@@ -20,4 +20,7 @@ public interface DropEntryRepository {
     int reserve(Long dropId, Long memberId, int selectQuantity);
 
     int fail(Long dropId, Long memberId);
+
+    // Redis 재고 카운터 초기화·복구의 기준값
+    int sumReservedQuantity(Long dropId);
 }

@@ -203,6 +203,22 @@ public class ProductService {
     }
 
 
+    /** 재고 카운터 초기화·드리프트 검출·롤백 상한 검사에 쓰이는 총 수량. 스칼라 조회라 가볍다. */
+    @Transactional(readOnly = true)
+    public int getTotalQuantity(Long productId) {
+        return productInventoryRepository.findTotalQuantity(productId);
+    }
+
+    /** 드롭 진행 중 Redis 카운터 값을 DB에 반영한다. 절대값 대입이라 멱등하다. */
+    @Transactional
+    public void syncRemainQuantity(Long productId, int remainQuantity) {
+        if (remainQuantity < 0) {
+            throw new BusinessException(ErrorCode.QUANTITY_CAN_NOT_BE_MINUS);
+        }
+
+        productInventoryRepository.syncRemainQuantity(productId, remainQuantity);
+    }
+
     private Product validateSellerProduct(Long productId, Long sellerId) {
         Product product = getProduct(productId);
 

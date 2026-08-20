@@ -40,13 +40,14 @@ public class ProductService {
                 .sellerId(sellerId)
                 .build();
 
+        productRepository.save(product);
+
         ProductInventory productInventory = ProductInventory.builder()
                 .productId(product.getId())
                 .remainQuantity(command.totalQuantity())
                 .totalQuantity(command.totalQuantity())
                 .build();
 
-        productRepository.save(product);
         productInventoryRepository.save(productInventory);
 
         return ProductInfoResult.of(product.getName(), product.getDescription(), product.getImageUrl(),

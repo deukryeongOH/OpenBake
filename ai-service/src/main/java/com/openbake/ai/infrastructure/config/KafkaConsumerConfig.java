@@ -21,8 +21,13 @@ import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.util.backoff.BackOff;
 import org.springframework.util.backoff.BackOffExecution;
 import tools.jackson.core.JacksonException;
+import io.micrometer.core.instrument.MeterRegistry;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
+import com.openbake.common.event.EventTopics;
 
 @Configuration
+@Slf4j
 public class KafkaConsumerConfig {
 
     /**
@@ -74,13 +79,23 @@ public class KafkaConsumerConfig {
      * DLT 토픽명은 이미 만들어둔 소문자 `.dlt` 접미사에 맞춰 커스텀 resolver로 지정한다.
      */
     @Bean
-    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafkaTemplate) {
+    public DefaultErrorHandler kafkaErrorHandler(
+            KafkaTemplate<String, String> kafkaTemplate, MeterRegistry meterRegistry) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 kafkaTemplate,
-                (record, ex) -> new TopicPartition(record.topic() + ".dlt", record.partition()));
+                (record, ex) -> new TopicPartition(record.topic() + ".dlt", 0));
+
+        ConsumerRecordRecoverer observingRecoverer = (record, exception) -> {
+            recoverer.accept(record, exception);
+            if (EventTopics.MEMBER_WITHDRAWN.equals(record.topic())) {
+                meterRegistry.counter("openbake.ai.member-withdrawn.dlt").increment();
+                log.error("회원 탈퇴 이벤트 DLT 이동 key={} partition={} offset={}",
+                        record.key(), record.partition(), record.offset(), exception);
+            }
+        };
 
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-                recoverer, new FixedIntervalsBackOff(1_000L, 5_000L, 30_000L));
+                observingRecoverer, new FixedIntervalsBackOff(1_000L, 5_000L, 30_000L));
         errorHandler.addNotRetryableExceptions(
                 JacksonException.class,
                 IllegalArgumentException.class);

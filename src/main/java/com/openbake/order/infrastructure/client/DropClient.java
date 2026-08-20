@@ -32,4 +32,11 @@ public class DropClient implements DropPort {
                 product.getPrice()
         );
     }
+
+    @Override
+    public Long getProductId(Long dropId) {
+        return dropRepository.findById(dropId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND))
+                .getProductId();
+    }
 }

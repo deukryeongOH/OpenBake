@@ -67,6 +67,8 @@ class OrderServiceTest {
     private OrderReservationReleaser reservationReleaser;
     @Mock
     private SettlementPort settlementPort;
+    @Mock
+    private PurchaseConfirmedOutboxWriter purchaseConfirmedOutboxWriter;
 
     private OrderService orderService;
 
@@ -81,7 +83,8 @@ class OrderServiceTest {
                 reservationPort,
                 dropPort,
                 reservationReleaser,
-                settlementPort
+                settlementPort,
+                purchaseConfirmedOutboxWriter
         );
     }
 

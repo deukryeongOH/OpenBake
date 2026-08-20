@@ -9,6 +9,7 @@ import com.openbake.cart.domain.CartItem;
 import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.interaction.application.InteractionOutboxWriter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ public class CartService {
     private final CartRepository cartRepository;
     private final ProductPort productPort;
     private final SellerPort sellerPort;
+    private final InteractionOutboxWriter interactionOutboxWriter;
 
     /**
      * 장바구니에 상품 담기.
@@ -95,6 +97,8 @@ public class CartService {
         //합산됐을 수도 새로 담겼을 수도 있으므로 최종 상태를 다시 읽어 응답한다.
         CartItem item = saved.findItem(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        interactionOutboxWriter.cartAdded(memberId, productId, quantity);
 
         return CartItemAddResult.from(saved.getCartId(), item);
     }

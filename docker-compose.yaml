@@ -237,9 +237,11 @@ services:
       MEMBER_DB_URL: jdbc:postgresql://member-postgres:5432/openbake_member
       REDIS_HOST: redis    # 기존 Redis 컨테이너 재사용 (블랙리스트/토큰 저장, 키 네임스페이스로 구분됨)
       REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       member-postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
     networks: [ openbake-net ]
@@ -277,12 +279,16 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       ai-postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
       elasticsearch:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083/actuator/health" ]

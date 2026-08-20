@@ -262,6 +262,15 @@ public class ProductService {
                 product.getId(), productInventory.getRemainQuantity(), product.getType(), product.getSellerId());
     }
 
+    @Transactional(readOnly = true)
+    public ProductInfoResult getGeneralProductInfo(Long productId) {
+        Product product = getProduct(productId);
+        if (product.getType() != Type.GENERAL) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
+        }
+        return getProductInfo(productId);
+    }
+
 
     @Transactional(readOnly = true)
     public List<ProductInfoResult> findProductListBySellerId(Long sellerId) {

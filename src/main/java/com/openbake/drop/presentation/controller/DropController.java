@@ -4,6 +4,7 @@ package com.openbake.drop.presentation.controller;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.drop.application.dto.*;
 import com.openbake.drop.application.service.DropService;
+import com.openbake.drop.application.service.DropDetailService;
 import com.openbake.drop.presentation.dto.DropInfoResponse;
 import com.openbake.drop.presentation.dto.DropInfoRequest;
 import com.openbake.drop.presentation.dto.LocalDateRequest;
@@ -27,6 +28,7 @@ import java.util.List;
 public class DropController {
 
     private final DropService dropService;
+    private final DropDetailService dropDetailService;
 
     @Operation(
             summary = "드롭 등록",
@@ -59,7 +61,7 @@ public class DropController {
     @GetMapping("/{dropId}/info")
     public ApiResponse<DropInfoResponse> getDropInfo(
             @Parameter(description = "조회할 드롭 ID", example = "1") @PathVariable("dropId") Long dropId){
-        DropInfoResult info = dropService.getDropInfo(dropId);
+        DropInfoResult info = dropDetailService.get(dropId);
         return ApiResponse.ok(DropInfoResponse.of(info));
     }
 

@@ -7,6 +7,7 @@ import com.openbake.common.outbox.OutboxEventRepository;
 import com.openbake.product.domain.Category;
 import com.openbake.product.domain.Product;
 import com.openbake.product.domain.Type;
+import com.openbake.interaction.application.InteractionOutboxWriter;
 import java.time.LocalDate;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -23,6 +24,9 @@ class ProductChangedOutboxWriterIntegrationTest {
 
     @Autowired
     private ProductChangedOutboxWriter outboxWriter;
+
+    @Autowired
+    private InteractionOutboxWriter interactionOutboxWriter;
 
     @Autowired
     private OutboxEventRepository outboxEventRepository;
@@ -52,6 +56,16 @@ class ProductChangedOutboxWriterIntegrationTest {
         assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status -> {
             outboxWriter.created(product);
             throw new IllegalStateException("force rollback");
+        })).isInstanceOf(IllegalStateException.class);
+
+        assertThat(outboxEventRepository.count()).isZero();
+    }
+
+    @Test
+    void cartAddOutboxRollsBackWithOwningTransaction() {
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status -> {
+            interactionOutboxWriter.cartAdded(1L, 2L, 3);
+            throw new IllegalStateException("force cart rollback");
         })).isInstanceOf(IllegalStateException.class);
 
         assertThat(outboxEventRepository.count()).isZero();

@@ -23,6 +23,12 @@ public final class HeaderAuthenticationFilter extends OncePerRequestFilter {
     private static final Pattern PUBLIC_SELLER_PATH =
             Pattern.compile("^/api/v1/sellers/[1-9][0-9]*$");
 
+    private static final Pattern OPTIONAL_PRODUCT_DETAIL_PATH =
+            Pattern.compile("^/api/v1/products/[1-9][0-9]*$");
+
+    private static final Pattern OPTIONAL_DROP_DETAIL_PATH =
+            Pattern.compile("^/api/v1/drops/[1-9][0-9]*/info$");
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String method = request.getMethod();
@@ -45,8 +51,22 @@ public final class HeaderAuthenticationFilter extends OncePerRequestFilter {
             return true;
         }
 
-        return "GET".equals(method)
-                && PUBLIC_SELLER_PATH.matcher(path).matches();
+        if (!"GET".equals(method)) {
+            return false;
+        }
+
+        if (PUBLIC_SELLER_PATH.matcher(path).matches()) {
+            return true;
+        }
+
+        if (OPTIONAL_PRODUCT_DETAIL_PATH.matcher(path).matches()
+                || OPTIONAL_DROP_DETAIL_PATH.matcher(path).matches()) {
+            return request.getHeader(GatewayIdentityHeaders.MEMBER_ID) == null
+                    && request.getHeader(GatewayIdentityHeaders.MEMBER_ROLE) == null
+                    && request.getHeader(GatewayIdentityHeaders.AUTH_SOURCE) == null;
+        }
+
+        return false;
     }
 
     @Override

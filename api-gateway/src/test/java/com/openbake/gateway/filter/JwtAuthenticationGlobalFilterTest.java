@@ -81,6 +81,48 @@ class JwtAuthenticationGlobalFilterTest {
     }
 
     @Test
+    void passesOptionalDetailWithoutToken() {
+        MockServerWebExchange exchange = exchange(
+                MockServerHttpRequest.get("/api/v1/products/7").build());
+        AtomicReference<ServerWebExchange> forwarded = new AtomicReference<>();
+
+        filter.filter(exchange, capturingChain(forwarded)).block();
+
+        assertSame(exchange, forwarded.get());
+        verifyNoInteractions(jwtVerifier, blacklist);
+    }
+
+    @Test
+    void authenticatesOptionalDetailWhenTokenExists() {
+        MockServerWebExchange exchange = exchange(
+                MockServerHttpRequest.get("/api/v1/drops/7/info")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+                        .build());
+        when(jwtVerifier.verify(TOKEN)).thenReturn(new JwtClaims(42L, "CUSTOMER"));
+        when(blacklist.contains(TOKEN)).thenReturn(Mono.just(false));
+        AtomicReference<ServerWebExchange> forwarded = new AtomicReference<>();
+
+        filter.filter(exchange, capturingChain(forwarded)).block();
+
+        assertEquals("42", forwarded.get().getRequest().getHeaders()
+                .getFirst("X-Openbake-Member-Id"));
+    }
+
+    @Test
+    void rejectsInvalidTokenOnOptionalDetail() throws Exception {
+        MockServerWebExchange exchange = exchange(
+                MockServerHttpRequest.get("/api/v1/products/7")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer invalid")
+                        .build());
+        when(jwtVerifier.verify("invalid")).thenThrow(new JwtVerificationException(
+                JwtVerificationError.MALFORMED));
+
+        filter.filter(exchange, ignoredChain()).block();
+
+        assertError(exchange, HttpStatus.UNAUTHORIZED, "TOKEN_INVALID");
+    }
+
+    @Test
     void rejectsMissingAuthorizationHeader() throws Exception {
         MockServerWebExchange exchange = protectedExchange();
 

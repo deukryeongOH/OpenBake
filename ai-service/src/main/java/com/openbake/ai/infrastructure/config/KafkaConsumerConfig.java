@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.MicrometerConsumerListener;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
@@ -25,6 +26,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import com.openbake.common.event.EventTopics;
+import org.springframework.beans.factory.annotation.Qualifier;
+import java.util.UUID;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @Slf4j
@@ -37,12 +42,26 @@ public class KafkaConsumerConfig {
      * 컨테이너를 죽이지 않고 에러 핸들러로 넘어가게 한다.
      */
     @Bean
-    public ConsumerFactory<String, String> consumerFactory(KafkaProperties kafkaProperties) {
+    public ConsumerFactory<String, String> consumerFactory(
+            KafkaProperties kafkaProperties, MeterRegistry meterRegistry) {
         Map<String, Object> props = kafkaProperties.buildConsumerProperties();
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
         props.put(ErrorHandlingDeserializer.KEY_DESERIALIZER_CLASS, StringDeserializer.class);
         props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, StringDeserializer.class);
+        DefaultKafkaConsumerFactory<String, String> factory = new DefaultKafkaConsumerFactory<>(props);
+        factory.addListener(new MicrometerConsumerListener<>(meterRegistry));
+        return factory;
+    }
+
+    /** 운영 DLT 조회가 listener consumer group의 offset을 절대 변경하지 않도록 별도 factory를 쓴다. */
+    @Bean("dltConsumerFactory")
+    public ConsumerFactory<String, String> dltConsumerFactory(KafkaProperties kafkaProperties) {
+        Map<String, Object> props = kafkaProperties.buildConsumerProperties();
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "openbake-ai-dlt-inspector");
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
@@ -80,17 +99,22 @@ public class KafkaConsumerConfig {
      */
     @Bean
     public DefaultErrorHandler kafkaErrorHandler(
-            KafkaTemplate<String, String> kafkaTemplate, MeterRegistry meterRegistry) {
+            KafkaTemplate<String, String> kafkaTemplate,
+            MeterRegistry meterRegistry,
+            ObjectMapper objectMapper) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 kafkaTemplate,
                 (record, ex) -> new TopicPartition(record.topic() + ".dlt", 0));
 
         ConsumerRecordRecoverer observingRecoverer = (record, exception) -> {
             recoverer.accept(record, exception);
+            String dltTopic = record.topic() + ".dlt";
+            meterRegistry.counter("openbake.ai.dlt", "topic", dltTopic).increment();
             if (EventTopics.MEMBER_WITHDRAWN.equals(record.topic())) {
-                meterRegistry.counter("openbake.ai.member-withdrawn.dlt").increment();
-                log.error("회원 탈퇴 이벤트 DLT 이동 key={} partition={} offset={}",
-                        record.key(), record.partition(), record.offset(), exception);
+                SafeWithdrawalIds ids = safeWithdrawalIds(
+                        record.value() instanceof String value ? value : null, objectMapper);
+                log.error("회원 탈퇴 이벤트 DLT 이동 eventId={} memberId={}",
+                        ids.eventId(), ids.memberId(), exception);
             }
         };
 
@@ -100,6 +124,23 @@ public class KafkaConsumerConfig {
                 JacksonException.class,
                 IllegalArgumentException.class);
         return errorHandler;
+    }
+
+    private SafeWithdrawalIds safeWithdrawalIds(String payload, ObjectMapper objectMapper) {
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            return new SafeWithdrawalIds(text(root, "eventId"), text(root, "memberId"));
+        } catch (Exception ignored) {
+            return new SafeWithdrawalIds("unparseable", "unparseable");
+        }
+    }
+
+    private String text(JsonNode root, String field) {
+        JsonNode value = root.get(field);
+        return value == null || value.isNull() ? "unknown" : value.asText();
+    }
+
+    private record SafeWithdrawalIds(String eventId, String memberId) {
     }
 
     /** Spring 기본 BackOff(고정 간격/고정 배율)로는 표현할 수 없는 불균등 재시도 간격 전용 구현. */

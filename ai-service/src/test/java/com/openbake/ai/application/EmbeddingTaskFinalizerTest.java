@@ -49,6 +49,7 @@ class EmbeddingTaskFinalizerTest {
                 "text-embedding-3-small",
                 1536,
                 "product-embeddings-v1",
+                "product-embeddings-v1",
                 "v1",
                 Duration.ofSeconds(3),
                 Duration.ofSeconds(30),

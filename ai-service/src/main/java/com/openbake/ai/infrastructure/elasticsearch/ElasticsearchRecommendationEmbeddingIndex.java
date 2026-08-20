@@ -27,7 +27,7 @@ public class ElasticsearchRecommendationEmbeddingIndex implements Recommendation
         try {
             List<String> ids = productIds.stream().distinct().map(String::valueOf).toList();
             var response = client.mget(
-                    request -> request.index(properties.indexName()).ids(ids),
+                    request -> request.index(properties.searchIndexName()).ids(ids),
                     ProductEmbeddingDocument.class);
             Map<Long, ProductEmbeddingSnapshot> documents = new LinkedHashMap<>();
             response.docs().forEach(item -> {
@@ -50,7 +50,7 @@ public class ElasticsearchRecommendationEmbeddingIndex implements Recommendation
         try {
             int numCandidates = Math.max(size, Math.min(1_000, size * 2));
             var response = client.search(request -> request
-                            .index(properties.indexName())
+                            .index(properties.searchIndexName())
                             .size(size)
                             .knn(knn -> knn
                                     .field("embedding")

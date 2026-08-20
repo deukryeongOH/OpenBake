@@ -9,4 +9,6 @@ public interface ProductEmbeddingMetadataRepository {
     ProductEmbeddingMetadata save(ProductEmbeddingMetadata metadata);
 
     void deleteById(Long productId);
+
+    long count();
 }

@@ -54,6 +54,16 @@ class ServiceAuthenticationFilterTest {
                 .anyMatch(authority -> Authorities.SERVICE_AI.equals(authority.getAuthority())));
     }
 
+    @Test
+    void productIndexSourceAndAiOperationsPathsUseServiceAuthentication() throws Exception {
+        MockHttpServletRequest products = new MockHttpServletRequest("GET", "/internal/v1/products/ids");
+        MockHttpServletRequest operations = new MockHttpServletRequest(
+                "POST", "/internal/v1/ai/embeddings/backfill");
+
+        assertTrue(!filter.shouldNotFilter(products));
+        assertTrue(!filter.shouldNotFilter(operations));
+    }
+
     private MockHttpServletResponse invoke(String suppliedToken, String serviceName) throws Exception {
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(request(suppliedToken, serviceName), response,

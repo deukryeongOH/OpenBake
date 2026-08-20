@@ -53,6 +53,7 @@ openbake:
       model: text-embedding-3-small
       dimensions: 1536
       index-name: product-embeddings-v1
+      search-index-name: product-embeddings-v1
       index-version: v1
       connect-timeout: PT3S
       read-timeout: PT30S
@@ -60,6 +61,21 @@ openbake:
         interval: PT2S
         batch-size: 20
         lease: PT5M
+    backfill:
+      page-size: 100
+      page-delay: PT0S
+    reconcile:
+      max-deletions: 100
+    metrics:
+      refresh-interval: PT30S
+    dlt:
+      max-fetch: 100
+      allowed-topics:
+        - product.changed.v1.dlt
+        - product.viewed.v1.dlt
+        - cart.item-added.v1.dlt
+        - order.purchase-confirmed.v1.dlt
+        - member.withdrawn.v1.dlt
 
 CORE_SERVICE_URL: http://localhost:18080
 AI_SERVICE_TOKEN: ${random.uuid}

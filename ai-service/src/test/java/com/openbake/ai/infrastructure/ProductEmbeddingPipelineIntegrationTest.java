@@ -9,6 +9,11 @@ import static org.mockito.Mockito.verify;
 
 import com.openbake.ai.application.EmbeddingTaskClaimer;
 import com.openbake.ai.application.EmbeddingTaskProcessor;
+import com.openbake.ai.application.DltOperationsService;
+import com.openbake.ai.application.EmbeddingBackfillService;
+import com.openbake.ai.application.EmbeddingReconciliationService;
+import com.openbake.ai.application.CoreProductSource;
+import com.openbake.ai.application.port.CoreProductSourceClient;
 import com.openbake.ai.application.ProductChangedEventService;
 import com.openbake.ai.application.MemberInteractionEventService;
 import com.openbake.ai.application.MemberWithdrawnEventService;
@@ -29,6 +34,7 @@ import com.openbake.common.event.MemberInteractionEvent;
 import com.openbake.common.event.MemberWithdrawnEvent;
 import java.time.Duration;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +47,9 @@ import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -50,6 +59,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Tag("integration")
 @Testcontainers
@@ -123,12 +133,23 @@ class ProductEmbeddingPipelineIntegrationTest {
     private MemberDeletionMarkerJpaRepository markerRepository;
     @Autowired
     private InteractionRetentionScheduler retentionScheduler;
+    @Autowired
+    private DltOperationsService dltOperationsService;
+    @Autowired
+    private MeterRegistry meterRegistry;
+    @Autowired
+    private EmbeddingBackfillService backfillService;
+    @Autowired
+    private EmbeddingReconciliationService reconciliationService;
 
     @MockitoBean
     private EmbeddingClient embeddingClient;
 
     @MockitoBean
     private EmbeddingWorker embeddingWorker;
+
+    @MockitoBean
+    private CoreProductSourceClient coreProductSourceClient;
 
     @BeforeEach
     void clean() {
@@ -278,6 +299,101 @@ class ProductEmbeddingPipelineIntegrationTest {
         assertThat(markerRepository.findById(104L)).isEmpty();
     }
 
+    @Test
+    void dltRecordCanBeFetchedAndRepublishedWithOriginalEventId() {
+        ProductChangedEvent event = changed(
+                40L, ProductChangeType.CREATED, "DLT 복구빵", "선택 재발행 검증");
+        RecordHeaders headers = new RecordHeaders();
+        headers.add(KafkaHeaders.DLT_ORIGINAL_TOPIC,
+                "product.changed.v1".getBytes(StandardCharsets.UTF_8));
+        headers.add(KafkaHeaders.DLT_EXCEPTION_FQCN,
+                IllegalArgumentException.class.getName().getBytes(StandardCharsets.UTF_8));
+        headers.add(KafkaHeaders.DLT_EXCEPTION_MESSAGE,
+                "test failure".getBytes(StandardCharsets.UTF_8));
+        kafkaTemplate.send(new ProducerRecord<>(
+                "product.changed.v1.dlt", null, null, "40",
+                objectMapper.writeValueAsString(event), headers)).join();
+
+        var fetched = dltOperationsService.fetch("product.changed.v1.dlt");
+        assertThat(fetched).anySatisfy(record -> {
+            assertThat(record.eventId()).isEqualTo(event.eventId().toString());
+            assertThat(record.originalTopic()).isEqualTo("product.changed.v1");
+            assertThat(record.domainSummary()).contains("productId=40");
+        });
+        var record = fetched.stream()
+                .filter(item -> event.eventId().toString().equals(item.eventId()))
+                .findFirst().orElseThrow();
+        var selection = new DltOperationsService.DltSelection(
+                record.dltTopic(), record.partition(), record.offset());
+
+        var first = dltOperationsService.republish(java.util.List.of(selection));
+        assertThat(first.warnings()).isEmpty();
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(consumedEventRepository.existsById(event.eventId())).isTrue());
+
+        var duplicate = dltOperationsService.republish(java.util.List.of(selection));
+        assertThat(duplicate.warnings()).singleElement().asString().contains("이미 소비됨");
+    }
+
+    @Test
+    void kafkaConsumerLagMetricsAreRegistered() {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(meterRegistry.getMeters())
+                        .extracting(meter -> meter.getId().getName())
+                        .anyMatch(name -> name.startsWith("kafka.consumer") && name.contains("lag")));
+    }
+
+    @Test
+    void backfillCreatesTasksThatWorkerCompletesAndIndexes() {
+        given(embeddingClient.embed(anyString())).willReturn(vector());
+        var products = java.util.List.of(source(70L), source(71L));
+        given(coreProductSourceClient.fetchPage(0, 100)).willReturn(
+                new CoreProductSourceClient.ProductSourcePage(products, 0, 1, 2, true));
+
+        var result = backfillService.backfill();
+        while (taskProcessor.processNext()) {
+            // 기존 worker와 같은 처리 경로를 동기적으로 비운다.
+        }
+
+        assertThat(result.inspectedCount()).isEqualTo(2);
+        assertThat(result.createdCount()).isEqualTo(2);
+        assertThat(taskRepository.findAll()).extracting("status")
+                .containsOnly(EmbeddingTaskStatus.COMPLETED);
+        assertThat(elasticsearchOperations.exists(
+                "70", IndexCoordinates.of("product-embeddings-v1"))).isTrue();
+        assertThat(elasticsearchOperations.exists(
+                "71", IndexCoordinates.of("product-embeddings-v1"))).isTrue();
+    }
+
+    @Test
+    void reconciliationRestoresMissingDocumentAndDeletesExtraDocument() {
+        given(embeddingClient.embed(anyString())).willReturn(vector());
+        eventService.consume(changed(
+                80L, ProductChangeType.CREATED, "복구 대상", "문서 삭제 후 복구"),
+                "product.changed.v1", 0, 80L);
+        eventService.consume(changed(
+                999L, ProductChangeType.CREATED, "잉여 문서", "core에는 없음"),
+                "product.changed.v1", 0, 999L);
+        assertThat(taskProcessor.processNext()).isTrue();
+        assertThat(taskProcessor.processNext()).isTrue();
+        elasticsearchOperations.delete("80", IndexCoordinates.of("product-embeddings-v1"));
+        elasticsearchOperations.indexOps(IndexCoordinates.of("product-embeddings-v1")).refresh();
+        given(coreProductSourceClient.fetchPage(0, 100)).willReturn(
+                new CoreProductSourceClient.ProductSourcePage(
+                        java.util.List.of(source(80L)), 0, 1, 1, true));
+
+        var result = reconciliationService.reconcile();
+        assertThat(taskProcessor.processNext()).isTrue();
+
+        assertThat(result.missingCount()).isEqualTo(1);
+        assertThat(result.extraCount()).isEqualTo(1);
+        assertThat(elasticsearchOperations.exists(
+                "80", IndexCoordinates.of("product-embeddings-v1"))).isTrue();
+        assertThat(elasticsearchOperations.exists(
+                "999", IndexCoordinates.of("product-embeddings-v1"))).isFalse();
+        assertThat(metadataRepository.findById(999L)).isEmpty();
+    }
+
     private ProductChangedEvent changed(
             Long productId, ProductChangeType type, String name, String description) {
         return new ProductChangedEvent(
@@ -312,5 +428,10 @@ class ProductEmbeddingPipelineIntegrationTest {
 
     private java.util.List<Float> vector() {
         return Collections.nCopies(1536, 0.01f);
+    }
+
+    private CoreProductSource source(Long productId) {
+        return new CoreProductSource(
+                productId, "상품-" + productId, "설명", "MEAL_BREADS", "GENERAL");
     }
 }

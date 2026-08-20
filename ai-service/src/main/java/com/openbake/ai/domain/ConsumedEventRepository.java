@@ -5,6 +5,8 @@ import java.util.UUID;
 
 public interface ConsumedEventRepository {
 
+    boolean existsById(UUID eventId);
+
     int claim(
             UUID eventId,
             String topic,

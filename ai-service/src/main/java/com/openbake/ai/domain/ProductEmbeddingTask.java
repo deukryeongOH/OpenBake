@@ -136,4 +136,38 @@ public class ProductEmbeddingTask {
         lastErrorCode = errorCode;
         updatedAt = now;
     }
+
+    /** 실시간 이벤트 순서를 보존하면서 core의 현재 원문으로 복구 작업을 재예약한다. */
+    public void rescheduleFromRecovery(
+            String name, String description, String category, String productType, Instant now) {
+        // latestEventId/sourceOccurredAt은 건드리지 않아 이후 실시간 이벤트의 순서가 우선한다.
+        eventType = ProductChangeType.UPDATED;
+        this.name = name;
+        this.description = description;
+        this.category = category;
+        this.productType = productType;
+        sourceHash = null;
+        resetPending(now);
+    }
+
+    public boolean retryIfRecoverable(Instant now) {
+        boolean recoverable = status == EmbeddingTaskStatus.FAILED
+                || (status == EmbeddingTaskStatus.PROCESSING
+                    && leaseExpiresAt != null && leaseExpiresAt.isBefore(now));
+        if (!recoverable) {
+            return false;
+        }
+        retryCount = 0;
+        resetPending(now);
+        return true;
+    }
+
+    private void resetPending(Instant now) {
+        status = EmbeddingTaskStatus.PENDING;
+        retryCount = 0;
+        nextAttemptAt = null;
+        leaseExpiresAt = null;
+        lastErrorCode = null;
+        updatedAt = now;
+    }
 }

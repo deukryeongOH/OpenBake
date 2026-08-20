@@ -6,6 +6,7 @@ import com.openbake.product.application.dto.ProductInfoCommand;
 import com.openbake.product.application.dto.ProductInfoResult;
 import com.openbake.product.domain.*;
 import com.openbake.product.application.event.ProductIndexEvent;
+import com.openbake.product.application.event.ProductChangedOutboxWriter;
 import com.openbake.product.application.port.CurrentSellerPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,6 +27,7 @@ public class ProductService {
     private final ProductInventoryRepository productInventoryRepository;
     private final CurrentSellerPort currentSellerPort;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProductChangedOutboxWriter productChangedOutboxWriter;
 
     // register product
     @Transactional
@@ -52,6 +54,8 @@ public class ProductService {
                 .build();
 
         productInventoryRepository.save(productInventory);
+
+        productChangedOutboxWriter.created(product);
 
         return ProductInfoResult.of(product.getName(), product.getDescription(), product.getImageUrl(),
                 productInventory.getTotalQuantity(), product.getPrice(), product.getPickUpAvailableDates(), product.getCategory(),
@@ -99,6 +103,8 @@ public class ProductService {
         Product updated = getProduct(productId); // adjustTotalQuantity는 별도 UPDATE이기 떄문에 최신값 다시 조회 해야함.
         ProductInventory productInventory = productInventoryRepository.findByProductId(updated.getId());
 
+        productChangedOutboxWriter.updated(updated);
+
         return ProductInfoResult.of(updated.getName(), updated.getDescription(), updated.getImageUrl(),
                 productInventory.getTotalQuantity(), updated.getPrice(), updated.getPickUpAvailableDates(), updated.getCategory(),
                 updated.getId(), productInventory.getRemainQuantity(), updated.getType(), updated.getSellerId());
@@ -132,6 +138,7 @@ public class ProductService {
         }
         productInventoryRepository.delete(productInventory);
         productRepository.delete(product);
+        productChangedOutboxWriter.deleted(productId);
 
     }
 

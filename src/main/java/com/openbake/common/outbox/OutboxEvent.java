@@ -66,8 +66,19 @@ public class OutboxEvent {
 
     public static OutboxEvent create(
             String topic, String eventKey, String eventType, int eventVersion, String payload, Instant occurredAt) {
+        return create(UUID.randomUUID().toString(), topic, eventKey, eventType, eventVersion, payload, occurredAt);
+    }
+
+    public static OutboxEvent create(
+            String eventId,
+            String topic,
+            String eventKey,
+            String eventType,
+            int eventVersion,
+            String payload,
+            Instant occurredAt) {
         OutboxEvent event = new OutboxEvent();
-        event.eventId = UUID.randomUUID().toString();
+        event.eventId = eventId;
         event.topic = topic;
         event.eventKey = eventKey;
         event.eventType = eventType;

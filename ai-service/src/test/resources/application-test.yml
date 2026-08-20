@@ -14,3 +14,23 @@ spring:
 
   flyway:
     enabled: false
+
+  kafka:
+    listener:
+      auto-startup: false
+
+OPENAI_API_KEY: test-key
+
+openbake:
+  ai:
+    embedding:
+      model: text-embedding-3-small
+      dimensions: 1536
+      index-name: product-embeddings-v1
+      index-version: v1
+      connect-timeout: PT3S
+      read-timeout: PT30S
+      worker:
+        interval: PT2S
+        batch-size: 20
+        lease: PT5M

@@ -14,6 +14,8 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     consumer:
@@ -23,6 +25,20 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+openbake:
+  ai:
+    embedding:
+      model: text-embedding-3-small
+      dimensions: 1536
+      index-name: product-embeddings-v1
+      index-version: v1
+      connect-timeout: PT3S
+      read-timeout: PT30S
+      worker:
+        interval: PT2S
+        batch-size: 20
+        lease: PT5M
 
 management:
   endpoints:

@@ -74,6 +74,7 @@ services:
       SETTLEMENT_ENCRYPTION_KEY: ${SETTLEMENT_ENCRYPTION_KEY}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       ELASTICSEARCH_URIS: http://elasticsearch:9200
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
       AWS_SECRET_KEY: ${AWS_SECRET_KEY}
     depends_on:
@@ -86,6 +87,8 @@ services:
       payment-service:
         condition: service_healthy
       member-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
@@ -271,8 +274,15 @@ services:
       AI_DB_URL: jdbc:postgresql://ai-postgres:5432/openbake_ai
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     depends_on:
       ai-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083/actuator/health" ]

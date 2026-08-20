@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "productId": { "type": "long" },
+    "name": {
+      "type": "text",
+      "fields": { "keyword": { "type": "keyword" } }
+    },
+    "description": { "type": "text" },
+    "category": { "type": "keyword" },
+    "type": { "type": "keyword" },
+    "embedding": {
+      "type": "dense_vector",
+      "dims": 1536,
+      "index": true,
+      "similarity": "cosine"
+    },
+    "sourceHash": { "type": "keyword" },
+    "embeddingModel": { "type": "keyword" },
+    "indexVersion": { "type": "keyword" },
+    "sourceOccurredAt": { "type": "date" },
+    "embeddedAt": { "type": "date" }
+  }
+}

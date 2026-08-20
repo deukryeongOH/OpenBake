@@ -1,6 +1,5 @@
-package com.openbake.ai.common.config;
+package com.openbake.ai.infrastructure.config;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -21,6 +20,7 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.util.backoff.BackOff;
 import org.springframework.util.backoff.BackOffExecution;
+import tools.jackson.core.JacksonException;
 
 @Configuration
 public class KafkaConsumerConfig {
@@ -82,7 +82,7 @@ public class KafkaConsumerConfig {
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
                 recoverer, new FixedIntervalsBackOff(1_000L, 5_000L, 30_000L));
         errorHandler.addNotRetryableExceptions(
-                JsonProcessingException.class,
+                JacksonException.class,
                 IllegalArgumentException.class);
         return errorHandler;
     }

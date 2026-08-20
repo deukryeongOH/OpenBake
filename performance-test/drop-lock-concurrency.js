@@ -30,6 +30,22 @@ const EXPECTED_SOLD_OUT =
     Number(__ENV.EXPECTED_SOLD_OUT ?? 0);
 
 /*
+ * 요청 타임아웃 / 시나리오 상한
+ *
+ * 기존에는 5s(lock은 10s)로 하드코딩돼 있어 서버가 그보다 느리면
+ * k6가 먼저 끊어버리고 status=0으로 기록됐습니다.
+ * 그러면 실제 응답시간이 얼마인지 알 수 없으므로 환경변수로 분리합니다.
+ *
+ * MAX_DURATION은 HTTP_TIMEOUT보다 반드시 커야 합니다.
+ * 작으면 시나리오가 먼저 끊겨 interrupted iterations로 데이터가 유실됩니다.
+ */
+const HTTP_TIMEOUT =
+    __ENV.HTTP_TIMEOUT ?? '30s';
+
+const MAX_DURATION =
+    __ENV.MAX_DURATION ?? '120s';
+
+/*
  * 환경변수 검증
  */
 if (!Number.isInteger(DROP_ID) || DROP_ID <= 0) {
@@ -148,7 +164,7 @@ export const options = {
             executor: 'per-vu-iterations',
             vus: USER_COUNT,
             iterations: 1,
-            maxDuration: '30s',
+            maxDuration: MAX_DURATION,
         },
     },
 
@@ -212,7 +228,7 @@ export default function () {
             /*
              * DB row contention과 connection 대기를 포함한 상한입니다.
              */
-            timeout: '10s',
+            timeout: HTTP_TIMEOUT,
         },
     );
 

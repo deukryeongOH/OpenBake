@@ -136,7 +136,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       GATEWAY_JWT_ENABLED: "true"
-      BLACKLIST_TIMEOUT: 2000ms
+      BLACKLIST_TIMEOUT: ${BLACKLIST_TIMEOUT:-2000ms}
+      # 부하 테스트에서 실제 응답시간을 측정할 때만 올린다. 기본값은 운영 기준 유지.
+      GATEWAY_RESPONSE_TIMEOUT: ${GATEWAY_RESPONSE_TIMEOUT:-10s}
     depends_on:
       backend:
         condition: service_healthy

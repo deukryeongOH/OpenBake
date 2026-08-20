@@ -12,6 +12,11 @@ const POLL_INTERVAL_MS = Number(__ENV.WAIT_ACTIVE_POLL_MS ?? 200);
 const TIMEOUT_SECONDS = Number(__ENV.WAIT_ACTIVE_TIMEOUT_SECONDS ?? 30);
 const USER_COUNT = Number(__ENV.USER_COUNT ?? 100);
 
+// 폴링 1회당 요청 타임아웃.
+// 반복 폴링이라 다른 시나리오(HTTP_TIMEOUT)보다 짧게 잡되,
+// 서버가 느릴 때 status=0으로 오탐하지 않을 만큼은 확보한다.
+const HTTP_TIMEOUT = __ENV.WAIT_ACTIVE_HTTP_TIMEOUT ?? '10s';
+
 const waitActiveSuccess = new Counter('wait_active_success');
 const waitActiveTimeout = new Counter('wait_active_timeout');
 const waitActiveUnexpected = new Counter('wait_active_unexpected');
@@ -102,7 +107,7 @@ export default function () {
           api_name: 'drop-queue-rank',
           test_type: 'wait-active',
         },
-        timeout: '5s',
+        timeout: HTTP_TIMEOUT,
       },
     );
 

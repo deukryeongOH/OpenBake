@@ -74,8 +74,11 @@ spring:
                 - Path=/api/**
               order: 0
           httpclient:
-            connect-timeout: 2000
-            response-timeout: 10s
+            # 부하 테스트 시에만 늘린다. 운영 기본값은 그대로 유지할 것.
+            # 이 값이 인증된 요청의 실질적인 응답시간 상한이라,
+            # k6 타임아웃만 늘리면 여기서 504로 잘린다.
+            connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:2000}
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:10s}
 
 management:
   endpoint:

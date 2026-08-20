@@ -40,7 +40,25 @@ openbake:
       deletion-marker-retention: P35D
       cleanup-batch-size: 1000
       cleanup-cron: "0 20 4 * * *"
-      recommendation-cache-key-prefix: "recommendation:member:"
+      recommendation-cache-key-prefix: "ai:recommendation:v1:"
+    recommendation:
+      cache-ttl: PT15M
+      default-size: 10
+      max-size: 20
+      candidate-multiplier: 5
+      candidate-max: 100
+      profile-window: P90D
+      popular-purchase-window: P30D
+      popular-cart-window: P7D
+      core-timeout: PT3S
+      weights:
+        view: 1
+        cart-add: 3
+        purchase: 5
+      half-life:
+        view: P5D
+        cart-add: P14D
+        purchase: P45D
     embedding:
       model: text-embedding-3-small
       dimensions: 1536
@@ -57,4 +75,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,metrics

@@ -95,6 +95,9 @@ settlement:
 
 openbake:
 
+  security:
+    ai-service-token: ${AI_SERVICE_TOKEN}
+
   # ES 재색인 배치 — RDB↔ES 드리프트 보정 안전망
   # 매일 새벽 3시 실행. 트래픽이 적은 시간대.
   reindex:
@@ -177,4 +180,3 @@ cloud:
     credentials:
       access-key: ${AWS_ACCESS_KEY}
       secret-key: ${AWS_SECRET_KEY}
-

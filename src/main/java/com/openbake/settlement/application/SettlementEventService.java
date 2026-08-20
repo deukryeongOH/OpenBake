@@ -95,7 +95,7 @@ public class SettlementEventService {
                 command.orderId(),
                 command.orderItemId(),
                 command.sellerId(),
-                command.dropId(),
+                command.productId(),
                 command.productNameSnapshot(),
                 command.quantity(),
                 command.grossAmount(),

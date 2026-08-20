@@ -35,7 +35,7 @@ public record ReceivePurchaseConfirmedCommand(
          * 상품 판매자 ID입니다.
          */
         Long sellerId,
-        Long dropId,
+        Long productId,
         /**
          * 구매확정 당시의 상품명입니다.
          */

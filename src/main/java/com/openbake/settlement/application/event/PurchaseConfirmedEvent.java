@@ -8,7 +8,7 @@ public record PurchaseConfirmedEvent(
         Long orderId,
         Long orderItemId,
         Long sellerId,
-        Long dropId,
+        Long productId,
         String productNameSnapshot,
         Integer quantity,
         BigDecimal grossAmount,

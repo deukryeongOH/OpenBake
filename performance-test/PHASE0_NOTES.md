@@ -4,13 +4,13 @@
 
 ## 적용한 변경
 
-1. `.env.k6`, `users.json`, `.env.monitoring`을 Git에서 제외하도록 로컬 `.gitignore` 추가
+1. `.env.k6.local`, `users.json`, `.env.monitoring`을 Git에서 제외하도록 로컬 `.gitignore` 추가
 2. `run-k6.sh`에서 사용하지 않는 `PAYMENT_BASE_URL` 필수 검증 제거
 3. 명령별로 실제 필요한 환경변수만 검증하도록 수정
 4. 이미 `MEMBER_BASE_URL`, `CORE_BASE_URL`을 직접 읽는 코드에 맞춰 오래된 `BASE_URL=...` 전달 제거
 5. `drop-enter-concurrency.js`에 성공/충돌/400 오류 개수 Threshold 추가
 6. 짧은 Burst 테스트를 놓치지 않도록 Prometheus scrape/evaluation interval을 5초에서 1초로 조정
-7. `.env.k6.example`을 실제 코드가 사용하는 환경변수 기준으로 정리
+7. `.env.k6.local.example`을 실제 코드가 사용하는 환경변수 기준으로 정리
 
 ## 아직 변경하지 않은 것
 

@@ -24,6 +24,11 @@ public class ProductRepositoryAdapter implements ProductRepository {
     }
 
     @Override
+    public List<Product> fallbackSearch(String keyword, Category category, Pageable pageable) {
+        return productJpaRepository.fallbackSearch(keyword, category, pageable);
+    }
+
+    @Override
     public Optional<Product> findById(Long productId) {
         return productJpaRepository.findById(productId);
     }
@@ -53,6 +58,11 @@ public class ProductRepositoryAdapter implements ProductRepository {
     @Override
     public Page<Product> findAllByType(Type type, Pageable pageable) {
         return productJpaRepository.findAllByType(type, pageable);
+    }
+
+    @Override
+    public List<Product> findAllByType(Type type) {
+        return productJpaRepository.findAllByType(type);
     }
 
 }

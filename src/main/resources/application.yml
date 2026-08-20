@@ -78,16 +78,11 @@ settlement:
       zone: Asia/Seoul
 
 openbake:
-  cart:
-    # 장바구니 만료 시간
-    # 장바구니 생성 = 재고 선점이라 결제하지 않고 방치되면 재고가 묶인다.
-    # 짧을수록 재고 회수는 빠르지만 결제 도중 만료될 위험이 커진다.
-    ttl: 15m
 
-    # 만료 배치 실행 주기
-    # 짧을수록 재고 회수가 빠르지만 조회 부하가 늘어난다.
-    # 이전 실행이 끝난 뒤부터 세는 fixedDelay 라 실행이 겹치지 않는다.
-    expiration-delay: PT5M
+  # ES 재색인 배치 — RDB↔ES 드리프트 보정 안전망
+  # 매일 새벽 3시 실행. 트래픽이 적은 시간대.
+  reindex:
+    cron: "0 0 3 * * *"
 
   member-service:
     url: ${MEMBER_SERVICE_URL:http://localhost:8081}
@@ -105,6 +100,8 @@ management:
           - info
           - metrics
           - prometheus
+          - circuitbreakers
+          - circuitbreakerevents
   endpoint:
     health:
       show-details: always
@@ -131,11 +128,6 @@ oauth:
       jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
       client-id: ${GOOGLE_CLIENT_ID}
 
-jwt:
-  secret: ${JWT_SECRET}
-  access-token-expiration: 1800000    # 30분 (ms)
-  refresh-token-expiration: 1209600000 # 14일 (ms)
-
 seller:
   settlement:
     # Base64로 인코딩된 AES-256(32바이트) 키. `openssl rand -base64 32`로 생성.
@@ -148,6 +140,18 @@ feign:
         connect-timeout: 1000
         read-timeout: 2000
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      elasticsearch:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+
 cloud:
   aws:
     active: true
@@ -157,3 +161,4 @@ cloud:
     credentials:
       access-key: ${AWS_ACCESS_KEY}
       secret-key: ${AWS_SECRET_KEY}
+

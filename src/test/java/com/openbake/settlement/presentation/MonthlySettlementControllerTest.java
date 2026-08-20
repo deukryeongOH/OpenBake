@@ -1,6 +1,5 @@
 //package com.openbake.settlement.presentation;
 //
-//import com.openbake.member.infrastructure.jwt.JwtTokenProvider;
 //import com.openbake.settlement.application.MonthlySettlementResult;
 //import com.openbake.settlement.application.MonthlySettlementService;
 //import org.junit.jupiter.api.DisplayName;
@@ -31,7 +30,6 @@
 //    private ObjectMapper objectMapper;
 //
 //    @MockitoBean
-//    private JwtTokenProvider jwtTokenProvider;
 //
 //    @MockitoBean
 //    private MonthlySettlementService monthlySettlementService;

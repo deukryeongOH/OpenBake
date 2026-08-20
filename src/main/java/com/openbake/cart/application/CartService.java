@@ -1,10 +1,8 @@
 package com.openbake.cart.application;
 
-import com.openbake.cart.application.port.DropPort;
-import com.openbake.cart.application.port.ReservationPort;
+import com.openbake.cart.application.port.ProductPort;
 import com.openbake.cart.application.port.SellerPort;
-import com.openbake.cart.application.port.dto.DropInfo;
-import com.openbake.cart.application.port.dto.ReservationInfo;
+import com.openbake.cart.application.port.dto.ProductInfo;
 import com.openbake.cart.application.port.dto.SellerInfo;
 import com.openbake.cart.domain.Cart;
 import com.openbake.cart.domain.CartItem;
@@ -12,148 +10,235 @@ import com.openbake.cart.domain.CartRepository;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
+/**
+ * 일반 상품 장바구니.
+ *
+ * 장바구니는 재고를 선점하지 않는다. 담기 시점의 재고 검사는 안내용이고,
+ * 실제 방어선은 결제 시점 product 의 조건부 재고 차감이다.
+ * 그래서 만료 개념이 없고 담아둔 항목은 사용자가 지울 때까지 남는다.
+ *
+ * 회원당 장바구니는 하나이며 경로에 cartId 가 없다. 대상은 로그인 회원으로 특정한다.
+ * 한 상품은 장바구니에 항상 한 행이고, 같은 상품을 또 담으면 수량을 합친다.
+ */
 @Service
 @RequiredArgsConstructor
 public class CartService {
 
     private final CartRepository cartRepository;
-    private final DropPort dropPort;
+    private final ProductPort productPort;
     private final SellerPort sellerPort;
-    //재고 선점 확인·복구 요청용. 차감은 cart 가 하지 않는다.
-    private final ReservationPort reservationPort;
-
-    //만료 시간은 정책값이라 코드에 박지 않고 설정에서 받는다.
-    @Value("${openbake.cart.ttl}")
-    private Duration cartTtl;
 
     /**
-     * 장바구니 생성.
-     * 재고 차감은 cart 가 하지 않는다. 드롭 상세에서 "담기"를 누르면 drop 이 재고를 선점/차감하고,
-     * 그 뒤 이 API 가 호출돼 장바구니를 만든다. cart 는 drop 이 실제로 선점했는지(DropEntry=RESERVED)만
-     * 확인하고 장바구니를 기록한다. 요청 수량이 선점 수량과 다르면 CA007 로 막는다.
+     * 장바구니에 상품 담기.
+     *
+     * 픽업 날짜는 담을 때 고르지 않아도 된다(주문으로 넘어갈 때 필수).
+     * 이미 담은 상품이면 수량을 합치고, 픽업 날짜를 이번에 골랐다면 그 값으로 덮어쓴다.
+     *
+     * 재고 검사는 요청 수량이 아니라 합산 후 수량으로 한다.
+     * 이미 3개 담긴 상품에 2개를 더할 때 봐야 할 값은 5다.
      */
     @Transactional
-    public CartCreateResult create(Long memberId, Long dropId, int quantity) {
-        LocalDateTime now = LocalDateTime.now();
+    public CartItemAddResult addItem(Long memberId, Long productId, int quantity, LocalDate pickUpDate) {
+        //상품이 없으면(삭제됐으면) 담을 수 없다.
+        ProductInfo product = productPort.findProduct(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        //기존 장바구니 처리
-        // 유효한 장바구니가 있으면 CART_ALREADY_EXISTS
-        // 만료된 장바구니면 선점 재고를 복구시키고 치운 뒤 새로 담게 해준다.
-        Optional<Cart> found = cartRepository.findByMemberId(memberId);
-        if (found.isPresent()) {
-            Cart existing = found.get();
-
-            //아직 만료되지 않았다면 사용 중인 장바구니이므로 새로 담을 수 없다.
-            if (!existing.isExpired(now)) {
-                throw new BusinessException(ErrorCode.CART_ALREADY_EXISTS);
-            }
-
-            //만료된 장바구니. 선점 재고를 drop 에 복구시키고 정리한다.
-            //(삭제 전에 dropId/quantity 를 읽어야 하므로 먼저 복구 요청을 보낸다)
-            rollbackStockIfPresent(existing);
-            //삭제를 즉시 확정해야 아래 저장이 member_id UNIQUE 제약에 걸리지 않는다.
-            cartRepository.deleteImmediately(existing);
+        if (!product.generalType()) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
         }
 
-        //재고 선점 확인 — drop 이 담기 시점에 선점했는지 확인한다.
-        //응모가 없거나 선점 상태가 아니면 정상적인 담기 흐름을 거치지 않은 것이므로 막는다.
-        ReservationInfo reservation = reservationPort.findReservation(dropId, memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED));
-        if (!reservation.reserved()) {
-            throw new BusinessException(ErrorCode.CART_STOCK_NOT_RESERVED);
+        //품절은 상품 자체가 팔리는지의 전제라, 수량·재고를 보기 전에 먼저 막는다.
+        //재고가 모자란 것(CA009)과는 사유가 다르므로 별도 코드(CA011)로 안내한다.
+        if (product.soldOut()) {
+            throw new BusinessException(ErrorCode.CART_PRODUCT_SOLD_OUT);
         }
 
-        //선점 수량 대조 — 요청 수량이 drop 이 실제로 차감한 수량과 같아야 한다.
-        //다르면 이탈 시 drop 이 선점 수량으로 복구하므로 재고가 어긋난다.
-        if (reservation.selectQuantity() != quantity) {
-            throw new BusinessException(ErrorCode.CART_STOCK_QUANTITY_MISMATCH);
+        //픽업 날짜를 골랐다면 상품의 픽업 가능일에 실제로 있는지 확인한다.
+        //화면 목록은 서버가 내려주지만 요청 본문은 클라이언트가 만든 값이다(위조/stale 방어).
+        validatePickUpDate(product, pickUpDate);
+
+        //장바구니가 없으면 이때 만든다. 빈 장바구니를 미리 만들어두지 않는다.
+        Cart cart = cartRepository.findByMemberId(memberId)
+                .orElseGet(() -> cartRepository.save(Cart.create(memberId)));
+
+        //합산 후 수량으로 재고를 확인한다. 검사가 담기보다 먼저 와야 한다.
+        int alreadyInCart = cart.findItem(productId)
+                .map(CartItem::getQuantity)
+                .orElse(0);
+        if (alreadyInCart + quantity > product.remainQuantity()) {
+            throw new BusinessException(ErrorCode.CART_INSUFFICIENT_STOCK);
         }
 
-        Cart cart = Cart.create(memberId, now.plus(cartTtl));
-        cart.addItem(CartItem.create(dropId, quantity));
+        //상호명을 담을 때도 저장해 둔다. 조회는 최신값을 다시 읽지만,
+        //상품이 삭제되면 sellerId 를 알 수 없어 판매자를 조회할 수 없으므로 이 값이 마지막 단서가 된다.
+        //담을 때 가격을 함께 저장한다. 조회할 때 지금 가격과 비교해 변동 폭을 보여주기 위한 기준값이다.
+        cart.addItem(CartItem.create(
+                productId, findBakeryName(product.sellerId()), quantity, pickUpDate, product.price()));
 
-        //동시 요청으로 UNIQUE 제약에 걸리면 구현체가 CART_ALREADY_EXISTS 로 바꿔 던진다.
+        //새로 담긴 항목은 저장이 확정돼야 cartItemId 와 생성/변경 시각이 채워진다.
+        //확정하지 않으면 응답의 cartItemId 가 null 로 나간다.
         Cart saved = cartRepository.save(cart);
-        return CartCreateResult.from(saved);
+
+        //합산됐을 수도 새로 담겼을 수도 있으므로 최종 상태를 다시 읽어 응답한다.
+        CartItem item = saved.findItem(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        return CartItemAddResult.from(saved.getCartId(), item);
     }
 
     /**
-     * 장바구니 조회. 만료된 장바구니는 CART_EXPIRED 로 막는다(배치가 아직 안 지운 구간 방어).
-     * 드롭/판매자 정보는 조회 시점에 drop/seller 에서 읽어 채운다(스냅샷 아님).
+     * 장바구니 조회.
+     *
+     * 장바구니가 없어도 200 으로 빈 목록을 내려준다. 장바구니 페이지는 비어 있어도 열려야 한다.
+     * 가격·재고는 조회 시점에 product 에서 다시 읽는다(스냅샷 아님).
+     * 상품이 삭제됐거나, 재고가 모자라거나, 픽업일이 선택되지 않았거나 더 이상 유효하지 않은 항목은
+     * orderable=false 로 내려 프론트가 비활성 처리한다.
      */
     @Transactional(readOnly = true)
     public CartDetailResult getCart(Long memberId) {
-        LocalDateTime now = LocalDateTime.now();
+        Optional<Cart> found = cartRepository.findByMemberId(memberId);
+        if (found.isEmpty()) {
+            return CartDetailResult.empty();
+        }
+        Cart cart = found.get();
 
-        // 1. memberId 로 장바구니 조회 → 없으면 CART_NOT_FOUND
-        Cart cart = cartRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
+        LocalDate today = LocalDate.now();
+        List<CartDetailResult.Item> items = new ArrayList<>();
+        //같은 판매자의 상품을 여러 개 담았을 때 판매자를 중복 조회하지 않기 위한 요청 단위 캐시.
+        Map<Long, String> bakeryNames = new HashMap<>();
 
-        // 2. 만료됐으면 CART_EXPIRED (배치가 아직 안 지운 구간 방어)
-        if (cart.isExpired(now)) {
-            throw new BusinessException(ErrorCode.CART_EXPIRED);
+        for (CartItem item : cart.getItems()) {
+            Optional<ProductInfo> product = productPort.findProduct(item.getProductId());
+
+            //상품이 사라진 항목. 값은 담을 때 저장해 둔 것만 남는다.
+            if (product.isEmpty()) {
+                items.add(CartDetailResult.Item.unavailable(item, CartItemStatus.PRODUCT_DELETED));
+                continue;
+            }
+            ProductInfo info = product.get();
+
+            BigDecimal price = BigDecimal.valueOf(info.price());
+
+            //선택 가능한 픽업 날짜도 조회 시점에 다시 읽는다.
+            //판매자가 날짜를 추가·수정했으면 늘어난 목록이 그대로 내려가 바로 고를 수 있다.
+            List<LocalDate> pickUpDates = info.pickUpAvailableDates().stream()
+                    .filter(d -> !d.isBefore(today))
+                    .sorted()
+                    .toList();
+
+            CartItemStatus status = resolveStatus(info, item, pickUpDates);
+
+            items.add(new CartDetailResult.Item(
+                    item.getCartItemId(),
+                    info.productId(),
+                    //판매자 묶음의 키. 상호명은 바뀔 수 있고 겹칠 수도 있어 묶음 기준으로 쓰지 않는다.
+                    info.sellerId(),
+                    info.name(),
+                    //상호명도 조회 시점에 다시 읽는다. 판매자가 상호를 바꾸면 그대로 반영되며
+                    //바뀌었다는 별도 안내는 하지 않는다.
+                    bakeryNames.computeIfAbsent(info.sellerId(), this::findBakeryName),
+                    info.imageUrl(),
+                    price,
+                    //담을 때 가격과 변동 여부. 금액 계산에는 쓰지 않고 화면 안내에만 쓴다.
+                    item.getAddedPrice() == null ? null : BigDecimal.valueOf(item.getAddedPrice()),
+                    item.isPriceChanged(info.price()),
+                    item.getQuantity(),
+                    price.multiply(BigDecimal.valueOf(item.getQuantity())),
+                    item.getPickUpDate(),
+                    pickUpDates,
+                    info.remainQuantity(),
+                    status == CartItemStatus.ORDERABLE,
+                    status
+            ));
         }
 
-        CartItem item = cart.getItems();
-        int quantity = item.getQuantity();
+        //주문 가능한 항목만 합산한다. 비활성 항목은 어차피 결제로 못 넘어간다.
+        BigDecimal totalAmount = items.stream()
+                .filter(CartDetailResult.Item::orderable)
+                .map(CartDetailResult.Item::estimatedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 3. 드롭 조회 — 상품명/가격/이미지/픽업일. 없으면 DROP_NOT_FOUND
-        DropInfo drop = dropPort.getDrop(item.getDropId());
-
-        //가격은 int → BigDecimal 변환. 조회 시점 최신값이며 스냅샷이 아니다.
-        BigDecimal price = BigDecimal.valueOf(drop.price());
-        BigDecimal estimatedAmount = price.multiply(BigDecimal.valueOf(quantity));
-
-        //픽업 가능일 — 지난 날짜는 제외하고 오름차순으로 내려준다.
-        List<LocalDate> pickupDates = drop.pickupDates().stream()
-                .filter(d -> !d.isBefore(now.toLocalDate()))
-                .sorted()
-                .toList();
-
-        // 4. 판매자 상호명 조회. 없으면 null(방어).
-        String sellerName = sellerPort.findSeller(drop.sellerId())
-                .map(SellerInfo::bakeryName)
-                .orElse(null);
-
-        // 5. 만료까지 남은 초
-        long remainingSeconds = Duration.between(now, cart.getExpiresAt()).getSeconds();
-
-        // 6. 응답 조립
-        return new CartDetailResult(
-                cart.getCartId(),
-                new CartDetailResult.DropInfo(
-                        drop.dropId(),
-                        drop.name(),
-                        price,
-                        drop.imageUrl()
-                ),
-                new CartDetailResult.SellerInfo(
-                        drop.sellerId(),
-                        sellerName
-                ),
-                quantity,
-                estimatedAmount,
-                pickupDates,
-                cart.getPickupDate(),
-                cart.getExpiresAt(),
-                (int) remainingSeconds
-        );
+        return new CartDetailResult(cart.getCartId(), items, totalAmount);
     }
 
     /**
-     * memberId 로 카트 존재 여부만 확인한다. drop 쪽 방치된 재고 선점 회수 배치가
-     * "카트가 실제로 만들어졌는지"를 판단할 때 쓴다.
+     * 수량 변경. 바꾸려는 수량이 현재 재고를 넘으면 막는다.
+     */
+    @Transactional
+    public CartItemAddResult updateQuantity(Long memberId, Long cartItemId, int quantity) {
+        Cart cart = getCart0(memberId);
+        CartItem item = findItem(cart, cartItemId);
+
+        ProductInfo product = productPort.findProduct(item.getProductId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        //합산이 아니라 교체이므로 요청 수량을 그대로 재고와 비교한다.
+        if (quantity > product.remainQuantity()) {
+            throw new BusinessException(ErrorCode.CART_INSUFFICIENT_STOCK);
+        }
+
+        item.updateQuantity(quantity);
+
+        //변경 시각(updatedAt)이 반영된 값을 응답하려면 저장을 확정해야 한다.
+        cartRepository.save(cart);
+        return CartItemAddResult.from(cart.getCartId(), item);
+    }
+
+    /**
+     * 픽업 날짜 선택·변경. 장바구니 페이지에서 다시 고를 수 있다.
+     */
+    @Transactional
+    public CartItemAddResult updatePickUpDate(Long memberId, Long cartItemId, LocalDate pickUpDate) {
+        Cart cart = getCart0(memberId);
+        CartItem item = findItem(cart, cartItemId);
+
+        ProductInfo product = productPort.findProduct(item.getProductId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        //장바구니에는 픽업일이 null 인 채로 담겨 있어도 된다
+        //여기서는 요청으로 들어온 날짜가 상품의 픽업 가능일인지만 확인한다.
+        validatePickUpDate(product, pickUpDate);
+
+        item.updatePickUpDate(pickUpDate);
+
+        //변경 시각(updatedAt)이 반영된 값을 응답하려면 저장을 확정해야 한다.
+        cartRepository.save(cart);
+        return CartItemAddResult.from(cart.getCartId(), item);
+    }
+
+    /**
+     * 장바구니에서 항목 하나 빼기. 장바구니 행 자체는 남는다.
+     * 재고를 선점하지 않았으므로 복구할 것도 없다.
+     */
+    @Transactional
+    public void removeItem(Long memberId, Long cartItemId) {
+        Cart cart = getCart0(memberId);
+        cart.removeItem(findItem(cart, cartItemId));
+    }
+
+    /**
+     * 장바구니 비우기. 항목만 지우고 장바구니 행은 남긴다.
+     */
+    @Transactional
+    public void clearItems(Long memberId) {
+        getCart0(memberId).clearItems();
+    }
+
+    /**
+     * memberId 로 카트 존재 여부만 확인한다.
      */
     @Transactional(readOnly = true)
     public boolean hasCart(Long memberId) {
@@ -161,88 +246,115 @@ public class CartService {
     }
 
     /**
-     * 픽업 날짜 선택. 재선택 시 덮어쓴다.
+     * 주문할 항목을 골라서 읽는다. 사용자가 장바구니 화면에서 체크한 것들이다.
+     *
+     * cartItemId 는 클라이언트가 만든 값이라 믿을 수 없다. auto-increment 라 남의 항목 번호를
+     * 찍어 보낼 수 있으므로, 회원의 장바구니를 먼저 잡고 그 안에서만 찾는다.
+     * 전역에서 cartItemId 로 조회하지 않는 것이 방어의 핵심이다.
+     *
+     * 하나라도 장바구니에 없으면 통째로 거부한다. 위조이거나 화면이 낡았다는 신호이고,
+     * 사용자가 고른 것 중 일부만 조용히 빠진 채 결제되면 안 되기 때문이다.
+     * "남의 것"과 "존재하지 않음"을 구분하지 않는다. 구분하면 그 id 가 있다는 정보가 새어나간다.
+     */
+    @Transactional(readOnly = true)
+    public List<CartOrderItem> findItemsForOrder(Long memberId, List<Long> cartItemIds) {
+        if (cartItemIds == null || cartItemIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        //같은 항목을 두 번 보내도 수량이 두 배가 되면 안 된다. 담긴 수량이 곧 주문 수량이다.
+        Set<Long> requested = new HashSet<>(cartItemIds);
+
+        Cart cart = getCart0(memberId);
+        List<CartOrderItem> found = cart.getItems().stream()
+                .filter(item -> requested.contains(item.getCartItemId()))
+                .map(CartOrderItem::from)
+                .toList();
+
+        if (found.size() != requested.size()) {
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+        return found;
+    }
+
+    /**
+     * 고른 항목만 장바구니에서 뺀다. 주문이 결제까지 끝난 뒤의 뒷정리다.
+     *
+     * <b>멱등하다.</b> 장바구니에 없는 cartItemId 는 조용히 무시한다.
+     * 이 메서드는 결제가 성공한 뒤에 불리므로, 여기서 예외를 던지면 성공한 결제까지 롤백된다.
+     * 사용자가 다른 탭에서 항목을 먼저 지운 정도로 주문이 무효가 되면 안 된다.
+     * 이미 없다는 것은 목표 상태가 이미 달성됐다는 뜻이지 실패가 아니다.
+     *
+     * 남의 cartItemId 를 넣어도 안전하다. 회원 본인의 장바구니 안에서만 지우므로 매칭되지 않는다.
+     *
+     * 항목만 지우고 carts 행은 남긴다. 재고를 선점하지 않았으므로 복구할 것도 없다.
      */
     @Transactional
-    public CartPickupDateResult updatePickupDate(Long memberId, LocalDate pickupDate) {
-        LocalDateTime now = LocalDateTime.now();
-
-        // 1. 조회 → 없으면 CART_NOT_FOUND
-        Cart cart = cartRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
-
-        // 2. 만료됐으면 CART_EXPIRED
-        if (cart.isExpired(now)) {
-            throw new BusinessException(ErrorCode.CART_EXPIRED);
+    public void removeItems(Long memberId, List<Long> cartItemIds) {
+        if (cartItemIds == null || cartItemIds.isEmpty()) {
+            return;
         }
+        Set<Long> targets = new HashSet<>(cartItemIds);
 
-        // 3. 지난 날짜 방어 — 오늘보다 이전이면 선택 불가 (drop 정보 없이 판정 가능)
-        if (pickupDate.isBefore(now.toLocalDate())) {
+        cartRepository.findByMemberId(memberId).ifPresent(cart -> {
+            //순회 중 컬렉션을 건드리지 않도록 지울 대상을 먼저 모은다.
+            List<CartItem> removals = cart.getItems().stream()
+                    .filter(item -> targets.contains(item.getCartItemId()))
+                    .toList();
+            removals.forEach(cart::removeItem);
+        });
+    }
+
+    //판매자를 못 찾으면 null. 상호명은 표시용이라 조회 자체를 실패시키지 않는다.
+    private String findBakeryName(Long sellerId) {
+        return sellerPort.findSeller(sellerId)
+                .map(SellerInfo::bakeryName)
+                .orElse(null);
+    }
+
+    private Cart getCart0(Long memberId) {
+        return cartRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
+    }
+
+    private CartItem findItem(Cart cart, Long cartItemId) {
+        return cart.getItems().stream()
+                .filter(i -> i.getCartItemId().equals(cartItemId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
+    }
+
+    /**
+     * 픽업 날짜 검증. 고르지 않았으면(null) 담기 단계에서는 통과시킨다.
+     */
+    private void validatePickUpDate(ProductInfo product, LocalDate pickUpDate) {
+        if (pickUpDate == null) {
+            return;
+        }
+        if (pickUpDate.isBefore(LocalDate.now())) {
             throw new BusinessException(ErrorCode.CART_PICKUP_DATE_UNAVAILABLE);
         }
-
-        // 4. 위조/stale 방어 — 요청된 날짜가 드롭의 픽업 가능일에 실제로 포함되는지 확인.
-        //    화면 목록은 drop 에서 내려주지만, 요청 본문은 클라이언트가 만든 값이라 서버가 다시 확인한다.
-        DropInfo drop = dropPort.getDrop(cart.getItems().getDropId());
-        if (!drop.pickupDates().contains(pickupDate)) {
+        if (!product.pickUpAvailableDates().contains(pickUpDate)) {
             throw new BusinessException(ErrorCode.CART_INVALID_PICKUP_DATE);
         }
-
-        // 5. 저장. 관리 상태 엔티티라 변경 감지로 커밋 시 자동 반영(별도 save 불필요).
-        cart.updatePickupDate(pickupDate);
-
-        return CartPickupDateResult.from(cart);
     }
 
-    /**
-     * 장바구니 삭제. 선점했던 재고를 drop 에서 복구시킨다(동기 호출).
-     * 만료된 장바구니도 삭제 대상이므로 여기서는 CART_EXPIRED 를 던지지 않는다.
-     *
-     * (주의: 여기서 행을 지우면 만료 배치의 조회 범위에서 사라지므로,
-     *  복구 요청을 반드시 삭제 전에 보내야 재고가 새지 않는다.)
-     */
-    @Transactional
-    public void deleteCart(Long memberId) {
-        Cart cart = cartRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
-
-        //삭제 전에 재고 복구를 요청한다. 지우고 나면 dropId/quantity 를 읽을 수 없다.
-        rollbackStockIfPresent(cart);
-
-        //cart_items 는 cascade = ALL + orphanRemoval 이라 함께 삭제된다.
-        cartRepository.delete(cart);
-    }
-
-    /**
-     * 만료된 장바구니를 일괄 정리한다. 선점 재고를 복구시키고 삭제한다.
-     * DELETE 를 호출하지 않고 이탈한 경우(브라우저 종료 등)의 실질적인 재고 회수 수단이다.
-     *
-     * @return 정리한 장바구니 수
-     */
-    @Transactional
-    public int expireCarts(LocalDateTime now) {
-        List<Cart> expiredCarts = cartRepository.findAllByExpiresAtLessThanEqual(now);
-        if (expiredCarts.isEmpty()) {
-            return 0;
+    private CartItemStatus resolveStatus(ProductInfo product, CartItem item, List<LocalDate> pickUpDates) {
+        if (product.soldOut()) {
+            return CartItemStatus.SOLD_OUT;
         }
-
-        for (Cart cart : expiredCarts) {
-            //삭제 전에 재고 복구를 요청한다. 벌크 삭제를 쓰면 이 값을 잃어 복구를 못 시킨다.
-            rollbackStockIfPresent(cart);
+        if (product.remainQuantity() < item.getQuantity()) {
+            return CartItemStatus.INSUFFICIENT_STOCK;
         }
-
-        cartRepository.deleteAll(expiredCarts);
-        return expiredCarts.size();
-    }
-
-    /**
-     * 장바구니 이탈(삭제/만료/기존 정리) 시, 선점했던 재고를 drop 에 복구 요청한다.
-     * 상태 변경과 재고 복구는 drop 이 수행한다. 재고 소유는 drop.
-     */
-    private void rollbackStockIfPresent(Cart cart) {
-        CartItem item = cart.getItems();
-        if (item != null) {
-            reservationPort.rollbackStock(item.getDropId(), cart.getMemberId());
+        //픽업일은 담을 때 고르지 않아도 되지만 주문으로는 넘길 수 없다.
+        //orderable 은 '지금 주문에 포함해도 통과하는가'를 뜻하므로 미선택도 비활성으로 내린다.
+        if (item.getPickUpDate() == null) {
+            return CartItemStatus.PICKUP_DATE_UNSELECTED;
         }
+        //판매자가 픽업 가능일에서 그 날짜를 지웠거나, 고른 날짜가 지나버린 경우다.
+        //선택 가능 목록은 최신으로 내려가므로 사용자는 그중에서 다시 고르면 된다.
+        if (!pickUpDates.contains(item.getPickUpDate())) {
+            return CartItemStatus.PICKUP_DATE_UNAVAILABLE;
+        }
+        return CartItemStatus.ORDERABLE;
     }
 }

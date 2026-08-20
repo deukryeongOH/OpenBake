@@ -44,6 +44,10 @@ public class Product {
     @Column(nullable = false)
     private Category category; // 상품 카테고리
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ProductStatus status = ProductStatus.SELLING; // 상품 상태 (판매중/품절)
+
     @ElementCollection(fetch = FetchType.LAZY)
     @BatchSize(size = 20)
     @CollectionTable(
@@ -123,5 +127,13 @@ public class Product {
 
     public void updateImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public void markSoldOut() {
+        this.status = ProductStatus.SOLD_OUT;
+    }
+
+    public void markSelling() {
+        this.status = ProductStatus.SELLING;
     }
 }

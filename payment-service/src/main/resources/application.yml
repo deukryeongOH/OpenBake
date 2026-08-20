@@ -9,11 +9,6 @@ spring:
     hikari:
       connection-init-sql: SET SESSION lock_timeout = '10s'
 
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -32,16 +27,31 @@ payment:
     connect-timeout: 3000
     read-timeout: 15000
 
-jwt:
-  secret: ${JWT_SECRET}
-  access-token-expiration: 1800000
-  refresh-token-expiration: 1209600000
-
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+      slo:
+        "[http.server.requests]":
+          - 100ms
+          - 300ms
+          - 500ms
+          - 1s
+          - 2s
 
 logging:
   level:

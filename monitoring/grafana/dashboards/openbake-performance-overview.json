@@ -710,86 +710,6 @@
           "sort": "none"
         }
       }
-    },
-    {
-      "id": 15,
-      "type": "timeseries",
-      "title": "Drop result counters",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 29,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "k6_drop_enter_success_total{testid=~\"$testid\"}",
-          "legendFormat": "enter success",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "k6_confirm_entry_success_total{testid=~\"$testid\"}",
-          "legendFormat": "confirm success",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "k6_drop_lock_success_total{testid=~\"$testid\"}",
-          "legendFormat": "lock success",
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "k6_drop_lock_sold_out_total{testid=~\"$testid\"}",
-          "legendFormat": "sold out",
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "k6_drop_lock_timeout_total{testid=~\"$testid\"}",
-          "legendFormat": "lock timeout",
-          "refId": "E"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      }
     }
   ],
   "refresh": "5s",
@@ -860,6 +780,6 @@
   "timezone": "browser",
   "title": "OpenBake Performance Overview",
   "uid": "openbake-performance-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

@@ -34,12 +34,10 @@ dependencies {
 
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.security:spring-security-oauth2-jose'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
 
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
-	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
     implementation 'software.amazon.awssdk:s3:2.21.5'
 
@@ -50,6 +48,9 @@ dependencies {
 
 	// FeignClient
 	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+	// CircuitBreaker (ES 장애 fallback)
+	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testRuntimeOnly 'com.h2database:h2'

@@ -5,8 +5,10 @@ import com.openbake.common.exception.ErrorCode;
 import com.openbake.product.application.dto.ProductInfoCommand;
 import com.openbake.product.application.dto.ProductInfoResult;
 import com.openbake.product.domain.*;
+import com.openbake.product.application.event.ProductIndexEvent;
 import com.openbake.product.application.port.CurrentSellerPort;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductInventoryRepository productInventoryRepository;
     private final CurrentSellerPort currentSellerPort;
+    private final ApplicationEventPublisher eventPublisher;
 
     // register product
     @Transactional
@@ -64,7 +67,10 @@ public class ProductService {
     // register General product
     @Transactional
     public ProductInfoResult registerGeneralProduct(ProductInfoCommand command) {
-        return register(command, Type.GENERAL);
+        ProductInfoResult result = register(command, Type.GENERAL);
+        Product product = getProduct(result.productId());
+        eventPublisher.publishEvent(ProductIndexEvent.saved(product));
+        return result;
     }
 
 
@@ -107,7 +113,10 @@ public class ProductService {
     // update General product
     @Transactional
     public ProductInfoResult updateGeneralProduct(ProductInfoCommand command, Long productId) {
-        return updateProduct(command, productId, Type.GENERAL);
+        ProductInfoResult result = updateProduct(command, productId, Type.GENERAL);
+        Product updated = getProduct(productId);
+        eventPublisher.publishEvent(ProductIndexEvent.saved(updated));
+        return result;
     }
 
     // delete product
@@ -136,6 +145,7 @@ public class ProductService {
     @Transactional
     public void deleteGeneralProduct(Long productId) {
         deleteProduct(productId, Type.GENERAL);
+        eventPublisher.publishEvent(ProductIndexEvent.deleted(productId));
     }
 
     // 판매자가 등록한 일반 상품 리스트 반환
@@ -163,6 +173,12 @@ public class ProductService {
 
         ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
 
+        if (productInventory.getRemainQuantity() == 0) {
+            Product product = getProduct(productId);
+            product.markSoldOut();
+            eventPublisher.publishEvent(ProductIndexEvent.saved(product));
+        }
+
         return productInventory.getRemainQuantity();
     }
 
@@ -176,6 +192,12 @@ public class ProductService {
         }
 
         ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+        Product product = getProduct(productId);
+
+        if (product.getStatus() == ProductStatus.SOLD_OUT && productInventory.getRemainQuantity() > 0) {
+            product.markSelling();
+            eventPublisher.publishEvent(ProductIndexEvent.saved(product));
+        }
 
         return productInventory.getRemainQuantity();
     }

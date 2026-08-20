@@ -56,6 +56,7 @@ Thumbs.db
 
 ### local ###
 run-local.sh
+scripts/setup-test-data.sh
 .gstack
 bmad-output
 
@@ -63,7 +64,8 @@ bmad-output
 performance-test/users.json
 performance-test/member-map.json
 # k6 테스트용 환경변수
-performance-test/.env.k6
+performance-test/.env.k6.local
+performance-test/.env.k6.server
 # k6 실행 결과
 performance-test/results/*.txt
 # Generated from prometheus.yml.template

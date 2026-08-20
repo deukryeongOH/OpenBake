@@ -1,7 +1,5 @@
 package com.openbake.settlement.presentation;
 
-import com.openbake.common.security.jwt.JwtAuthenticationFilter;
-import com.openbake.common.security.jwt.JwtTokenProvider;
 import com.openbake.settlement.application.SettlementListResult;
 import com.openbake.settlement.application.SettlementQueryService;
 import com.openbake.settlement.application.SettlementResult;
@@ -35,16 +33,6 @@ class AdminSettlementControllerTest {
 
     @MockitoBean
     private SettlementQueryService settlementQueryService;
-
-    /*
-     * 현재 프로젝트의 @WebMvcTest에서 JWT Filter가 발견되므로
-     * 테스트 컨텍스트 생성에 필요한 Mock입니다.
-     */
-    @MockitoBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @MockitoBean
-    private JwtTokenProvider jwtTokenProvider;
 
     @Test
     @DisplayName("정산 단건 상세를 조회한다")

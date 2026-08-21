@@ -162,11 +162,51 @@ class HeaderAuthenticationFilterTest {
     }
 
     @Test
-    void skipsInternalEndpoint() throws Exception {
-        assertSkipped(new MockHttpServletRequest(
+    void doesNotSkipInternalEndpoint() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
                 "GET",
                 "/internal/v1/members/1"
-        ));
+        );
+
+        assertRejected(request);
+    }
+
+    @Test
+    void authenticatesInternalEndpointWithAdminRole() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST",
+                "/internal/v1/settlement-events/purchase-confirmed"
+        );
+
+        request.addHeader(
+                GatewayIdentityHeaders.MEMBER_ID,
+                "4"
+        );
+        request.addHeader(
+                GatewayIdentityHeaders.MEMBER_ROLE,
+                "ADMIN"
+        );
+        request.addHeader(
+                GatewayIdentityHeaders.AUTH_SOURCE,
+                GatewayIdentityHeaders.EXPECTED_AUTH_SOURCE
+        );
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(authentication).isNotNull();
+        assertThat(authentication.isAuthenticated()).isTrue();
+        assertThat(authentication.getPrincipal()).isEqualTo(4L);
+        assertThat(authentication.getAuthorities())
+                .extracting("authority")
+                .containsExactly("ROLE_ADMIN");
+        assertThat(chain.getRequest()).isSameAs(request);
     }
 
     @Test

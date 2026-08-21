@@ -1,6 +1,12 @@
+server:
+  shutdown: graceful
+
 spring:
   application:
     name: openbake
+
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
 
   datasource:
     url: ${DB_URL}
@@ -8,6 +14,7 @@ spring:
     password: ${DB_PASSWORD}
     hikari:
       connection-init-sql: SET SESSION lock_timeout = '10s'
+      maximum-pool-size: 10
 
   data:
     redis:
@@ -133,6 +140,8 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
   metrics:
     tags:
       application: ${spring.application.name}

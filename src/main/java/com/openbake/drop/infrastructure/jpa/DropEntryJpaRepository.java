@@ -12,10 +12,7 @@ import java.util.Optional;
 
 public interface DropEntryJpaRepository extends JpaRepository<DropEntry, Long> {
 
-    // 현재 입장 중이거나 재고를 선점한 상태인지 확인
-    boolean existsByDropIdAndMemberIdAndEntryStatusIn(Long dropId, Long memberId, List<EntryStatus> status);
     Optional<DropEntry> findByDropIdAndMemberId(Long dropId, Long memberId);
-    boolean existsByDropIdAndMemberId(Long dropId, Long memberId);
 
     @Modifying(clearAutomatically = true)
     @Query("Update DropEntry e SET e.entryStatus = 'RESERVED', e.selectQuantity = :selectQuantity " + "WHERE e.dropId = :dropId AND e.memberId = :memberId" +
@@ -26,6 +23,12 @@ public interface DropEntryJpaRepository extends JpaRepository<DropEntry, Long> {
     @Query("Update DropEntry e SET e.entryStatus = 'FAILED' " + "WHERE e.dropId = :dropId AND e.memberId = :memberId" +
             " AND e.entryStatus = 'RESERVED'")
     int fail(@Param("dropId") Long dropId,@Param("memberId") Long memberId);
+
+    // 마감된 드롭에서 ENTERED로 남은 진입 내역 정리. 드롭당 UPDATE 1회라 경합이 없다.
+    @Modifying(clearAutomatically = true)
+    @Query("Update DropEntry e SET e.entryStatus = 'FAILED' " +
+            "WHERE e.dropId = :dropId AND e.entryStatus = 'ENTERED'")
+    int expireEnteredEntries(@Param("dropId") Long dropId);
 
     // Redis 재고 카운터의 초기값 계산용. 드롭 시작 시점(합계 0)과 카운터 유실 후 복구 시점 모두
     // 같은 식으로 정확한 잔여 수량을 얻기 위해 선점 합계를 집계한다.

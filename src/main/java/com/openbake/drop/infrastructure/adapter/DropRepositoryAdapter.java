@@ -63,12 +63,17 @@ public class DropRepositoryAdapter implements DropRepository {
     }
 
     @Override
-    public void activeStatus(Long dropId) {
-        dropJpaRepository.activeStatus(dropId);
+    public int activeStatus(Long dropId) {
+        return dropJpaRepository.activeStatus(dropId);
     }
 
     @Override
-    public void completeStatus(Long dropId) {
-        dropJpaRepository.completeStatus(dropId);
+    public int completeStatus(Long dropId) {
+        return dropJpaRepository.completeStatus(dropId);
+    }
+
+    @Override
+    public int reviveFromSoldOut(Long dropId) {
+        return dropJpaRepository.reviveFromSoldOut(dropId);
     }
 }

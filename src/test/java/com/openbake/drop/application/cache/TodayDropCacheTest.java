@@ -1,7 +1,7 @@
-package com.openbake.drop.application.queue;
+package com.openbake.drop.application.cache;
 
-import com.openbake.drop.application.cache.CachedDrop;
-import com.openbake.drop.application.cache.TodayDropCache;
+import com.openbake.drop.application.dto.DropProductInfoResult;
+import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.drop.domain.DropStatus;
@@ -13,8 +13,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,6 +27,9 @@ class TodayDropCacheTest {
 
     @Mock
     private DropRepository dropRepository;
+
+    @Mock
+    private ProductPort productPort;
 
     @InjectMocks
     private TodayDropCache todayDropCache;
@@ -41,6 +46,11 @@ class TodayDropCacheTest {
         return drop;
     }
 
+    private static DropProductInfoResult product(Long productId) {
+        return DropProductInfoResult.of("두쫀쿠", "원물 맛이 많이 나요.", "image.jpg",
+                Set.of(LocalDate.of(2028, 7, 28)), 8000, 100, 97, 1L, productId);
+    }
+
     @Test
     @DisplayName("오늘 진행되는 드롭이 있으면 캐시에 dropId/시작/종료 시각을 채운다")
     void refresh_WithDropToday_CachesDropInfo() {
@@ -49,6 +59,7 @@ class TodayDropCacheTest {
         LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
 
         given(dropRepository.findListByDropDate(any())).willReturn(List.of(drop(100L, start, end, 1L)));
+        given(productPort.getProductInfo(1L)).willReturn(product(1L));
 
         // when
         todayDropCache.refresh();
@@ -62,6 +73,28 @@ class TodayDropCacheTest {
     }
 
     @Test
+    @DisplayName("드롭 중 불변인 상품 표시 정보를 캐시에 함께 담는다 (입장 확정의 상품 조회를 없애기 위함)")
+    void refresh_CachesImmutableProductSnapshot() {
+        // given
+        LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
+        LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
+        given(dropRepository.findListByDropDate(any())).willReturn(List.of(drop(100L, start, end, 1L)));
+        given(productPort.getProductInfo(1L)).willReturn(product(1L));
+
+        // when
+        todayDropCache.refresh();
+
+        // then
+        CachedDrop cached = todayDropCache.get().get(0);
+        assertThat(cached.name()).isEqualTo("두쫀쿠");
+        assertThat(cached.description()).isEqualTo("원물 맛이 많이 나요.");
+        assertThat(cached.imageUrl()).isEqualTo("image.jpg");
+        assertThat(cached.price()).isEqualTo(8000);
+        assertThat(cached.pickupDates()).containsExactly(LocalDate.of(2028, 7, 28));
+        // 잔여 수량은 요청마다 바뀌므로 캐시 대상이 아니다 (드롭 중 정본은 Redis)
+    }
+
+    @Test
     @DisplayName("오늘 진행되는 드롭이 여러 개면 캐시에도 전부 담긴다")
     void refresh_WithMultipleDropsToday_CachesAll() {
         // given
@@ -72,6 +105,8 @@ class TodayDropCacheTest {
                 drop(100L, start, end, 1L),
                 drop(200L, start.plusHours(2), end.plusHours(2), 2L)
         ));
+        given(productPort.getProductInfo(1L)).willReturn(product(1L));
+        given(productPort.getProductInfo(2L)).willReturn(product(2L));
 
         // when
         todayDropCache.refresh();
@@ -104,6 +139,7 @@ class TodayDropCacheTest {
         LocalDateTime start = LocalDateTime.of(2028, 7, 25, 9, 0);
         LocalDateTime end = LocalDateTime.of(2028, 7, 25, 10, 0);
         given(dropRepository.findListByDropDate(any())).willReturn(List.of(drop(100L, start, end, 1L)));
+        given(productPort.getProductInfo(1L)).willReturn(product(1L));
 
         todayDropCache.refresh();
         todayDropCache.get().get(0).tryMarkStarted();

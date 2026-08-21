@@ -1,13 +1,18 @@
 server:
   port: 8081   # 신규 지정 — root(8080)와 겹치지 않게
+  shutdown: graceful
 
 spring:
   application:
     name: member-service
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
   datasource:
     url: ${MEMBER_DB_URL}          # 3단계에서 전용 DB URL로 교체
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -54,6 +59,8 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
   metrics:
     tags:
       application: ${spring.application.name}

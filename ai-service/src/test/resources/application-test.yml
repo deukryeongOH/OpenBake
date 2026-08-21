@@ -79,3 +79,4 @@ openbake:
 
 CORE_SERVICE_URL: http://localhost:18080
 AI_SERVICE_TOKEN: ${random.uuid}
+CORE_SERVICE_TOKEN: ${random.uuid}

@@ -58,7 +58,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
         "KAFKA_BOOTSTRAP_SERVERS=unused:9092",
         "spring.kafka.listener.auto-startup=false",
         "spring.task.scheduling.enabled=false",
-        "openbake.ai.recommendation.cache-ttl=PT0.5S"
+        "openbake.ai.recommendation.cache-ttl=PT0.5S",
+        "CORE_SERVICE_TOKEN=${random.uuid}"
 })
 class RecommendationFlowIntegrationTest {
 

@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +32,14 @@ public class ProductRepositoryAdapter implements ProductRepository {
     @Override
     public Optional<Product> findById(Long productId) {
         return productJpaRepository.findById(productId);
+    }
+
+    @Override
+    public List<Product> findAllByIdWithPickupDates(Collection<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return List.of();
+        }
+        return productJpaRepository.findAllByIdWithPickupDates(productIds);
     }
 
     @Override

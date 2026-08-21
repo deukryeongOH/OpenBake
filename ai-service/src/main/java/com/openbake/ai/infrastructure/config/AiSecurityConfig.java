@@ -1,10 +1,15 @@
 package com.openbake.ai.infrastructure.config;
 
+import com.openbake.common.security.Authorities;
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.common.security.gateway.HeaderAuthenticationFilter;
 import com.openbake.common.security.ServiceAuthenticationFilter;
+import com.openbake.common.security.ServiceCredential;
 import com.openbake.common.security.service.AiServicePaths;
+import com.openbake.common.security.service.CoreServicePaths;
+import com.openbake.common.security.service.ServiceAuthenticationHeaders;
 import java.time.Clock;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,7 +27,9 @@ public class AiSecurityConfig {
     SecurityFilterChain aiSecurityFilterChain(
             HttpSecurity http,
             @org.springframework.beans.factory.annotation.Value("${AI_SERVICE_TOKEN}")
-            String aiServiceToken) throws Exception {
+            String aiServiceToken,
+            @org.springframework.beans.factory.annotation.Value("${CORE_SERVICE_TOKEN}")
+            String coreServiceToken) throws Exception {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
@@ -35,11 +42,22 @@ public class AiSecurityConfig {
                                 "/actuator/health", "/actuator/health/**",
                                 "/actuator/prometheus", "/actuator/metrics", "/actuator/metrics/**")
                         .permitAll()
-                        .requestMatchers(AiServicePaths.AI_OPERATIONS_PATTERN).hasAuthority("SERVICE_AI")
+                        .requestMatchers(AiServicePaths.AI_OPERATIONS_PATTERN).hasAuthority(Authorities.SERVICE_AI)
+                        .requestMatchers(CoreServicePaths.SEARCH_PATTERN).hasAuthority(Authorities.SERVICE_CORE)
                         .requestMatchers(HttpMethod.GET, "/api/v1/recommendations").authenticated()
                         .anyRequest().authenticated())
                 .addFilterBefore(
-                        new ServiceAuthenticationFilter(aiServiceToken),
+                        new ServiceAuthenticationFilter(List.of(
+                                ServiceCredential.of(
+                                        ServiceAuthenticationHeaders.AI_SERVICE,
+                                        Authorities.SERVICE_AI,
+                                        aiServiceToken,
+                                        AiServicePaths::matches),
+                                ServiceCredential.of(
+                                        ServiceAuthenticationHeaders.CORE_SERVICE,
+                                        Authorities.SERVICE_CORE,
+                                        coreServiceToken,
+                                        CoreServicePaths::matches))),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new HeaderAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
         return http.build();

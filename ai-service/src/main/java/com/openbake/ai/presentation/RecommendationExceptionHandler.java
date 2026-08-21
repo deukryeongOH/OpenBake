@@ -1,6 +1,7 @@
 package com.openbake.ai.presentation;
 
 import com.openbake.ai.application.RecommendationUnavailableException;
+import com.openbake.ai.application.SemanticSearchUnavailableException;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.response.ApiResponse.ApiError;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,14 @@ public class RecommendationExceptionHandler {
                 .body(ApiResponse.fail(new ApiError(
                         "AI_RECOMMENDATION_UNAVAILABLE",
                         "추천 서비스를 일시적으로 사용할 수 없습니다.")));
+    }
+
+    @ExceptionHandler(SemanticSearchUnavailableException.class)
+    ResponseEntity<ApiResponse<Void>> semanticSearchUnavailable(SemanticSearchUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.fail(new ApiError(
+                        "AI_SEMANTIC_SEARCH_UNAVAILABLE",
+                        "의미 검색을 일시적으로 사용할 수 없습니다.")));
     }
 
     @ExceptionHandler({

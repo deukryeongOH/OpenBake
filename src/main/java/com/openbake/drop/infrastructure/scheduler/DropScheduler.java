@@ -4,7 +4,6 @@ import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.service.DropEnterService;
 import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.application.service.DropStockSyncService;
-import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.application.cache.TodayDropCache;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -12,15 +11,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
-public class QueueScheduler {
+public class DropScheduler {
 
-    private static final int ENTRIES_PER_TICK = 100;
-
-    private final QueueManager queueManager;
     private final DropService dropService;
     private final DropEnterService dropEnterService;
     private final TodayDropCache todayDropCache;
@@ -39,16 +34,18 @@ public class QueueScheduler {
     }
 
     // 200ms마다 실행되지만 DB에는 접근하지 않고, 캐싱된 시간 정보로만 진행 중 여부를 판단한다.
-    @Scheduled(fixedRate = 200) // 200ms 마다 스케줄링 실행하고 틱마다 100명씩 입장
-    public void processQueue() {
+    // 상태 전환은 tryMarkStarted/tryMarkEnded가 CAS로 막아 드롭당 정확히 1회만 일어난다.
+    @Scheduled(fixedRate = 200)
+    public void processDropLifecycle() {
         LocalDateTime now = LocalDateTime.now();
         for(CachedDrop drop : todayDropCache.get()){
             if (now.isAfter(drop.dropEnd())) {
                 if (drop.tryMarkEnded()) {
                     dropService.changeDropStatusCompleted(drop.dropId());
                     dropStockSyncService.finalizeStock(drop);
+                    // 입장만 하고 구매로 이어지지 않은 진입 내역을 마감 시점에 한 번만 정리한다.
+                    dropEnterService.expireRemainingEntries(drop.dropId());
                 }
-                queueManager.finishDrop(drop.dropId());
                 continue;
             }
 
@@ -61,12 +58,11 @@ public class QueueScheduler {
                 // 재고 카운터가 없으면 요청이 전부 fail-closed 로 거부되므로 ACTIVE 전환과 같은 시점에 워밍업한다.
                 dropStockSyncService.warmUp(drop);
             }
-
-            queueManager.allowEntries(drop.dropId(), ENTRIES_PER_TICK);
         }
     }
 
     // 진행 중인 드롭의 Redis 재고를 DB에 반영한다. 드롭당 UPDATE 1회라 경합이 없다.
+    // 화면에 보이는 잔여 수량의 신선도를 결정하므로 짧은 주기를 유지한다.
     @Scheduled(fixedRate = 2000)
     public void syncDropStock() {
         LocalDateTime now = LocalDateTime.now();
@@ -79,17 +75,17 @@ public class QueueScheduler {
         }
     }
 
-    // 대기열은 통과했지만 수량을 선택하고 장바구니로 넘어가지 않는 Member 지속적으로 만료
-    @Scheduled(fixedRate = 120000)
-    public void checkActiveMembers() {
+    // 재고 카운터와 drop_entry 합계의 대조. 로그만 남기는 관측 로직이고
+    // 집계 스캔이라 참여자가 늘수록 무거워지므로, 동기화보다 훨씬 긴 주기로 돈다.
+    @Scheduled(fixedRate = 30000)
+    public void checkDropStockDrift() {
         LocalDateTime now = LocalDateTime.now();
-        for(CachedDrop drop : todayDropCache.get()){
-            if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())){
+        for (CachedDrop drop : todayDropCache.get()) {
+            if (now.isBefore(drop.dropStart()) || now.isAfter(drop.dropEnd())) {
                 continue;
             }
 
-            Set<Long> memberSet = queueManager.checkActiveMembers(drop.dropId());
-            dropEnterService.failExpiredEntries(drop.dropId(), memberSet);
+            dropStockSyncService.checkDrift(drop);
         }
     }
 }

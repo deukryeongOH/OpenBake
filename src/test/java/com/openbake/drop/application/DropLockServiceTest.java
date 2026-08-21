@@ -2,12 +2,13 @@ package com.openbake.drop.application;
 
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.application.cache.CachedDrop;
+import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.application.dto.DropProductInfoResult;
 import com.openbake.drop.application.dto.DropReserveCommand;
 import com.openbake.drop.application.port.CurrentMemberPort;
 import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.application.port.StockReservationPort;
-import com.openbake.drop.application.queue.QueueManager;
 import com.openbake.drop.application.service.DropLockService;
 import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.domain.*;
@@ -29,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,9 +54,6 @@ class DropLockServiceTest {
     private DropEntryRepository dropEntryRepository;
 
     @Mock
-    private QueueManager queueManager;
-
-    @Mock
     private ProductPort productPort;
 
     @Mock
@@ -62,6 +61,9 @@ class DropLockServiceTest {
 
     @Mock
     private StockReservationPort stockReservationPort;
+
+    @Mock
+    private TodayDropCache todayDropCache;
 
     @InjectMocks
     private DropLockService dropLockService;
@@ -91,6 +93,19 @@ class DropLockServiceTest {
         ReflectionTestUtils.setField(drop, "id", dropId);
     }
 
+    // TodayDropCache가 돌려주는 오늘 드롭. limitQuantity/productId는 시작 후 불변이라 캐시에서 읽는다.
+    private CachedDrop cachedDrop(LocalDateTime dropEnd) {
+        return new CachedDrop(LocalDate.now(), dropId, productId,
+                LocalDateTime.now().minusMinutes(10), dropEnd,
+                new AtomicBoolean(true), new AtomicBoolean(false), 5,
+                "두쫀쿠", "설명", "image.jpg", 8000, Set.of(LocalDate.now().plusDays(7)));
+    }
+
+    private void givenDropIsCachedAndRunning() {
+        given(todayDropCache.find(dropId))
+                .willReturn(Optional.of(cachedDrop(LocalDateTime.now().plusMinutes(30))));
+    }
+
     private DropProductInfoResult productInfo(int remainQuantity) {
         return DropProductInfoResult.of(
                 "두쫀쿠", "원물 맛이 많이 나요.", "image.jpg",
@@ -101,7 +116,6 @@ class DropLockServiceTest {
     @DisplayName("재고 차감 성공 - DropEntry가 원자적으로 RESERVED로 전환되고 재고가 차감된다")
     void decreaseQuantity_Success() {
         // given
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
         given(stockReservationPort.reserve(dropId, 3)).willReturn(97L);
 
@@ -114,14 +128,12 @@ class DropLockServiceTest {
         // 재고 차감이 Redis 로 옮겨갔으므로 DB 단일 row UPDATE 는 더 이상 호출되지 않는다
         verify(productPort, never()).decreaseQuantity(any(), anyInt());
         verify(dropService, never()).changeDropStatusCompleted(any());
-        verify(queueManager, never()).markSoldOut(any());
     }
 
     @Test
-    @DisplayName("ENTERED 상태가 아니면(이미 예약됐거나 대기열 통과 상태가 아니면) 재고를 건드리지 않고 예외를 던진다")
+    @DisplayName("ENTERED 상태가 아니면(이미 예약됐거나 입장하지 않았으면) 재고를 건드리지 않고 예외를 던진다")
     void decreaseQuantity_Fail_NotEnteredStatus_DoesNotTouchStock() {
         // given
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(0);
 
         // when & then
@@ -133,10 +145,9 @@ class DropLockServiceTest {
     }
 
     @Test
-    @DisplayName("차감 후 남은 수량이 0이면 드롭을 COMPLETED로 바꾸고 대기열에 품절 마킹한다")
+    @DisplayName("차감 후 남은 수량이 0이면 드롭을 COMPLETED로 바꾼다")
     void decreaseQuantity_SoldOut_MarksDropCompleted() {
         // given
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 5)).willReturn(1);
         given(stockReservationPort.reserve(dropId, 5)).willReturn(0L);
 
@@ -145,14 +156,12 @@ class DropLockServiceTest {
 
         // then
         verify(dropService).changeDropStatusCompleted(dropId);
-        verify(queueManager).markSoldOut(dropId);
     }
 
     @Test
     @DisplayName("재고 카운터가 초기화되지 않았으면 선점을 거부한다(fail-closed)")
     void decreaseQuantity_StockNotInitialized_Rejects() {
         // given
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
         given(stockReservationPort.reserve(dropId, 3)).willReturn((long) StockReservationPort.NOT_INITIALIZED);
 
@@ -168,7 +177,6 @@ class DropLockServiceTest {
     @DisplayName("재고가 부족하면 품절 예외를 던진다")
     void decreaseQuantity_OutOfStock_Throws() {
         // given
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
         given(stockReservationPort.reserve(dropId, 3)).willReturn((long) StockReservationPort.OUT_OF_STOCK);
 
@@ -184,7 +192,7 @@ class DropLockServiceTest {
     void reserveStock_Success() {
         // given
         given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        givenDropIsCachedAndRunning();
         given(dropEntryRepository.reserve(dropId, memberId, 3)).willReturn(1);
         given(stockReservationPort.reserve(dropId, 3)).willReturn(97L);
 
@@ -199,9 +207,9 @@ class DropLockServiceTest {
     @Test
     @DisplayName("1인당 제한 수량을 초과하면 재고 차감 시도 없이 예외를 던진다")
     void reserveStock_Fail_ExceedsLimitPerPerson() {
-        // given: drop.limitQuantity == 5
+        // given: 캐시된 drop.limitQuantity == 5
         given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        givenDropIsCachedAndRunning();
 
         // when & then
         assertThatThrownBy(() -> dropLockService.reserveStock(dropId, DropReserveCommand.create(10)))
@@ -226,7 +234,7 @@ class DropLockServiceTest {
     @DisplayName("1인당 제한 수량 검증 성공")
     void checkLimitQuantityPerPerson_Success() {
         // given
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        givenDropIsCachedAndRunning();
 
         // when & then (예외 없이 통과)
         dropLockService.checkLimitQuantityPerPerson(dropId, 3);
@@ -236,7 +244,7 @@ class DropLockServiceTest {
     @DisplayName("남은 수량 검증 성공")
     void checkSelectQuantity_Success() {
         // given
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        givenDropIsCachedAndRunning();
         given(productPort.getProductInfo(productId)).willReturn(productInfo(100));
 
         // when & then (예외 없이 통과)
@@ -250,7 +258,7 @@ class DropLockServiceTest {
         ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        givenDropIsCachedAndRunning();
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
         given(productPort.getTotalQuantity(productId)).willReturn(100);
         given(stockReservationPort.rollback(dropId, 5, 100)).willReturn(5L);
@@ -270,7 +278,6 @@ class DropLockServiceTest {
         // given
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(0);
 
         // when & then
@@ -299,7 +306,7 @@ class DropLockServiceTest {
         ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(soldOutDrop));
+        givenDropIsCachedAndRunning();
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
         given(productPort.getTotalQuantity(productId)).willReturn(100);
         given(stockReservationPort.rollback(dropId, 5, 100)).willReturn(5L);
@@ -308,8 +315,9 @@ class DropLockServiceTest {
         dropLockService.rollbackStock(dropId, memberId);
 
         // then
-        verify(dropService).changeDropStatusActive(dropId);
-        verify(queueManager).unmarkSoldOut(dropId);
+        verify(dropService).reviveFromSoldOut(dropId);
+        // 상태를 읽지 않고 조건부 UPDATE로 처리하므로 drops 조회가 없다
+        verify(dropRepository, never()).findById(any());
     }
 
     @Test
@@ -334,7 +342,8 @@ class DropLockServiceTest {
         ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(endedDrop));
+        given(todayDropCache.find(dropId))
+                .willReturn(Optional.of(cachedDrop(now.minusMinutes(1))));
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
         given(productPort.getTotalQuantity(productId)).willReturn(100);
         given(stockReservationPort.rollback(dropId, 5, 100)).willReturn(5L);
@@ -343,18 +352,19 @@ class DropLockServiceTest {
         dropLockService.rollbackStock(dropId, memberId);
 
         // then
-        verify(dropService, never()).changeDropStatusActive(any());
-        verify(queueManager, never()).unmarkSoldOut(any());
+        verify(dropService, never()).reviveFromSoldOut(any());
+        // 마감 창 밖이라 상태 확인용 DB 조회 자체가 일어나지 않는다
+        verify(dropRepository, never()).findById(any());
     }
 
     @Test
-    @DisplayName("COMPLETED가 아닌(정상 진행 중인) 드롭은 재고 롤백만 하고 상태 전환은 시도하지 않는다")
-    void rollbackStock_DoesNotRevive_WhenDropIsNotCompleted() {
+    @DisplayName("마감 전에 재고가 복구되면 상태를 읽지 않고 복구 UPDATE를 호출한다 (COMPLETED 여부는 UPDATE의 WHERE가 판단)")
+    void rollbackStock_WithinWindow_DelegatesReviveToConditionalUpdate() {
         // given
         ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 3);
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
                 .willReturn(Optional.of(enteredEntry));
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop)); // status = ACTIVE
+        givenDropIsCachedAndRunning();
         given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
         given(productPort.getTotalQuantity(productId)).willReturn(100);
         given(stockReservationPort.rollback(dropId, 3, 100)).willReturn(100L);
@@ -363,7 +373,43 @@ class DropLockServiceTest {
         dropLockService.rollbackStock(dropId, memberId);
 
         // then
-        verify(dropService, never()).changeDropStatusActive(any());
-        verify(queueManager, never()).unmarkSoldOut(any());
+        verify(dropService).reviveFromSoldOut(dropId);
+        verify(dropRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("오늘 진행되는 드롭이 아니면(캐시 미스) 재고 선점을 DB 조회 없이 거부한다(fail-closed)")
+    void checkLimitQuantityPerPerson_CacheMiss_RejectsWithoutDbLookup() {
+        // given
+        given(todayDropCache.find(dropId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> dropLockService.checkLimitQuantityPerPerson(dropId, 3))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DROP_NOT_ACTIVE);
+
+        verifyNoInteractions(dropRepository);
+    }
+
+    @Test
+    @DisplayName("드롭 당일이 지나 캐시에 없어도 롤백은 DB 폴백으로 정상 처리된다")
+    void rollbackStock_CacheMiss_FallsBackToDb() {
+        // given
+        ReflectionTestUtils.setField(enteredEntry, "selectQuantity", 5);
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .willReturn(Optional.of(enteredEntry));
+        given(todayDropCache.find(dropId)).willReturn(Optional.empty());
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop));
+        given(dropEntryRepository.fail(dropId, memberId)).willReturn(1);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(stockReservationPort.rollback(dropId, 5, 100)).willReturn(5L);
+
+        // when
+        dropLockService.rollbackStock(dropId, memberId);
+
+        // then
+        verify(stockReservationPort).rollback(dropId, 5, 100);
+        // 캐시 미스 = 진행 창 밖이므로 되살리지 않는다
+        verify(dropService, never()).reviveFromSoldOut(any());
     }
 }

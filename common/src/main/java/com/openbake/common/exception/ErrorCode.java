@@ -55,8 +55,8 @@ public enum ErrorCode {
     ALREADY_ENTERED(HttpStatus.CONFLICT, "DR006", "이미 응모 완료된 드롭입니다."),
     DROP_OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "DR007", "준비된 재고가 모두 소진되었습니다."),
     DROP_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "DR008", "현재 응모 가능한 드롭 기간이 아닙니다."),
-    UNAUTHORIZED_QUEUE_ACCESS(HttpStatus.BAD_REQUEST, "DR009", "드롭에 입장 할 수 없습니다. 조금만 더 기다려주세요."),
-    PLEASE_WAIT(HttpStatus.BAD_REQUEST, "DR010", "대기열 진행 중... 조금만 더 기다려주세요."),
+    // DR009(UNAUTHORIZED_QUEUE_ACCESS), DR010(PLEASE_WAIT)은 대기열 제거와 함께 삭제됐다.
+    // 코드 문자열은 프론트/문서에 노출되므로 재사용하지 않는다.
     NEVER_ENTERED(HttpStatus.NOT_FOUND, "DR011", "드롭에 참여한 기록이 없습니다. 드롭에 참여한 후 다시 시도해주세요."),
     LOCK_ACQUISITION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "DR012", "락을 획득하는 과정에서 시스템 오류가 발생했습니다."),
     NOT_ENTERED_STATUS(HttpStatus.BAD_REQUEST, "DR014", "재고를 선점할 수 있는 상태가 아닙니다."),
@@ -68,6 +68,7 @@ public enum ErrorCode {
     NOT_RESERVED_STATUS(HttpStatus.BAD_REQUEST, "DR020", "재고를 선점한 상태가 아닙니다."),
     OPTIMISTIC_LOCK_CONFLICT(HttpStatus.CONFLICT, "DR021", "다른 요청과 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     STOCK_NOT_INITIALIZED(HttpStatus.SERVICE_UNAVAILABLE, "DR022", "재고가 준비되지 않았습니다. 잠시 후 다시 시도해주세요."),
+    DUPLICATE_DROP_REQUEST(HttpStatus.CONFLICT, "DR023", "동시에 처리되어 실패했습니다. 잠시 후 다시 시도해주세요."),
 
     // product - PR
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PR001", "존재하지 않는 일반 상품입니다."),

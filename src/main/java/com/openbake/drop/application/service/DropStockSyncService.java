@@ -60,7 +60,12 @@ public class DropStockSyncService {
         }
     }
 
-    /** 진행 중 주기 동기화. 드롭당 UPDATE 1회라 경합이 없다. */
+    /**
+     * 진행 중 주기 동기화. 드롭당 UPDATE 1회라 경합이 없다.
+     *
+     * 여기서는 DB를 읽지 않는다. Redis 값을 절대값으로 대입할 뿐이고,
+     * 대조 검사는 훨씬 낮은 빈도로 도는 checkDrift 가 맡는다.
+     */
     @Transactional
     public void sync(CachedDrop drop) {
         Long remain = stockReservationPort.peek(drop.dropId());
@@ -69,8 +74,28 @@ public class DropStockSyncService {
             return; // 아직 초기화 전이거나 이미 정리됨
         }
 
-        detectDrift(drop, remain);
         productPort.syncRemainQuantity(drop.productId(), remain.intValue());
+    }
+
+    /**
+     * 재고 카운터와 drop_entry 합계의 불일치 검출.
+     *
+     * sync 에서 분리한 이유는 비용과 목적이 다르기 때문이다.
+     * 이 검사는 로그만 남기고 아무것도 고치지 않는 관측 로직인데,
+     * 근거가 되는 sumReservedQuantity 는 해당 드롭의 RESERVED 행을 전부 훑는 집계다.
+     * entry_status 와 select_quantity 가 인덱스에 없어 매칭 행마다 힙을 다시 읽어야 하므로
+     * 참여자가 늘수록(= 부하가 가장 높은 순간) 무거워진다.
+     * 자가 치유도 못 하는 검사를 그 비용으로 2초마다 돌릴 이유가 없다.
+     */
+    @Transactional(readOnly = true)
+    public void checkDrift(CachedDrop drop) {
+        Long remain = stockReservationPort.peek(drop.dropId());
+
+        if (remain == null) {
+            return; // 아직 초기화 전이거나 이미 정리됨
+        }
+
+        detectDrift(drop, remain);
     }
 
     /** 드롭 종료 시 최종 확정 후 키를 정리한다. */
@@ -99,7 +124,7 @@ public class DropStockSyncService {
      *
      * 검출만 하고 Redis 를 자동 보정하지는 않는다. 진행 중에 카운터를 덮어쓰는 것은
      * warmUp 이 조건부여야 하는 이유와 같은 위험을 만들기 때문이다(선점 중인 요청과 경합).
-     * DB 는 아래 syncRemainQuantity 로 어차피 Redis 값에 맞춰지고,
+     * DB 는 sync 의 syncRemainQuantity 로 어차피 Redis 값에 맞춰지고,
      * 종료 시 finalizeStock 이 최종값을 확정한다.
      */
     private void detectDrift(CachedDrop drop, long redisRemain) {

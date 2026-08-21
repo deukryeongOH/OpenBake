@@ -118,14 +118,22 @@ public class DropService {
         }
     }
 
+    // 아래 세 전환은 모두 조건부 UPDATE라 여러 번 호출해도 안전하다.
+    // 전환이 실제로 일어났는지 알아야 하는 호출자를 위해 영향 행 수를 그대로 돌려준다.
     @Transactional
-    public void changeDropStatusActive(Long dropId) {
-        dropRepository.activeStatus(dropId);
+    public int changeDropStatusActive(Long dropId) {
+        return dropRepository.activeStatus(dropId);
     }
 
     @Transactional
-    public void changeDropStatusCompleted(Long dropId) {
-        dropRepository.completeStatus(dropId);
+    public int changeDropStatusCompleted(Long dropId) {
+        return dropRepository.completeStatus(dropId);
+    }
+
+    // 품절로 마감된 드롭을 되살린다. COMPLETED가 아니면 아무 일도 하지 않는다.
+    @Transactional
+    public int reviveFromSoldOut(Long dropId) {
+        return dropRepository.reviveFromSoldOut(dropId);
     }
 
     private Drop findDrop(Long dropId) {

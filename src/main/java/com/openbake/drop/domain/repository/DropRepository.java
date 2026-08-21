@@ -29,7 +29,11 @@ public interface DropRepository {
 
     Drop findByProductId(Long aLong);
 
-    void activeStatus(Long dropId);
+    // 상태 전환은 조건부 UPDATE이며, 실제로 전환된 행 수를 반환한다(0이면 이미 그 상태가 아니었다는 뜻).
+    int activeStatus(Long dropId);
 
-    void completeStatus(Long dropId);
+    int completeStatus(Long dropId);
+
+    // 품절(COMPLETED)된 드롭만 ACTIVE로 되살린다
+    int reviveFromSoldOut(Long dropId);
 }

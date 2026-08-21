@@ -16,11 +16,6 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
 
     private final DropEntryJpaRepository dropEntryJpaRepository;
     @Override
-    public boolean existsByDropIdAndMemberIdAndEntryStatusIn(Long dropId, Long memberId, List<EntryStatus> statuses) {
-        return dropEntryJpaRepository.existsByDropIdAndMemberIdAndEntryStatusIn(dropId, memberId, statuses);
-    }
-
-    @Override
     public Optional<DropEntry> findByDropIdAndMemberId(Long dropId, Long memberId) {
         return dropEntryJpaRepository.findByDropIdAndMemberId(dropId, memberId);
     }
@@ -31,11 +26,6 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
     }
 
     @Override
-    public boolean existsByDropIdAndMemberId(Long dropId, Long memberId) {
-        return dropEntryJpaRepository.existsByDropIdAndMemberId(dropId, memberId);
-    }
-
-    @Override
     public int reserve(Long dropId, Long memberId, int selectQuantity) {
         return dropEntryJpaRepository.reserve(dropId, memberId, selectQuantity);
     }
@@ -43,6 +33,11 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
     @Override
     public int fail(Long dropId, Long memberId) {
         return dropEntryJpaRepository.fail(dropId, memberId);
+    }
+
+    @Override
+    public int expireEnteredEntries(Long dropId) {
+        return dropEntryJpaRepository.expireEnteredEntries(dropId);
     }
 
     @Override

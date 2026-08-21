@@ -106,6 +106,15 @@ openbake:
   member-service:
     url: ${MEMBER_SERVICE_URL:http://localhost:8081}
 
+  search:
+    semantic:
+      enabled: ${SEMANTIC_SEARCH_ENABLED:true}
+      timeout: PT0.5S
+      pool-multiplier: 2
+      candidate-max: 200
+    rrf:
+      k: 60
+
 logging:
   level:
     org.hibernate.orm.jdbc.bind: trace
@@ -163,6 +172,14 @@ resilience4j:
   circuitbreaker:
     instances:
       elasticsearch:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+      ai-semantic-search:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 10
         minimum-number-of-calls: 5

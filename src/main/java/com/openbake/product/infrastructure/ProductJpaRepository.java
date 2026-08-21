@@ -53,6 +53,10 @@ public interface ProductJpaRepository extends JpaRepository<Product, Long> {
                                 @Param("category") Category category,
                                 Pageable pageable);
 
+    @Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.pickUpAvailableDates "
+         + "WHERE p.id IN :productIds")
+    List<Product> findAllByIdWithPickupDates(@Param("productIds") Collection<Long> productIds);
+
     @Query(value = "Select p From Product p WHERE p.sellerId = :sellerId")
     Page<Product> findAllBySellerId(@Param("sellerId") Long sellerId, Pageable pageable);
 

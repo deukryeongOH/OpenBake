@@ -1,10 +1,12 @@
 package com.openbake.ai.infrastructure.elasticsearch;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import com.openbake.ai.application.EmbeddingProperties;
 import com.openbake.ai.application.ProductEmbeddingSnapshot;
 import com.openbake.ai.application.port.RecommendationEmbeddingIndex;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,8 +49,18 @@ public class ElasticsearchRecommendationEmbeddingIndex implements Recommendation
 
     @Override
     public List<ProductEmbeddingSnapshot> findGeneralNearest(List<Float> vector, int size) {
+        return findGeneralNearest(vector, size, null);
+    }
+
+    @Override
+    public List<ProductEmbeddingSnapshot> findGeneralNearest(List<Float> vector, int size, String category) {
         try {
             int numCandidates = Math.max(size, Math.min(1_000, size * 2));
+            List<Query> filters = new ArrayList<>();
+            filters.add(Query.of(q -> q.term(term -> term.field("type").value("GENERAL"))));
+            if (category != null && !category.isBlank()) {
+                filters.add(Query.of(q -> q.term(term -> term.field("category").value(category))));
+            }
             var response = client.search(request -> request
                             .index(properties.searchIndexName())
                             .size(size)
@@ -57,9 +69,7 @@ public class ElasticsearchRecommendationEmbeddingIndex implements Recommendation
                                     .queryVector(vector)
                                     .k(size)
                                     .numCandidates(numCandidates)
-                                    .filter(query -> query.term(term -> term
-                                            .field("type")
-                                            .value("GENERAL")))),
+                                    .filter(filters)),
                     ProductEmbeddingDocument.class);
             return response.hits().hits().stream()
                     .filter(hit -> hit.source() != null)

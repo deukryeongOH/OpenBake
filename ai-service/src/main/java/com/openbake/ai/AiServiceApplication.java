@@ -7,11 +7,13 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import com.openbake.ai.application.InteractionProperties;
 import com.openbake.ai.application.RecommendationProperties;
 import com.openbake.ai.application.RecoveryProperties;
+import com.openbake.ai.application.SemanticSearchProperties;
 
 @SpringBootApplication
 @EnableScheduling
 @EnableConfigurationProperties({
-        InteractionProperties.class, RecommendationProperties.class, RecoveryProperties.class})
+        InteractionProperties.class, RecommendationProperties.class, RecoveryProperties.class,
+        SemanticSearchProperties.class})
 public class AiServiceApplication {
 
     public static void main(String[] args) {

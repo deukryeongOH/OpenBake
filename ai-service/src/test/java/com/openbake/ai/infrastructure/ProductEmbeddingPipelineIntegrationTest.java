@@ -74,7 +74,8 @@ import io.micrometer.core.instrument.MeterRegistry;
         "spring.data.redis.host=127.0.0.1",
         "spring.data.redis.port=1",
         "spring.data.redis.timeout=100ms",
-        "spring.task.scheduling.enabled=false"
+        "spring.task.scheduling.enabled=false",
+        "CORE_SERVICE_TOKEN=${random.uuid}"
 })
 class ProductEmbeddingPipelineIntegrationTest {
 

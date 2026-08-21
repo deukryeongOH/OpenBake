@@ -78,6 +78,8 @@ services:
       AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
       AWS_SECRET_KEY: ${AWS_SECRET_KEY}
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN}
+      CORE_SERVICE_TOKEN: ${CORE_SERVICE_TOKEN}
+      AI_SERVICE_URL: http://ai-service:8083
     depends_on:
       postgres:
         condition: service_healthy
@@ -287,6 +289,7 @@ services:
       REDIS_PORT: 6379
       CORE_SERVICE_URL: http://backend:8080
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN}
+      CORE_SERVICE_TOKEN: ${CORE_SERVICE_TOKEN}
     depends_on:
       ai-postgres:
         condition: service_healthy

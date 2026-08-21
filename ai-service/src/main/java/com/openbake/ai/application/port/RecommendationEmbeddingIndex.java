@@ -10,4 +10,6 @@ public interface RecommendationEmbeddingIndex {
     Map<Long, ProductEmbeddingSnapshot> findAll(Collection<Long> productIds);
 
     List<ProductEmbeddingSnapshot> findGeneralNearest(List<Float> vector, int size);
+
+    List<ProductEmbeddingSnapshot> findGeneralNearest(List<Float> vector, int size, String category);
 }

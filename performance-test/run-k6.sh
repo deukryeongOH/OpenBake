@@ -8,7 +8,7 @@ PROFILE="${1:-}"
 CMD="${2:-}"
 
 usage() {
-  echo "사용법: ./run-k6.sh {local|server} {users|confirm|lock}"
+  echo "사용법: ./run-k6.sh {local|server} {users|confirm|lock|oversell}"
 }
 
 if [[ "$PROFILE" != "local" && "$PROFILE" != "server" ]]; then
@@ -98,6 +98,9 @@ case "$CMD" in
     ;;
   lock)
     run_k6 "drop-lock-concurrency" "drop-lock-concurrency.js"
+    ;;
+  oversell)
+    run_k6 "drop-oversell-verification" "drop-oversell-verification.js"
     ;;
   *)
     usage

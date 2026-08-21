@@ -32,8 +32,12 @@ public final class HeaderAuthenticationFilter extends OncePerRequestFilter {
             return true;
         }
 
-        // internal, actuator, Swagger 등 외부 API가 아닌 요청
-        if (!path.startsWith("/api/")) {
+        // actuator, Swagger 등 외부 API가 아닌 요청, /api/** 와 /internal/** 는 인증 필터 적용
+        boolean protectedPath =
+                path.startsWith("/api/")
+                        || path.startsWith("/internal/");
+
+        if (!protectedPath) {
             return true;
         }
 

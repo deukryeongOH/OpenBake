@@ -30,7 +30,7 @@ public class PurchaseConfirmedEventListener {
                         event.orderId(),
                         event.orderItemId(),
                         event.sellerId(),
-                        event.dropId(),
+                        event.productId(),
                         event.productNameSnapshot(),
                         event.quantity(),
                         event.grossAmount(),

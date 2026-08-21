@@ -1,10 +1,15 @@
 package com.openbake.product.domain;
 
 
+import java.util.Collection;
+import java.util.List;
+
 public interface ProductInventoryRepository {
     ProductInventory save(ProductInventory productInventory);
 
     ProductInventory findByProductId(Long productId);
+
+    List<ProductInventory> findAllByProductIds(Collection<Long> productIds);
 
     void delete(ProductInventory productInventory);
 

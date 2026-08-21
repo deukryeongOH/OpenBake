@@ -178,6 +178,21 @@ class PublicEndpointPolicyTest {
         )));
     }
 
+    @Test
+    void recognizesOnlyDetailGetsAsOptionallyAuthenticated() {
+        assertTrue(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/products/1")));
+        assertTrue(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/drops/12/info")));
+
+        assertFalse(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/products/0")));
+        assertFalse(policy.isOptionallyAuthenticated(request(
+                HttpMethod.POST, "/api/v1/products/1")));
+        assertFalse(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/drops/12")));
+    }
+
     private MockServerHttpRequest request(
             HttpMethod method,
             String uri

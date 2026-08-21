@@ -118,7 +118,7 @@ public class SellerSettlementQueryService {
                 line.getTargetId(),
                 line.getOrderId(),
                 line.getOrderItemId(),
-                line.getDropId(),
+                line.getProductId(),
                 line.getProductNameSnapshot(),
                 line.getQuantity(),
                 line.getGrossAmount(),

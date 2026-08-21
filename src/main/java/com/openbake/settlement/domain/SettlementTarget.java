@@ -88,8 +88,8 @@ public class SettlementTarget {
     @Column(name = "seller_id", nullable = false)
     private Long sellerId;
 
-    @Column(name = "drop_id", nullable = false)
-    private Long dropId;
+    @Column(name = "product_id", nullable = false)
+    private Long productId;
 
     /**
      * 구매확정 당시 상품명입니다.
@@ -163,7 +163,7 @@ public class SettlementTarget {
             Long orderId,
             Long orderItemId,
             Long sellerId,
-            Long dropId,
+            Long productId,
             String productNameSnapshot,
             Integer quantity,
             BigDecimal grossAmount,
@@ -175,7 +175,7 @@ public class SettlementTarget {
                 orderId,
                 orderItemId,
                 sellerId,
-                dropId,
+                productId,
                 productNameSnapshot,
                 quantity,
                 grossAmount,
@@ -202,7 +202,7 @@ public class SettlementTarget {
         this.orderId = orderId;
         this.orderItemId = orderItemId;
         this.sellerId = sellerId;
-        this.dropId = dropId;
+        this.productId = productId;
         this.productNameSnapshot = productNameSnapshot.trim();
         this.quantity = quantity;
         this.grossAmount = normalizedGrossAmount;
@@ -222,7 +222,7 @@ public class SettlementTarget {
             Long orderId,
             Long orderItemId,
             Long sellerId,
-            Long dropId,
+            Long productId,
             String productNameSnapshot,
             Integer quantity,
             BigDecimal grossAmount,
@@ -234,7 +234,7 @@ public class SettlementTarget {
                 orderId,
                 orderItemId,
                 sellerId,
-                dropId,
+                productId,
                 productNameSnapshot,
                 quantity,
                 grossAmount,
@@ -316,7 +316,7 @@ public class SettlementTarget {
             Long orderId,
             Long orderItemId,
             Long sellerId,
-            Long dropId,
+            Long productId,
             String productNameSnapshot,
             Integer quantity,
             BigDecimal grossAmount,
@@ -333,7 +333,7 @@ public class SettlementTarget {
         validatePositiveId(orderId, "orderId");
         validatePositiveId(orderItemId, "orderItemId");
         validatePositiveId(sellerId, "sellerId");
-        validatePositiveId(dropId, "dropId");
+        validatePositiveId(productId, "productId");
 
         if (productNameSnapshot == null || productNameSnapshot.isBlank()) {
             throw new IllegalArgumentException(

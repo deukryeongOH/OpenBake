@@ -9,6 +9,12 @@ scrape_configs:
       - targets:
           - "${OPENBAKE_CORE_TARGET}"
 
+  - job_name: "openbake-ai"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets:
+          - "${OPENBAKE_AI_TARGET}"
+
   - job_name: "openbake-member"
     metrics_path: "/actuator/prometheus"
     static_configs:

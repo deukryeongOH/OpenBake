@@ -3,6 +3,7 @@ package com.openbake.product.presentation;
 import com.openbake.common.response.ApiResponse;
 import com.openbake.product.application.ProductSearchService;
 import com.openbake.product.application.ProductService;
+import com.openbake.product.application.GeneralProductDetailService;
 import com.openbake.product.application.port.S3ImagePort;
 import com.openbake.product.application.dto.PresignedUploadResult;
 import com.openbake.product.application.dto.ProductInfoCommand;
@@ -35,6 +36,14 @@ public class ProductController {
     private final ProductService productService;
     private final S3ImagePort s3ImagePort;
     private final ProductSearchService productSearchService;
+    private final GeneralProductDetailService generalProductDetailService;
+
+    @Operation(summary = "일반 상품 상세 조회", description = "일반 상품 상세를 조회합니다. 인증 없이 조회할 수 있으며 로그인 회원의 조회만 추천 행동으로 기록됩니다.")
+    @GetMapping("/{productId}")
+    public ApiResponse<ProductInfoResponse> getGeneralProduct(
+            @Parameter(description = "조회할 상품 ID", example = "1") @PathVariable Long productId) {
+        return ApiResponse.ok(ProductInfoResponse.of(generalProductDetailService.get(productId)));
+    }
   
     @Operation(
             summary = "일반 상품 등록",

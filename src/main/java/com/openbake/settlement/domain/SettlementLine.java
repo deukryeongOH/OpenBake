@@ -77,8 +77,8 @@ public class SettlementLine {
     @Column(name = "order_item_id", nullable = false)
     private Long orderItemId;
 
-    @Column(name = "drop_id", nullable = false)
-    private Long dropId;
+    @Column(name = "product_id", nullable = false)
+    private Long productId;
 
     @Column(
             name = "product_name_snapshot",
@@ -133,7 +133,7 @@ public class SettlementLine {
             Long targetId,
             Long orderId,
             Long orderItemId,
-            Long dropId,
+            Long productId,
             String productNameSnapshot,
             Integer quantity,
             BigDecimal grossAmount,
@@ -147,7 +147,7 @@ public class SettlementLine {
                 targetId,
                 orderId,
                 orderItemId,
-                dropId,
+                productId,
                 productNameSnapshot,
                 quantity,
                 grossAmount,
@@ -182,7 +182,7 @@ public class SettlementLine {
         this.targetId = targetId;
         this.orderId = orderId;
         this.orderItemId = orderItemId;
-        this.dropId = dropId;
+        this.productId = productId;
         this.productNameSnapshot = productNameSnapshot.trim();
         this.quantity = quantity;
         this.grossAmount = normalizedGrossAmount;
@@ -221,7 +221,7 @@ public class SettlementLine {
                 target.getId(),
                 target.getOrderId(),
                 target.getOrderItemId(),
-                target.getDropId(),
+                target.getProductId(),
                 target.getProductNameSnapshot(),
                 target.getQuantity(),
                 target.getGrossAmount(),
@@ -237,7 +237,7 @@ public class SettlementLine {
             Long targetId,
             Long orderId,
             Long orderItemId,
-            Long dropId,
+            Long productId,
             String productNameSnapshot,
             Integer quantity,
             BigDecimal grossAmount,
@@ -250,7 +250,7 @@ public class SettlementLine {
         validatePositiveId(targetId, "targetId");
         validatePositiveId(orderId, "orderId");
         validatePositiveId(orderItemId, "orderItemId");
-        validatePositiveId(dropId, "dropId");
+        validatePositiveId(productId, "productId");
 
         if (productNameSnapshot == null
                 || productNameSnapshot.isBlank()) {

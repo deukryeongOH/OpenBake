@@ -1,0 +1,94 @@
+server:
+  port: 8083   # AI 추천 서비스 전용 포트
+
+spring:
+  application:
+    name: ai-service
+  datasource:
+    url: ${AI_DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:500ms}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    consumer:
+      group-id: ai-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+openbake:
+  ai:
+    interaction:
+      view-suppression: PT5M
+      interaction-retention: P90D
+      consumed-event-retention: P90D
+      deletion-marker-retention: P35D
+      cleanup-batch-size: 1000
+      cleanup-cron: "0 20 4 * * *"
+      recommendation-cache-key-prefix: "ai:recommendation:v1:"
+    recommendation:
+      cache-ttl: PT15M
+      default-size: 10
+      max-size: 20
+      candidate-multiplier: 5
+      candidate-max: 100
+      profile-window: P90D
+      popular-purchase-window: P30D
+      popular-cart-window: P7D
+      core-timeout: PT3S
+      weights:
+        view: 1
+        cart-add: 3
+        purchase: 5
+      half-life:
+        view: P5D
+        cart-add: P14D
+        purchase: P45D
+    embedding:
+      model: text-embedding-3-small
+      dimensions: 1536
+      index-name: product-embeddings-v1
+      search-index-name: ${AI_SEARCH_INDEX_NAME:${openbake.ai.embedding.index-name}}
+      index-version: v1
+      connect-timeout: PT3S
+      read-timeout: PT30S
+      worker:
+        interval: PT2S
+        batch-size: 20
+        lease: PT5M
+    backfill:
+      page-size: 100
+      page-delay: PT1S
+    reconcile:
+      max-deletions: 100
+    metrics:
+      refresh-interval: PT30S
+    dlt:
+      max-fetch: 100
+      allowed-topics:
+        - product.changed.v1.dlt
+        - product.viewed.v1.dlt
+        - cart.item-added.v1.dlt
+        - order.purchase-confirmed.v1.dlt
+        - member.withdrawn.v1.dlt
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics

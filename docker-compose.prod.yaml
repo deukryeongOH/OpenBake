@@ -11,5 +11,8 @@ services:
   member-service:
     image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-member-service:latest
 
+  ai-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-ai-service:latest
+
   elasticsearch:
     image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-elasticsearch:latest

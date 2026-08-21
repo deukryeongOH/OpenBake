@@ -20,7 +20,7 @@ class SettlementLineTest {
     private static final Long ORDER_ID = 1001L;
     private static final Long ORDER_ITEM_ID = 2001L;
     private static final Long SELLER_ID = 10L;
-    private static final Long DROP_ID = 3001L;
+    private static final Long PRODUCT_ID = 3001L;
 
     private static final OffsetDateTime PURCHASE_CONFIRMED_AT =
             OffsetDateTime.parse("2026-07-21T10:00:00+09:00");
@@ -48,8 +48,8 @@ class SettlementLineTest {
         assertThat(line.getOrderItemId())
                 .isEqualTo(ORDER_ITEM_ID);
 
-        assertThat(line.getDropId())
-                .isEqualTo(DROP_ID);
+        assertThat(line.getProductId())
+                .isEqualTo(PRODUCT_ID);
 
         assertThat(line.getProductNameSnapshot())
                 .isEqualTo("제주 당근 케이크");
@@ -134,7 +134,7 @@ class SettlementLineTest {
                 ORDER_ID,
                 ORDER_ITEM_ID,
                 SELLER_ID,
-                DROP_ID,
+                PRODUCT_ID,
                 "제주 당근 케이크",
                 2,
                 new BigDecimal("30000.00"),

@@ -1,6 +1,7 @@
 package com.openbake.drop.presentation;
 
 import com.openbake.drop.application.service.DropService;
+import com.openbake.drop.application.service.DropDetailService;
 import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.domain.DropStatus;
 import com.openbake.drop.presentation.controller.DropController;
@@ -31,6 +32,9 @@ class DropControllerTest {
 
     @MockitoBean
     private DropService dropService;
+
+    @MockitoBean
+    private DropDetailService dropDetailService;
 
     @MockitoBean
     private CurrentSellerProvider currentSellerProvider;

@@ -45,6 +45,12 @@ public class PublicEndpointPolicy {
     private static final Pattern PUBLIC_SELLER_PATH =
             Pattern.compile("^/api/v1/sellers/[1-9][0-9]*$");
 
+    private static final Pattern OPTIONAL_PRODUCT_DETAIL_PATH =
+            Pattern.compile("^/api/v1/products/[1-9][0-9]*$");
+
+    private static final Pattern OPTIONAL_DROP_DETAIL_PATH =
+            Pattern.compile("^/api/v1/drops/[1-9][0-9]*/info$");
+
     public boolean isPublic(ServerHttpRequest request) {
         HttpMethod method = request.getMethod();
         String rawPath = request.getURI().getRawPath();
@@ -65,6 +71,16 @@ public class PublicEndpointPolicy {
 
         return method == HttpMethod.GET
                 && PUBLIC_SELLER_PATH.matcher(rawPath).matches();
+    }
+
+    public boolean isOptionallyAuthenticated(ServerHttpRequest request) {
+        HttpMethod method = request.getMethod();
+        String rawPath = request.getURI().getRawPath();
+        if (method != HttpMethod.GET || rawPath == null) {
+            return false;
+        }
+        return OPTIONAL_PRODUCT_DETAIL_PATH.matcher(rawPath).matches()
+                || OPTIONAL_DROP_DETAIL_PATH.matcher(rawPath).matches();
     }
 
     private boolean isAllowedOAuthEndpoint(

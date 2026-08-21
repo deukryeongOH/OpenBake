@@ -1,0 +1,42 @@
+package com.openbake.ai.presentation;
+
+import com.openbake.ai.application.RecommendationUnavailableException;
+import com.openbake.ai.application.SemanticSearchUnavailableException;
+import com.openbake.common.response.ApiResponse;
+import com.openbake.common.response.ApiResponse.ApiError;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+@RestControllerAdvice
+public class RecommendationExceptionHandler {
+
+    @ExceptionHandler(RecommendationUnavailableException.class)
+    ResponseEntity<ApiResponse<Void>> unavailable(RecommendationUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.fail(new ApiError(
+                        "AI_RECOMMENDATION_UNAVAILABLE",
+                        "추천 서비스를 일시적으로 사용할 수 없습니다.")));
+    }
+
+    @ExceptionHandler(SemanticSearchUnavailableException.class)
+    ResponseEntity<ApiResponse<Void>> semanticSearchUnavailable(SemanticSearchUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.fail(new ApiError(
+                        "AI_SEMANTIC_SEARCH_UNAVAILABLE",
+                        "의미 검색을 일시적으로 사용할 수 없습니다.")));
+    }
+
+    @ExceptionHandler({
+            IllegalArgumentException.class,
+            MethodArgumentNotValidException.class,
+            MethodArgumentTypeMismatchException.class
+    })
+    ResponseEntity<ApiResponse<Void>> invalidInput(Exception exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail(new ApiError("C001", "잘못된 요청입니다.")));
+    }
+}

@@ -29,7 +29,7 @@ public record SellerSettlementDetailResult(
             Long targetId,
             Long orderId,
             Long orderItemId,
-            Long dropId,
+            Long productId,
             String productName,
             Integer quantity,
             BigDecimal grossAmount,

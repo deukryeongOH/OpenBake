@@ -26,4 +26,9 @@ public class ProductEmbeddingMetadataRepositoryAdapter implements ProductEmbeddi
     public void deleteById(Long productId) {
         jpaRepository.deleteById(productId);
     }
+
+    @Override
+    public long count() {
+        return jpaRepository.count();
+    }
 }

@@ -13,6 +13,9 @@ public interface ProductEmbeddingIndex {
 
     void delete(Long productId);
 
+    /** 정합성 검사 용도로 대상 인덱스의 모든 productId를 반환한다. */
+    List<Long> findAllProductIds();
+
     record ProductEmbeddingIndexDocument(
             Long productId,
             String name,

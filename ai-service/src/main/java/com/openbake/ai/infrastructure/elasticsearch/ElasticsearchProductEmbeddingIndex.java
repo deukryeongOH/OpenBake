@@ -7,6 +7,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.elasticsearch.core.query.Query;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
@@ -78,6 +83,35 @@ public class ElasticsearchProductEmbeddingIndex implements ProductEmbeddingIndex
         }
     }
 
+    @Override
+    public java.util.List<Long> findAllProductIds() {
+        try {
+            ensureIndex();
+            ArrayList<Long> ids = new ArrayList<>();
+            int page = 0;
+            while (true) {
+                Query query = Query.findAll();
+                query.setPageable(PageRequest.of(page, 1_000));
+                var hits = operations.search(query, ProductEmbeddingDocument.class, coordinates());
+                hits.forEach(hit -> {
+                    ProductEmbeddingDocument content = hit.getContent();
+                    ids.add(content.getProductId() == null
+                            ? Long.valueOf(hit.getId()) : content.getProductId());
+                });
+                if (hits.getSearchHits().size() < 1_000) {
+                    break;
+                }
+                page++;
+            }
+            ids.sort(Comparator.naturalOrder());
+            return List.copyOf(ids);
+        } catch (EmbeddingFailureException e) {
+            throw e;
+        } catch (Exception e) {
+            throw EmbeddingFailureException.transientFailure("ELASTICSEARCH_READ_ERROR", e);
+        }
+    }
+
     private synchronized void ensureIndex() {
         IndexOperations indexOperations = operations.indexOps(coordinates());
         if (indexOperations.exists()) {
@@ -85,7 +119,8 @@ public class ElasticsearchProductEmbeddingIndex implements ProductEmbeddingIndex
         }
         try {
             String mappingJson = new ClassPathResource(MAPPING_PATH)
-                    .getContentAsString(StandardCharsets.UTF_8);
+                    .getContentAsString(StandardCharsets.UTF_8)
+                    .replace("\"dims\": 1536", "\"dims\": " + properties.dimensions());
             Document mapping = Document.parse(mappingJson);
             indexOperations.create(Map.of(), mapping);
         } catch (IOException e) {

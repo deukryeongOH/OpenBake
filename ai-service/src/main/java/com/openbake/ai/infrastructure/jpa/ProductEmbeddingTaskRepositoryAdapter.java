@@ -2,6 +2,10 @@ package com.openbake.ai.infrastructure.jpa;
 
 import com.openbake.ai.domain.ProductEmbeddingTask;
 import com.openbake.ai.domain.ProductEmbeddingTaskRepository;
+import com.openbake.ai.domain.EmbeddingTaskStatus;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -35,5 +39,20 @@ public class ProductEmbeddingTaskRepositoryAdapter implements ProductEmbeddingTa
     @Override
     public ProductEmbeddingTask save(ProductEmbeddingTask task) {
         return jpaRepository.save(task);
+    }
+
+    @Override
+    public List<ProductEmbeddingTask> findRecoverable(Instant now) {
+        return jpaRepository.findRecoverable(now);
+    }
+
+    @Override
+    public List<ProductEmbeddingTask> findAllById(Collection<Long> ids) {
+        return jpaRepository.findAllById(ids);
+    }
+
+    @Override
+    public long countByStatus(EmbeddingTaskStatus status) {
+        return jpaRepository.countByStatus(status);
     }
 }

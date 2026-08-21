@@ -26,4 +26,6 @@ public interface ProductRepository {
     Page<Product> findAllByType(Type type, Pageable pageable);
 
     List<Product> findAllByType(Type type);
+
+    Page<Product> findAll(Pageable pageable);
 }

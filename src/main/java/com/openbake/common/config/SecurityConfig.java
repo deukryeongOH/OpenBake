@@ -2,6 +2,7 @@ package com.openbake.common.config;
 
 import com.openbake.common.security.gateway.HeaderAuthenticationFilter;
 import com.openbake.common.security.ServiceAuthenticationFilter;
+import com.openbake.common.security.service.AiServicePaths;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,9 +34,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/sellers/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/drops/*/info").permitAll()
-                        .requestMatchers(
-                                "/internal/v1/products/recommendation-candidates",
-                                "/internal/v1/products/latest-recommendation-candidates")
+                        .requestMatchers(AiServicePaths.SECURITY_MATCHERS)
                         .hasAuthority("SERVICE_AI")
                         /** 2. 관리자 전용 내부 API: 현재는 정산만 사용중 */
                         .requestMatchers("/internal/v1/**").hasRole("ADMIN")

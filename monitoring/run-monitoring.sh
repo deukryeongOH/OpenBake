@@ -200,10 +200,13 @@ set +a
 : "${OPENBAKE_CORE_PORT:=8080}"
 : "${OPENBAKE_MEMBER_PORT:=8081}"
 : "${OPENBAKE_PAYMENT_PORT:=8082}"
+: "${OPENBAKE_AI_PORT:=8083}"
 
 : "${CORE_CONTAINER:=openbake-backend}"
 : "${MEMBER_CONTAINER:=openbake-member-service}"
 : "${PAYMENT_CONTAINER:=openbake-payment}"
+# AI는 선택 대상이다. 아래 필수 컨테이너 확인 루프에 넣지 않는다.
+: "${AI_CONTAINER:=openbake-ai-service}"
 : "${PROM_CONTAINER:=openbake-prometheus}"
 
 for var in GRAFANA_ADMIN_USER GRAFANA_ADMIN_PASSWORD; do
@@ -242,6 +245,12 @@ if [[ "$PROFILE" == "local" ]]; then
             "$TARGET_HOST" \
             "$OPENBAKE_PAYMENT_PORT"
     )"
+    OPENBAKE_AI_TARGET="$(
+        resolve_local_target \
+            "${LOCAL_AI_TARGET:-${OPENBAKE_AI_TARGET:-}}" \
+            "$TARGET_HOST" \
+            "$OPENBAKE_AI_PORT"
+    )"
 else
     for container in "$CORE_CONTAINER" "$MEMBER_CONTAINER" "$PAYMENT_CONTAINER"; do
         if ! container_is_running "$container"; then
@@ -254,9 +263,10 @@ else
     OPENBAKE_CORE_TARGET="${SERVER_CORE_TARGET:-${CORE_CONTAINER}:8080}"
     OPENBAKE_MEMBER_TARGET="${SERVER_MEMBER_TARGET:-${MEMBER_CONTAINER}:8081}"
     OPENBAKE_PAYMENT_TARGET="${SERVER_PAYMENT_TARGET:-${PAYMENT_CONTAINER}:8082}"
+    OPENBAKE_AI_TARGET="${SERVER_AI_TARGET:-${AI_CONTAINER}:8083}"
 fi
 
-export OPENBAKE_CORE_TARGET OPENBAKE_MEMBER_TARGET OPENBAKE_PAYMENT_TARGET
+export OPENBAKE_CORE_TARGET OPENBAKE_MEMBER_TARGET OPENBAKE_PAYMENT_TARGET OPENBAKE_AI_TARGET
 
 log ""
 log "실행 모드:"
@@ -267,11 +277,15 @@ log "  Target host : $TARGET_HOST"
 log "  Core        : $OPENBAKE_CORE_TARGET"
 log "  Member      : $OPENBAKE_MEMBER_TARGET"
 log "  Payment     : $OPENBAKE_PAYMENT_TARGET"
+log "  AI (선택)   : $OPENBAKE_AI_TARGET"
 
 log ""
 log "==> Prometheus 설정 생성"
+# 빈 target은 Prometheus 설정 자체를 무효로 만들어 모니터링 전체가 뜨지 않는다.
+# AI는 선택 대상이라 값이 없어도 기동은 막지 않고 기본값으로 채운다.
+: "${OPENBAKE_AI_TARGET:=${AI_CONTAINER}:${OPENBAKE_AI_PORT}}"
 envsubst \
-'${OPENBAKE_CORE_TARGET} ${OPENBAKE_MEMBER_TARGET} ${OPENBAKE_PAYMENT_TARGET}' \
+'${OPENBAKE_CORE_TARGET} ${OPENBAKE_MEMBER_TARGET} ${OPENBAKE_PAYMENT_TARGET} ${OPENBAKE_AI_TARGET}' \
 < "$TEMPLATE_FILE" \
 > "$OUTPUT_FILE"
 log "==> 생성 완료: $OUTPUT_FILE"
@@ -302,6 +316,9 @@ FAILED=0
 check_actuator_from_prometheus "Core" "$OPENBAKE_CORE_TARGET" || FAILED=1
 check_actuator_from_prometheus "Member" "$OPENBAKE_MEMBER_TARGET" || FAILED=1
 check_actuator_from_prometheus "Payment" "$OPENBAKE_PAYMENT_TARGET" || FAILED=1
+# AI는 선택 대상이라 실패해도 전체 실패로 보지 않는다.
+check_actuator_from_prometheus "AI" "$OPENBAKE_AI_TARGET" \
+    || log "  INFO: ai-service는 선택 대상입니다. 추천 기능을 쓰지 않으면 무시해도 됩니다."
 
 if [[ "$FAILED" -ne 0 ]]; then
     log ""

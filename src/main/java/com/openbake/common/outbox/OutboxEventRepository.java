@@ -24,4 +24,9 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
     Optional<OutboxEvent> claimNext();
 
     long deleteByStatusAndPublishedAtBefore(OutboxStatus status, Instant cutoff);
+
+    long countByStatus(OutboxStatus status);
+
+    @Query("select min(event.occurredAt) from OutboxEvent event where event.status = :status")
+    Optional<Instant> findOldestOccurredAtByStatus(OutboxStatus status);
 }

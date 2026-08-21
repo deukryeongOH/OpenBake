@@ -25,18 +25,27 @@ public class EmbeddingTextBuilder {
             "DROP", "드롭 상품");
 
     public SourceText build(TaskSnapshot task) {
-        String categoryLabel = CATEGORY_LABELS.get(task.category());
+        return build(task.productId(), task.name(), task.description(), task.category(), task.productType());
+    }
+
+    public SourceText build(CoreProductSource product) {
+        return build(product.productId(), product.name(), product.description(), product.category(), product.type());
+    }
+
+    private SourceText build(
+            Long productId, String name, String description, String category, String productType) {
+        String categoryLabel = CATEGORY_LABELS.get(category);
         if (categoryLabel == null) {
-            categoryLabel = task.category();
+            categoryLabel = category;
             log.warn("[Embedding] 알 수 없는 카테고리, enum 이름 사용 productId={}, category={}",
-                    task.productId(), task.category());
+                    productId, category);
         }
-        String typeLabel = TYPE_LABELS.getOrDefault(task.productType(), task.productType());
+        String typeLabel = TYPE_LABELS.getOrDefault(productType, productType);
         String text = """
                 상품명: %s
                 카테고리: %s
                 상품 유형: %s
-                설명: %s""".formatted(task.name(), categoryLabel, typeLabel, task.description());
+                설명: %s""".formatted(name, categoryLabel, typeLabel, description);
         return new SourceText(text, sha256(text));
     }
 

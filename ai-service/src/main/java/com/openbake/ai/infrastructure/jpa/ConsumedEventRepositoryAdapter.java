@@ -13,6 +13,11 @@ public class ConsumedEventRepositoryAdapter implements ConsumedEventRepository {
     private final ConsumedEventJpaRepository jpaRepository;
 
     @Override
+    public boolean existsById(UUID eventId) {
+        return jpaRepository.existsById(eventId);
+    }
+
+    @Override
     public int claim(
             UUID eventId,
             String topic,

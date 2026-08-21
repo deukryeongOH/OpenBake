@@ -2,6 +2,8 @@ package com.openbake.ai.infrastructure.config;
 
 import com.openbake.common.security.CurrentMemberProvider;
 import com.openbake.common.security.gateway.HeaderAuthenticationFilter;
+import com.openbake.common.security.ServiceAuthenticationFilter;
+import com.openbake.common.security.service.AiServicePaths;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,7 +19,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class AiSecurityConfig {
 
     @Bean
-    SecurityFilterChain aiSecurityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain aiSecurityFilterChain(
+            HttpSecurity http,
+            @org.springframework.beans.factory.annotation.Value("${AI_SERVICE_TOKEN}")
+            String aiServiceToken) throws Exception {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
@@ -30,8 +35,12 @@ public class AiSecurityConfig {
                                 "/actuator/health", "/actuator/health/**",
                                 "/actuator/prometheus", "/actuator/metrics", "/actuator/metrics/**")
                         .permitAll()
+                        .requestMatchers(AiServicePaths.AI_OPERATIONS_PATTERN).hasAuthority("SERVICE_AI")
                         .requestMatchers(HttpMethod.GET, "/api/v1/recommendations").authenticated()
                         .anyRequest().authenticated())
+                .addFilterBefore(
+                        new ServiceAuthenticationFilter(aiServiceToken),
+                        UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new HeaderAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

@@ -8,10 +8,17 @@ public record EmbeddingProperties(
         String model,
         int dimensions,
         String indexName,
+        String searchIndexName,
         String indexVersion,
         Duration connectTimeout,
         Duration readTimeout,
         Worker worker) {
+
+    public EmbeddingProperties {
+        if (searchIndexName == null || searchIndexName.isBlank()) {
+            searchIndexName = indexName;
+        }
+    }
 
     public record Worker(Duration interval, int batchSize, Duration lease) {
     }

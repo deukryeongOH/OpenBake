@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - allow-traefik-to-api-gateway.yaml
+  - allow-prometheus-to-api-gateway.yaml
+  - allow-api-gateway-to-backend.yaml
+  - allow-prometheus-to-backend.yaml
+  - allow-api-gateway-to-member-service.yaml
+  - allow-backend-to-member-service.yaml
+  - allow-prometheus-to-member-service.yaml
+  - allow-api-gateway-to-payment-service.yaml
+  - allow-backend-to-payment-service.yaml
+  - allow-prometheus-to-payment-service.yaml
+  - allow-backend-to-core-postgres.yaml
+  - allow-member-service-to-member-postgres.yaml
+  - allow-payment-service-to-payment-postgres.yaml
+  - allow-ai-service-to-ai-postgres.yaml
+  - allow-to-redis.yaml
+  - allow-backend-to-elasticsearch.yaml
+  - allow-to-kafka.yaml
+  - allow-grafana-to-prometheus.yaml
+  - allow-to-loki.yaml

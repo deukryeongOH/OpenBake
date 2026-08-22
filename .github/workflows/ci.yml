@@ -53,5 +53,4 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - run: chmod +x gradlew
-      - run: ./gradlew build
-      - run: ./gradlew :ai-service:integrationTest
+      - run: ./gradlew build :ai-service:integrationTest

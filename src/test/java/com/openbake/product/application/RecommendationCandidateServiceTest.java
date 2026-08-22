@@ -16,7 +16,6 @@ import com.openbake.product.infrastructure.ProductJpaRepository;
 import com.openbake.seller.domain.Seller;
 import com.openbake.seller.domain.SellerRepository;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -28,7 +27,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class RecommendationCandidateServiceTest {
 
-    private static final LocalDate TODAY = LocalDate.of(2026, 8, 20);
+    // Product.validatePickUpDates()가 LocalDate.now()로 검증하므로 하드코딩된 과거 날짜를 쓰면
+    // 시간이 지나 실제 오늘을 넘기는 순간 테스트가 깨진다. 항상 실행 시점 기준으로 맞춘다.
+    private static final LocalDate TODAY = LocalDate.now();
 
     private final ProductJpaRepository productRepository = mock(ProductJpaRepository.class);
     private final ProductInventoryJpaRepository inventoryRepository =
@@ -38,7 +39,7 @@ class RecommendationCandidateServiceTest {
             productRepository,
             inventoryRepository,
             sellerRepository,
-            Clock.fixed(Instant.parse("2026-08-20T00:00:00Z"), ZoneOffset.UTC));
+            Clock.fixed(TODAY.atStartOfDay(ZoneOffset.UTC).toInstant(), ZoneOffset.UTC));
 
     @BeforeEach
     void noSellerByDefault() {

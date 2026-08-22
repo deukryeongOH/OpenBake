@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - backend-config.yaml
+  - member-config.yaml
+  - payment-config.yaml
+  - gateway-config.yaml
+  - ai-config.yaml

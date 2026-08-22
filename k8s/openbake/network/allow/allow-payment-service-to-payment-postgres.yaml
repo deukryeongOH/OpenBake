@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-payment-service-to-payment-postgres
+  namespace: openbake
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: payment-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: payment-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres-backup
+      ports:
+        - protocol: TCP
+          port: 5432

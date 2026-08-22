@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-elasticsearch
+  namespace: openbake
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: elasticsearch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ai-service
+      ports:
+        - protocol: TCP
+          port: 9200

@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-kafka
+  namespace: openbake
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  policyTypes:
+    - Ingress
+  ingress:
+    # docker-compose.yaml 확인 결과 실제 producer/consumer:
+    #   backend(root), member-service → producer (KafkaOutboxSender)
+    #   ai-service → consumer (ProductChangedEventConsumer, MemberWithdrawnEventConsumer, MemberInteractionEventConsumer)
+    # payment-service, api-gateway는 Kafka를 호출하지 않는다.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: member-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ai-service
+      ports:
+        - protocol: TCP
+          port: 29092

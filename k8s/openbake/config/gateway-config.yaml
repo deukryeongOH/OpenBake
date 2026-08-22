@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  MEMBER_SERVICE_URL: "http://member-service:8081"
+  PAYMENT_SERVICE_URL: "http://payment-service:8082"
+  CORE_SERVICE_URL: "http://backend:8080"
+  AI_SERVICE_URL: "http://ai-service:8083"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  BLACKLIST_TIMEOUT: "2000ms"
+  # 08번 문서 예시값(300ms)이 아니라 docker-compose.yaml의 현재 운영 기본값을 그대로 옮김
+  GATEWAY_JWT_ENABLED: "true"
+  # gateway-jwt-enabled은 matchIfMissing이 없어, 이 값이 없거나 "true"가 아니면
+  # 인증 필터가 등록되지 않고 모든 API가 인증 없이 통과한다 (이슈 1 이관 항목).
+  SPRING_PROFILES_ACTIVE: "prod"

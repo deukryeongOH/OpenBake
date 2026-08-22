@@ -40,7 +40,6 @@ def configure(profile: str) -> None:
     # 공통 → 프로파일 순서. 프로파일 파일이 공통값을 덮어쓴다.
     load_env_file(SCRIPT_DIR / ".env.perf")
     load_env_file(SCRIPT_DIR / f".env.{profile}", override=True)
-    load_env_file(k6_env_path(profile))
 
     os.environ["PERF_PROFILE"] = profile
 
@@ -48,6 +47,7 @@ def configure(profile: str) -> None:
         os.environ.setdefault("CORE_BASE_URL", "http://localhost:8080")
         os.environ.setdefault("MEMBER_BASE_URL", "http://localhost:8081")
         os.environ.setdefault("AUTH_MODE", "direct")
+        os.environ.setdefault("PERF_EXEC_MODE", "docker")
         os.environ.setdefault("PERF_DB_CONTAINER", "openbake-postgres")
         os.environ.setdefault("PERF_BACKEND_CONTAINER", "openbake-backend")
         os.environ.setdefault("PERF_RESTART_BACKEND", "true")
@@ -62,11 +62,33 @@ def configure(profile: str) -> None:
         os.environ["CORE_BASE_URL"] = server
         os.environ["MEMBER_BASE_URL"] = server
         os.environ.setdefault("AUTH_MODE", "gateway")
+        os.environ.setdefault("PERF_EXEC_MODE", "docker")
         os.environ.setdefault("PERF_DB_CONTAINER", "openbake-postgres")
         os.environ.setdefault("PERF_BACKEND_CONTAINER", "openbake-backend")
         os.environ.setdefault("PERF_RESTART_BACKEND", "true")
+    elif profile == "k3s":
+        # k3s는 docker exec/docker restart로 Compose container를 직접 조작할 수 없다.
+        # kubectl exec/rollout restart로 같은 절차(DB 조회, TodayDropCache 갱신)를 수행한다.
+        server = os.getenv("SERVER_BASE_URL", "").strip().rstrip("/")
+        if not server:
+            raise RuntimeError(
+                "k3s 프로파일은 SERVER_BASE_URL이 필요합니다(port-forward 또는 cutover 후 Ingress 주소). "
+                "performance-test/prepare/.env.k3s에 설정하세요."
+            )
+        os.environ["CORE_BASE_URL"] = server
+        os.environ["MEMBER_BASE_URL"] = server
+        os.environ.setdefault("AUTH_MODE", "gateway")
+        os.environ.setdefault("PERF_EXEC_MODE", "kubectl")
+        os.environ.setdefault("PERF_K8S_NAMESPACE", "openbake")
+        os.environ.setdefault("PERF_DB_WORKLOAD", "statefulset/core-postgres")
+        os.environ.setdefault("PERF_BACKEND_WORKLOAD", "deployment/backend")
+        os.environ.setdefault("PERF_RESTART_BACKEND", "true")
+        # run-k6.sh는 {local|server}만 받으므로 k6 트래픽 프로파일은 server 파일을 그대로 쓴다.
+        os.environ.setdefault("PERF_K6_PROFILE", "server")
     else:
-        raise RuntimeError("profile은 local 또는 server만 지원합니다.")
+        raise RuntimeError("profile은 local, server, k3s만 지원합니다.")
+
+    load_env_file(k6_env_path(env("PERF_K6_PROFILE", profile)))
 
 
 def env(name: str, default: str = "", required: bool = False) -> str:
@@ -202,18 +224,31 @@ def db_scalar(sql: str) -> str:
             "이미 APPROVED/ACTIVE 데이터를 준비하세요."
         )
 
-    container = env("PERF_DB_CONTAINER", "openbake-postgres")
     db = env("PERF_DB_NAME", "openbake")
     user = env("PERF_DB_USER", "openbake")
-    command = [
-        "docker", "exec", container,
-        "psql", "-U", user, "-d", db,
-        "-At", "-c", sql,
-    ]
+    exec_mode = env("PERF_EXEC_MODE", "docker")
+
+    if exec_mode == "kubectl":
+        namespace = env("PERF_K8S_NAMESPACE", "openbake")
+        workload = env("PERF_DB_WORKLOAD", "statefulset/core-postgres")
+        command = [
+            "kubectl", "exec", "-n", namespace, workload, "--",
+            "psql", "-U", user, "-d", db, "-At", "-c", sql,
+        ]
+        missing_msg = "kubectl 명령을 찾을 수 없습니다."
+    else:
+        container = env("PERF_DB_CONTAINER", "openbake-postgres")
+        command = [
+            "docker", "exec", container,
+            "psql", "-U", user, "-d", db,
+            "-At", "-c", sql,
+        ]
+        missing_msg = "docker 명령을 찾을 수 없습니다."
+
     try:
         result = subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as e:
-        raise RuntimeError("docker 명령을 찾을 수 없습니다.") from e
+        raise RuntimeError(missing_msg) from e
     except subprocess.CalledProcessError as e:
         raise RuntimeError(
             "PostgreSQL 명령 실패\n"
@@ -377,6 +412,21 @@ def restart_backend() -> None:
     if env("PERF_RESTART_BACKEND", "true").lower() != "true":
         return
 
+    if env("PERF_EXEC_MODE", "docker") == "kubectl":
+        namespace = env("PERF_K8S_NAMESPACE", "openbake")
+        workload = env("PERF_BACKEND_WORKLOAD", "deployment/backend")
+        print(f"[PERF] TodayDropCache 갱신: kubectl rollout restart {workload} -n {namespace}")
+        subprocess.run(
+            ["kubectl", "rollout", "restart", workload, "-n", namespace],
+            check=True, stdout=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            ["kubectl", "rollout", "status", workload, "-n", namespace, "--timeout=120s"],
+            check=True,
+        )
+        print("[PERF] backend rollout 완료")
+        return
+
     container = env("PERF_BACKEND_CONTAINER", "openbake-backend")
     print(f"[PERF] TodayDropCache 갱신: docker restart {container}")
     subprocess.run(["docker", "restart", container], check=True, stdout=subprocess.DEVNULL)
@@ -468,9 +518,10 @@ def create_drop(user_count: int) -> int:
         print(f"[PERF] Drop 즉시 활성화 완료: {active_window}")
         restart_backend()
 
-    # local은 직접 서비스 주소, server는 공개 gateway 주소가 두 값 모두에 들어간다.
+    # local은 직접 서비스 주소, server/k3s는 공개 gateway 주소가 두 값 모두에 들어간다.
+    # k3s는 run-k6.sh가 받지 못하는 프로파일이라 .env.k6.server를 갱신 대상으로 쓴다.
     update_k6_env(
-        env("PERF_PROFILE", required=True),
+        env("PERF_K6_PROFILE", env("PERF_PROFILE", required=True)),
         {
             "CORE_BASE_URL": env("CORE_BASE_URL", required=True),
             "MEMBER_BASE_URL": env("MEMBER_BASE_URL", required=True),
@@ -496,7 +547,7 @@ def create_drop(user_count: int) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("profile", choices=["local", "server"])
+    parser.add_argument("profile", choices=["local", "server", "k3s"])
     parser.add_argument("command", choices=["seller", "drop"])
     parser.add_argument("user_count", type=int, nargs="?")
     args = parser.parse_args()

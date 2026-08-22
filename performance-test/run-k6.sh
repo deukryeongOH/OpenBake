@@ -28,9 +28,33 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+# CLI에서 USER_COUNT=300 ./run-k6.sh server lock 처럼 전달한 값은
+# .env.k6보다 우선하도록 보존한다. Capacity scan이 이 동작에 의존한다(각 CSV 행의 독립 Drop 전제).
+# declare -A(bash 4+)는 macOS 기본 bash 3.2에서 동작하지 않으므로 병렬 배열로 구현한다.
+OVERRIDE_VARS=(
+  CORE_BASE_URL MEMBER_BASE_URL DROP_ID USER_COUNT START_INDEX QUANTITY
+  EXPECTED_SUCCESS EXPECTED_SOLD_OUT LOGIN_PATH TEST_PASSWORD TOKEN_PATH
+  EMAIL_FIELD PASSWORD_FIELD EMAIL_PREFIX EMAIL_DOMAIN OUTPUT_FILE REQUEST_TIMEOUT
+  K6_PROMETHEUS_RW_ENABLED K6_PROMETHEUS_RW_SERVER_URL
+  K6_PROMETHEUS_RW_TREND_STATS K6_PROMETHEUS_RW_PUSH_INTERVAL
+)
+CALLER_OVERRIDE_NAMES=()
+CALLER_OVERRIDE_VALUES=()
+for var in "${OVERRIDE_VARS[@]}"; do
+  if [[ -n "${!var+x}" ]]; then
+    CALLER_OVERRIDE_NAMES+=("$var")
+    CALLER_OVERRIDE_VALUES+=("${!var}")
+  fi
+done
+
 set -a
 source "$ENV_FILE"
 set +a
+
+for i in "${!CALLER_OVERRIDE_NAMES[@]}"; do
+  printf -v "${CALLER_OVERRIDE_NAMES[$i]}" '%s' "${CALLER_OVERRIDE_VALUES[$i]}"
+  export "${CALLER_OVERRIDE_NAMES[$i]}"
+done
 
 echo "======================================"
 echo "Profile         : $PROFILE"

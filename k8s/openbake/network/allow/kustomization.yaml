@@ -12,6 +12,7 @@ resources:
   - allow-api-gateway-to-payment-service.yaml
   - allow-backend-to-payment-service.yaml
   - allow-prometheus-to-payment-service.yaml
+  - allow-prometheus-to-ai-service.yaml
   - allow-backend-to-core-postgres.yaml
   - allow-member-service-to-member-postgres.yaml
   - allow-payment-service-to-payment-postgres.yaml

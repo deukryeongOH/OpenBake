@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: member-service
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: member-service
+    app.kubernetes.io/component: member
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  minReadySeconds: 10
+  progressDeadlineSeconds: 300
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: member-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: member-service
+        app.kubernetes.io/component: member
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: registry-credentials
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - service
+      containers:
+        - name: member-service
+          image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-member-service:sha-placeholder
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms128m -Xmx320m"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: member-db-credentials
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: member-db-credentials
+                  key: DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-credentials
+                  key: JWT_SECRET
+          envFrom:
+            - configMapRef:
+                name: member-config
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 750m
+              memory: 640Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 18
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: member-service
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: member-service
+    app.kubernetes.io/component: member
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: member-service
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081

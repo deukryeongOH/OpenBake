@@ -1,0 +1,104 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup-member
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  schedule: "30 2 * * *"
+  timeZone: "Asia/Seoul"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: postgres-backup
+            app.kubernetes.io/component: backup
+            app.kubernetes.io/part-of: openbake
+            app.kubernetes.io/instance: production
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: OnFailure
+          initContainers:
+            - name: dump
+              image: postgres:17
+              env:
+                - name: DB_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: member-db-credentials
+                      key: DB_USERNAME
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: member-db-credentials
+                      key: DB_PASSWORD
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  date +%Y/%m/%d > /backup/date.txt
+                  pg_dump -Fc -h member-postgres -U "$DB_USERNAME" -d openbake_member -f /backup/openbake_member.dump
+                  pg_restore --list /backup/openbake_member.dump > /dev/null
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          containers:
+            - name: upload
+              image: amazon/aws-cli:2.17.62
+              envFrom:
+                - configMapRef:
+                    name: postgres-backup-config
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-credentials
+                      key: AWS_ACCESS_KEY
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: s3-credentials
+                      key: AWS_SECRET_KEY
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  DATE=$(cat /backup/date.txt)
+                  KEY="postgres/member/$DATE/openbake_member.dump"
+                  aws s3 cp /backup/openbake_member.dump "s3://$BACKUP_S3_BUCKET/$KEY" --region "$AWS_REGION"
+                  SIZE=$(aws s3api head-object --bucket "$BACKUP_S3_BUCKET" --key "$KEY" --region "$AWS_REGION" --query ContentLength --output text)
+                  if [ "$SIZE" -le 0 ]; then
+                    echo "backup object is empty: $KEY" >&2
+                    exit 1
+                  fi
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              emptyDir: {}

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: ai-service
+    app.kubernetes.io/component: ai
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ai-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083

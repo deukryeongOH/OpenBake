@@ -1,0 +1,61 @@
+# 05번 문서 4장: 개발 단계 외부 경로 5개, upstream은 전부 api-gateway 하나.
+# /internal/**, /actuator/prometheus, /actuator/metrics, /actuator/env, 하위 서비스의
+# Actuator·Swagger, DB/Redis/ES/Kafka 포트는 여기에 절대 추가하지 않는다.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openbake
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: openbake-ingress
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - 3.38.24.67.sslip.io
+  rules:
+    - host: 3.38.24.67.sslip.io
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /actuator/health
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /swagger-ui.html
+            pathType: Exact
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /swagger-ui
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /v3/api-docs
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

@@ -41,14 +41,29 @@ spec:
                     secretKeyRef:
                       name: ai-db-credentials
                       key: DB_PASSWORD
+                - name: BACKUP_PASSPHRASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-encryption-credentials
+                      key: BACKUP_PASSPHRASE
               command:
                 - sh
                 - -c
                 - |
                   set -eu
+                  # 백업 버킷이 앱 이미지 서빙과 같은 공개 가능성이 있는 버킷이라
+                  # dump를 평문으로 올리지 않는다. 복호화 절차는 jobs/README.md 참고.
+                  command -v openssl >/dev/null 2>&1 || {
+                    echo "openssl이 없다. 이 image로는 암호화할 수 없다 — README의 SSE-C 대안을 쓴다." >&2
+                    exit 1
+                  }
                   date +%Y/%m/%d > /backup/date.txt
                   pg_dump -Fc -h ai-postgres -U "$DB_USERNAME" -d openbake_ai -f /backup/openbake_ai.dump
                   pg_restore --list /backup/openbake_ai.dump > /dev/null
+                  openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+                    -pass env:BACKUP_PASSPHRASE \
+                    -in /backup/openbake_ai.dump -out /backup/openbake_ai.dump.enc
+                  rm -f /backup/openbake_ai.dump
               resources:
                 requests:
                   cpu: 100m
@@ -82,8 +97,8 @@ spec:
                 - |
                   set -eu
                   DATE=$(cat /backup/date.txt)
-                  KEY="postgres/ai/$DATE/openbake_ai.dump"
-                  aws s3 cp /backup/openbake_ai.dump "s3://$BACKUP_S3_BUCKET/$KEY" --region "$AWS_REGION"
+                  KEY="postgres/ai/$DATE/openbake_ai.dump.enc"
+                  aws s3 cp /backup/openbake_ai.dump.enc "s3://$BACKUP_S3_BUCKET/$KEY" --region "$AWS_REGION"
                   SIZE=$(aws s3api head-object --bucket "$BACKUP_S3_BUCKET" --key "$KEY" --region "$AWS_REGION" --query ContentLength --output text)
                   if [ "$SIZE" -le 0 ]; then
                     echo "backup object is empty: $KEY" >&2

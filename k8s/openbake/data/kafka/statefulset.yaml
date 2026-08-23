@@ -83,12 +83,14 @@ spec:
               mountPath: /var/lib/kafka/data
           # Kafka Probe는 04번 문서 6장(미래 구성요소)에 방식만 정의되어 있고
           # period/threshold 값은 없음 — 아래 값은 이번에 제안한 것이며 미확정으로 보고.
+          # kafka-broker-api-versions.sh는 JVM을 새로 띄우므로 응답까지 5초를 넘긴다.
+          # timeoutSeconds를 15초로 두고 period도 그에 맞춘다(총 유예는 동일하게 약 3분).
           startupProbe:
             exec:
               command: ["/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29092"]
-            periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 36
+            periodSeconds: 15
+            timeoutSeconds: 15
+            failureThreshold: 12
           livenessProbe:
             tcpSocket:
               port: 29092
@@ -98,8 +100,8 @@ spec:
           readinessProbe:
             exec:
               command: ["/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29092"]
-            periodSeconds: 10
-            timeoutSeconds: 5
+            periodSeconds: 20
+            timeoutSeconds: 15
             failureThreshold: 3
   volumeClaimTemplates:
     - metadata:

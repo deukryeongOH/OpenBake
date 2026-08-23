@@ -21,10 +21,20 @@ k8s/
     ├── apps/           backend·member-service·payment-service·api-gateway·ai-service Deployment
     ├── jobs/           PostgreSQL logical backup CronJob 4종
     ├── entrypoint/      Ingress (api-gateway 5개 경로, TLS — cutover 때만 적용)
-    └── autoscaling/     이슈 4 — HPA(용량 검증 후)
+    └── autoscaling/     backend HPA(autoscaling/v2, min1/max2, CPU 65%)
+
+k8s/monitoring/
+├── prometheus/        StatefulSet + Kubernetes Pod Discovery, Node B 고정, 3Gi PVC
+└── grafana/           Deployment(Recreate) + 기존 대시보드 재사용, Node B 고정, 1Gi PVC
 ```
 
-`autoscaling/`만 아직 비어 있다. 이슈 4의 용량 검증 결과가 나오면 채운다.
+Loki·log-agent는 아직 없다(03번 문서에 자원 예약값만 있고 설정 설계가 없어 이슈 4 범위에서 제외). blackbox_exporter도 아직 없다(`scripts/infra/node-a-alerting/README.md` 참고).
+
+## 현재 상태 (이슈 4)
+
+- `k8s/monitoring/`이 새로 생겼다. Prometheus는 15초 scrape·Kubernetes Pod Discovery로 다섯 서비스를 자동 수집하고, Grafana는 `monitoring/grafana/dashboards/`의 기존 대시보드를 복사해 재사용한다(Kustomize가 kustomization root 밖 파일을 참조하지 못해 복사본을 둔다 — 원본과 별도 관리).
+- `k8s/openbake/autoscaling/backend-hpa.yaml`이 채워졌고, `apps/backend/deployment.yaml`의 `replicas: 1` 고정값을 제거했다(HPA와의 apply 충돌 방지).
+- `k8s/openbake/network/allow/allow-prometheus-to-ai-service.yaml`을 추가했다(다섯 서비스 중 ai-service scrape 허용이 빠져 있었다).
 
 ## 현재 상태 (이슈 3 PR1·PR2·PR3)
 
@@ -105,6 +115,12 @@ kubectl apply -k k8s/openbake/apps
 
 # 이슈 3 PR1 — backup CronJob (data 적용 후, 수동 1회 실행으로 검증)
 kubectl apply -k k8s/openbake/jobs
+
+# 이슈 4 — Prometheus/Grafana. metrics-server, backend Ready 확인 후 진행
+kubectl apply -k k8s/monitoring
+
+# 이슈 4 — HPA. Metrics Server 응답과 backend CPU request 확인 후 마지막에 적용
+kubectl apply -k k8s/openbake/autoscaling
 ```
 
 여기까지는 외부 트래픽을 받지 않는다. 검증은 `kubectl port-forward`로 한다.

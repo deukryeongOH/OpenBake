@@ -26,6 +26,8 @@ spec:
       # elasticsearch 프로세스가 uid 1000으로 실행되므로 local-path PVC 쓰기 권한 확보
       securityContext:
         fsGroup: 1000
+      imagePullSecrets:
+        - name: registry-credentials
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -35,30 +37,11 @@ spec:
                     operator: In
                     values:
                       - core
-      # 커스텀 이미지(ghcr.io/.../openbake-elasticsearch)는 analysis-nori 플러그인
-      # 하나를 위해 존재했다. private GHCR 접근 권한이 필요해 배포가 계정 권한에
-      # 묶이므로, 공개 이미지 + initContainer 설치로 바꿔 의존을 없앤다.
-      # 플러그인은 emptyDir에 설치되어 Pod마다 새로 받는다(약 1MB).
-      initContainers:
-        - name: install-nori
-          image: elasticsearch:9.0.3
-          command:
-            - sh
-            - -c
-            - elasticsearch-plugin install --batch analysis-nori
-          volumeMounts:
-            - name: plugins
-              mountPath: /usr/share/elasticsearch/plugins
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
       containers:
         - name: elasticsearch
-          image: elasticsearch:9.0.3
+          # deploy.yml이 다른 5개 서비스와 같은 규칙(IMAGE_BASE-<service>)으로 빌드·push한다.
+          # analysis-nori 플러그인이 포함된 이미지다(elasticsearch/Dockerfile).
+          image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-elasticsearch:sha-placeholder
           env:
             - name: discovery.type
               value: single-node
@@ -79,8 +62,6 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /usr/share/elasticsearch/data
-            - name: plugins
-              mountPath: /usr/share/elasticsearch/plugins
           startupProbe:
             httpGet:
               path: /_cluster/health?wait_for_status=yellow&timeout=1s
@@ -101,9 +82,6 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
-      volumes:
-        - name: plugins
-          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data

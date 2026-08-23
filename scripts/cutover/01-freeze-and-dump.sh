@@ -7,6 +7,10 @@
 # Go/No-Go는 판정하지 않는다 — 결과를 출력만 하고 사람이 읽고 결정한다.
 set -Eeuo pipefail
 
+# COMPOSE_FILE 기본값이 저장소 루트 기준 상대 경로라 어디서 호출하든 루트에서 동작해야 한다.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/../.."
+
 # ---------------------------------------------------------------------------
 # 설정 — 값은 전부 환경 변수로 주입한다. 비밀번호를 이 파일에 하드코딩하지 않는다.
 # ---------------------------------------------------------------------------
@@ -47,6 +51,12 @@ require_env() {
 # ---------------------------------------------------------------------------
 # STEP 0. 사전 점검
 # ---------------------------------------------------------------------------
+# log()가 $LOG에 tee 하므로 어떤 log 호출보다 먼저 디렉터리를 만들어야 한다.
+mkdir -p "$DUMP_DIR"
+chmod 700 "$DUMP_DIR"
+: > "$MANIFEST"
+: > "$LOG"
+
 for tool in pg_dump pg_restore sha256sum docker; do
     command -v "$tool" >/dev/null 2>&1 || { echo "$tool 이 설치되어 있지 않다." >&2; exit 1; }
 done
@@ -64,11 +74,6 @@ for key in "${DB_KEYS[@]}"; do
         require_env "${key}_COMPOSE_DB_USER"
     fi
 done
-
-mkdir -p "$DUMP_DIR"
-chmod 700 "$DUMP_DIR"
-: > "$MANIFEST"
-: > "$LOG"
 
 # COMPOSE_FILE="a.yaml:b.yaml" → docker compose --file a.yaml --file b.yaml
 IFS=':' read -r -a _compose_files <<< "$COMPOSE_FILE"

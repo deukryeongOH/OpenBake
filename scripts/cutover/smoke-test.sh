@@ -15,6 +15,8 @@ fi
 : "${KUBE_NAMESPACE:=openbake}"
 : "${GATEWAY_SVC:=api-gateway}"
 : "${LOCAL_PORT:=18080}"
+# api-gateway Service의 포트. k8s/openbake/apps/api-gateway/service.yaml과 맞춘다.
+: "${GATEWAY_SVC_PORT:=8080}"
 : "${EXTERNAL_BASE_URL:=}"
 : "${SMOKE_TEST_MEMBER_EMAIL:=}"
 : "${SMOKE_TEST_MEMBER_PASSWORD:=}"
@@ -43,7 +45,7 @@ if [[ "$MODE" == "external" ]]; then
 else
     command -v kubectl >/dev/null 2>&1 || { echo "kubectl이 설치되어 있지 않다." >&2; exit 1; }
     echo "=== kubectl port-forward로 $GATEWAY_SVC 연결 (127.0.0.1:$LOCAL_PORT) ==="
-    kubectl -n "$KUBE_NAMESPACE" port-forward "svc/$GATEWAY_SVC" "$LOCAL_PORT:80" \
+    kubectl -n "$KUBE_NAMESPACE" port-forward "svc/$GATEWAY_SVC" "$LOCAL_PORT:$GATEWAY_SVC_PORT" \
         >/tmp/openbake-smoke-port-forward.log 2>&1 &
     PF_PID=$!
     sleep 3

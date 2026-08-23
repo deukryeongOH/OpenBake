@@ -56,30 +56,67 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
+  # 2026-08-23 Compose → k3s 전환. 이전 deploy job은 EC2에서
+  # `docker compose up -d --remove-orphans`를 실행했다 — 지금 그게 돌면 구 Compose
+  # 스택이 되살아나 옛 DB에 write하고 80/443을 Traefik에서 뺏는다. 아래로 대체했다.
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: read
     steps:
-      - name: Deploy to EC2 via SSH
+      - name: Deploy to k3s via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GITHUB_ACTOR,GHCR_TOKEN
           command_timeout: 15m
           script: |
+            set -Eeuo pipefail
+            export KUBECONFIG=$HOME/.kube/config
+            BASE=ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be
+            SHA=${{ github.sha }}
+
             cd ${{ secrets.EC2_PROJECT_DIR }}
             git fetch origin
             git checkout ${{ github.ref_name }}
             git pull origin ${{ github.ref_name }}
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-            docker compose -f docker-compose.yaml -f docker-compose.prod.yaml pull
-            docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --remove-orphans
-            docker image prune -f
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            # Node A 8GB에서 Compose와 공존하다 available 81Mi로 apiserver가 교착된
+            # 적이 있다(2026-08-23). 롤링 중에는 Pod가 일시적으로 두 배가 되므로
+            # 여유가 없으면 시작하지 않는다.
+            AVAIL=$(free -m | awk '/^Mem:/ {print $7}')
+            echo "available: ${AVAIL}Mi"
+            if [ "$AVAIL" -lt 2048 ]; then
+              echo "가용 메모리가 2Gi 미만이다. 배포를 중단한다." >&2
+              exit 1
+            fi
+
+            cd k8s/openbake/apps
+            kustomize edit set image \
+              "$BASE-backend=$BASE-backend:$SHA" \
+              "$BASE-member-service=$BASE-member-service:$SHA" \
+              "$BASE-payment-service=$BASE-payment-service:$SHA" \
+              "$BASE-api-gateway=$BASE-api-gateway:$SHA" \
+              "$BASE-ai-service=$BASE-ai-service:$SHA"
+
+            # placeholder가 남아 있으면 존재하지 않는 이미지를 배포하게 된다.
+            if kubectl kustomize . | grep -q "sha-placeholder"; then
+              echo "sha-placeholder가 남아 있다. 배포를 중단한다." >&2
+              git checkout kustomization.yaml
+              exit 1
+            fi
+
+            kubectl apply -k .
+            git checkout kustomization.yaml
+
+            # apply 한 번으로 5개 Deployment가 동시에 롤링된다. 아래 status는
+            # 순차로 기다릴 뿐이라 전체 소요는 합이 아니라 가장 느린 하나다.
+            cd -
+            for d in member-service payment-service backend api-gateway ai-service; do
+              kubectl -n openbake rollout status "deployment/$d" --timeout=300s
+            done
+
+            kubectl -n openbake get pod -o wide
+            free -h

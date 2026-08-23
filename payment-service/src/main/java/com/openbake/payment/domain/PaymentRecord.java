@@ -71,6 +71,23 @@ public class PaymentRecord {
         return status == PaymentRecordStatus.SUCCESS;
     }
 
+    public boolean isFail() {
+        return status == PaymentRecordStatus.FAIL;
+    }
+
+    public void markSuccess() {
+        this.status = PaymentRecordStatus.SUCCESS;
+        this.failReason = null;
+    }
+
+    public void markFail(String failReason) {
+        if (this.status == PaymentRecordStatus.SUCCESS) {
+            return;
+        }
+        this.status = PaymentRecordStatus.FAIL;
+        this.failReason = failReason;
+    }
+
     public String getIdempotencyKey() { return idempotencyKey; }
     public Long getOrderId() { return orderId; }
     public Long getMemberId() { return memberId; }

@@ -24,6 +24,11 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: ai-service
+        # topic 생성 Job(Compose의 kafka-init 대응). broker port만 사용하며
+        # controller port(29093)는 열지 않는다.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka-topics-init
       ports:
         - protocol: TCP
           port: 29092

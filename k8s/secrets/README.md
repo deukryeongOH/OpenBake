@@ -32,7 +32,30 @@
 
 ## 생성 명령
 
-Node A에서 `/opt/openbake/secrets/`에 실제 값을 담은 env file을 만든 뒤 적용한다. 값이 shell history에 남지 않도록 `--from-env-file`을 사용한다.
+`apply-secrets.sh`가 위 표 전체를 다룬다. Node A에서 실행한다.
+
+```bash
+./apply-secrets.sh scaffold   # /opt/openbake/secrets/*.env 틀 생성 (기존 파일은 덮어쓰지 않음)
+# 각 파일을 sudoedit로 열어 값 입력
+./apply-secrets.sh apply      # 빈 값 검사 후 Secret 생성·갱신
+./apply-secrets.sh verify     # 이름과 key만 확인 (값은 출력하지 않음)
+```
+
+`scaffold`가 각 파일 상단에 **값 출처 주석**을 넣는다. 세 종류로 갈린다.
+
+| 구분 | 대상 |
+|---|---|
+| Compose와 반드시 동일 | `settlement`(복호화 key — 회전 금지), `toss`, `ai-provider`, `s3` |
+| 새로 생성 | `jwt`(12번 문서 6.1장 — Compose에 반영 금지), `service-auth`, `grafana-admin` |
+| 아무 값이나 가능 | DB credential 4종 (k3s PostgreSQL이 이 값으로 초기화된다) |
+
+`apply`는 값이 비어 있는 key를 **이름만** 알려주고 중단한다. 값은 어떤 경우에도 출력하지 않는다.
+
+`registry-credentials`는 dockerconfigjson이라 이 스크립트가 다루지 않는다. 아래 별도 절차를 쓴다.
+
+### 수동으로 할 경우
+
+`/opt/openbake/secrets/`에 실제 값을 담은 env file을 만든 뒤 적용한다. 값이 shell history에 남지 않도록 `--from-env-file`을 사용한다.
 
 ```bash
 sudo mkdir -p /opt/openbake/secrets

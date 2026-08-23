@@ -39,8 +39,9 @@ spec:
                       - core
       containers:
         - name: elasticsearch
-          # CI(ci.yml)에서 이미 사용 중인 nori 플러그인 포함 이미지, docker-compose와 동일 tag
-          image: ghcr.io/prgrms-be-adv-devcourse/openbake-elasticsearch:9.0.3
+          # deploy.yml이 다른 5개 서비스와 같은 규칙(IMAGE_BASE-<service>)으로 빌드·push한다.
+          # analysis-nori 플러그인이 포함된 이미지다(elasticsearch/Dockerfile).
+          image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-elasticsearch:sha-placeholder
           env:
             - name: discovery.type
               value: single-node

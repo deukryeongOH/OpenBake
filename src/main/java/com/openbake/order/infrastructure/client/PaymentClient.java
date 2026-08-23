@@ -27,6 +27,16 @@ public interface PaymentClient extends PaymentPort {
     @GetMapping("/internal/v1/deposits/{memberId}/balance")
     BalanceInfo getBalance(@PathVariable("memberId") Long memberId);
 
+    /**
+     * 결제 결과 조회. 타임아웃 이후 결과를 확정하기 위한 부작용 없는 GET.
+     *
+     * payment 는 Order가 보낸 차감 멱등키의 SUCCESS / FAIL / NOT_FOUND 를 돌려준다.
+     * 계약 상세는 .claude/docs/payment-timeout-issue.md 에 있다.
+     */
+    @Override
+    @GetMapping("/internal/v1/payments/pay-result/{idempotencyKey}")
+    PaymentResult getPayResult(@PathVariable("idempotencyKey") String idempotencyKey);
+
     // ── PaymentPort 구현: 도메인 시그니처 → Feign 요청 변환 ──
 
     @Override
@@ -35,8 +45,9 @@ public interface PaymentClient extends PaymentPort {
     }
 
     @Override
-    default PaymentResult refund(String idempotencyKey, Long orderId) {
-        return refund(new RefundRequest(idempotencyKey, orderId));
+    default PaymentResult refund(
+            String idempotencyKey, Long orderId, Long memberId, BigDecimal amount) {
+        return refund(new RefundRequest(idempotencyKey, orderId, memberId, amount));
     }
 
     @Override
@@ -47,6 +58,6 @@ public interface PaymentClient extends PaymentPort {
     // ── Feign 전용 요청 DTO ──
 
     record PayRequest(String idempotencyKey, Long orderId, Long memberId, BigDecimal amount) {}
-    record RefundRequest(String idempotencyKey, Long orderId) {}
+    record RefundRequest(String idempotencyKey, Long orderId, Long memberId, BigDecimal amount) {}
     record ConfirmRequest(Long orderId) {}
 }

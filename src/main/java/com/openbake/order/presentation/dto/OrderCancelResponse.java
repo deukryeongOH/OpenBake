@@ -7,22 +7,27 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-//주문 취소 응답. 전액 환불 + 재고 복구 후의 결과.
+/**
+ * 취소 응답.
+ *
+ * orderState 가 EXPIRED 면 결제 전 취소라 환불이 없었다는 뜻이고(refundAmount = 0),
+ * CANCELED 면 전액 환불된 것이다.
+ */
 public record OrderCancelResponse(
-        @Schema(description = "취소된 주문 ID", example = "101")
+        @Schema(description = "주문 ID", example = "101")
         Long orderId,
 
-        @Schema(description = "주문 상태. 취소가 성공했으므로 항상 CANCELED.", example = "CANCELED")
+        @Schema(description = "EXPIRED(결제 전 취소) 또는 CANCELED(결제 후 취소)", example = "CANCELED")
         OrderState orderState,
 
-        @Schema(description = "환불 금액. 부분 환불은 없고 결제 금액 전액이다.", example = "24000")
+        @Schema(description = "환불 금액. 결제 전 취소면 0.", example = "9000")
         BigDecimal refundAmount,
 
-        @Schema(description = "환불 후 예치금 잔액", example = "100000")
+        @Schema(description = "환불 후 예치금 잔액. 환불이 있었을 때만 채워진다.", example = "50000")
         BigDecimal balanceAfter,
 
-        @Schema(description = "취소 시각", example = "2026-07-28T15:00:00")
-        LocalDateTime canceledAt
+        @Schema(description = "종료 시각")
+        LocalDateTime endedAt
 ) {
 
     public static OrderCancelResponse from(OrderCancelResult result) {
@@ -31,7 +36,7 @@ public record OrderCancelResponse(
                 result.orderState(),
                 result.refundAmount(),
                 result.balanceAfter(),
-                result.canceledAt()
+                result.endedAt()
         );
     }
 }

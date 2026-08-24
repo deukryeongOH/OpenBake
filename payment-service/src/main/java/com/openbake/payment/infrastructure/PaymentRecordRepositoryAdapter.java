@@ -19,7 +19,17 @@ public class PaymentRecordRepositoryAdapter implements PaymentRecordRepository {
     }
 
     @Override
+    public Optional<PaymentRecord> findByIdempotencyKeyForUpdate(String idempotencyKey) {
+        return jpaRepository.findByIdempotencyKeyForUpdate(idempotencyKey);
+    }
+
+    @Override
     public PaymentRecord save(PaymentRecord record) {
         return jpaRepository.save(record);
+    }
+
+    @Override
+    public PaymentRecord saveAndFlush(PaymentRecord record) {
+        return jpaRepository.saveAndFlush(record);
     }
 }

@@ -1,60 +1,47 @@
 package com.openbake.order.infrastructure.client;
 
-import com.openbake.cart.domain.Cart;
-import com.openbake.cart.domain.CartItem;
-import com.openbake.cart.domain.CartRepository;
+import com.openbake.cart.application.CartOrderItem;
+import com.openbake.cart.application.CartService;
 import com.openbake.order.application.port.CartPort;
-import com.openbake.order.application.port.dto.CartInfo;
+import com.openbake.order.application.port.dto.CartItemInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.List;
 
 /**
- * CartPort 구현체. cart 저장소를 직접 호출한다.
- * cart 의 타입(Cart, CartItem)은 이 파일 밖으로 나가지 않는다.
+ * CartPort 구현체. cart 가 아직 같은 코어 안에 있어 서비스를 직접 호출한다.
  *
- * TODO: 장바구니가 일반 상품 전용 1:N 으로 바뀌면서 이 어댑터의 계약이 맞지 않는다.
- *  - 장바구니에 dropId 가 없다. 드롭은 장바구니를 거치지 않고 바로 주문으로 간다.
- *  - 장바구니에 만료가 없다.
- *  - 항목이 여러 개다. CartInfo 는 단일 항목을 전제한다.
- *  order 개편(후속 이슈)에서 CartPort/CartInfo 를 다중 항목 기준으로 다시 설계한다.
- *  지금은 컴파일과 기존 시그니처 유지를 위해 첫 항목만 담아 내보낸다.
+ * 저장소가 아니라 서비스를 부른다. 소유권 검증(CA008)과 삭제의 멱등성은 cart 의
+ * 규칙이라 order 가 저장소를 직접 뒤지면서 다시 구현할 일이 아니다.
+ *
+ * cart 의 타입(Cart, CartItem, CartOrderItem)은 이 파일 밖으로 나가지 않는다.
  */
-@Component
+//cart 자신에게도 같은 이름의 빈이 생길 수 있어 이름을 명시한다.
+@Component("orderCartClient")
 @RequiredArgsConstructor
 public class CartClient implements CartPort {
 
-    private final CartRepository cartRepository;
+    private final CartService cartService;
 
     @Override
-    public Optional<CartInfo> findCart(Long memberId) {
-        return cartRepository.findByMemberId(memberId).map(this::toInfo);
+    public List<CartItemInfo> findItemsForOrder(Long memberId, List<Long> cartItemIds) {
+        return cartService.findItemsForOrder(memberId, cartItemIds).stream()
+                .map(this::toInfo)
+                .toList();
     }
 
-    /**
-     * 장바구니 행 자체를 지운다.
-     *
-     * 장바구니는 더 이상 재고를 선점하지 않으므로 삭제해도 복구할 재고가 없다.
-     */
     @Override
-    public void deleteCart(Long memberId) {
-        cartRepository.findByMemberId(memberId).ifPresent(cartRepository::delete);
+    public void removeItems(Long memberId, List<Long> cartItemIds) {
+        cartService.removeItems(memberId, cartItemIds);
     }
 
-    //담긴 항목이 없는 장바구니가 있을 수 있어 quantity 는 0으로 내보낸다.
-    private CartInfo toInfo(Cart cart) {
-        CartItem item = cart.getItems().isEmpty() ? null : cart.getItems().getFirst();
-
-        return new CartInfo(
-                cart.getMemberId(),
-                //장바구니는 일반 상품만 담는다. dropId 는 더 이상 존재하지 않는다.
-                null,
-                item == null ? 0 : item.getQuantity(),
-                item == null ? null : item.getPickUpDate(),
-                //만료 개념이 없어졌다. CartInfo.isExpired 가 항상 false 가 되게 한다.
-                LocalDateTime.MAX
+    private CartItemInfo toInfo(CartOrderItem item) {
+        return new CartItemInfo(
+                item.cartItemId(),
+                item.productId(),
+                item.quantity(),
+                item.pickUpDate()
         );
     }
 }

@@ -1,96 +1,95 @@
 package com.openbake.order.presentation.dto;
 
 import com.openbake.order.application.OrderDetailResult;
+import com.openbake.order.domain.OrderItemStatus;
 import com.openbake.order.domain.OrderState;
+import com.openbake.order.domain.SalesType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * 주문 상세.
+ * 주문 상세 응답. 주문 내역 화면이라 판매자 상호명·단가까지 전부 내려준다.
+ *
+ * 판매자·픽업일·확정 시각이 항목 안에 있다 — 한 주문에 판매자가 여럿일 수 있다.
  */
 public record OrderDetailResponse(
-        @Schema(description = "주문 ID", example = "101")
         Long orderId,
-
-        @Schema(description = "주문 항목. 상품명/가격은 주문 시점 스냅샷이다.")
-        OrderItemInfo orderItem,
-
-        @Schema(description = "판매자 정보")
-        SellerInfo seller,
-
-        @Schema(description = "구매자가 선택한 픽업 날짜", example = "2026-08-01")
-        LocalDate pickupDate,
-
-        @Schema(description = "주문 상태: PAID / CONFIRMED / CANCELED", example = "PAID")
         OrderState orderState,
-
-        @Schema(description = "결제완료 시각", example = "2026-07-28T14:05:00")
+        @Schema(description = "GENERAL(일반 상품) 또는 DROP", example = "GENERAL")
+        SalesType salesType,
+        List<Item> items,
+        BigDecimal totalAmount,
+        LocalDateTime createdAt,
         LocalDateTime paidAt,
-
-        @Schema(description = "구매확정 시각. 확정 전이면 null.", example = "2026-08-01T18:30:00")
-        LocalDateTime confirmedAt,
-
-        @Schema(description = "취소 시각. 취소되지 않았으면 null.", example = "2026-07-28T15:00:00")
-        LocalDateTime canceledAt
+        LocalDateTime canceledAt,
+        @Schema(description = "PENDING 일 때만 의미가 있다. 이 시각까지 결제하지 않으면 자동 취소된다.")
+        LocalDateTime reservationExpiresAt
 ) {
+
+    public record Item(
+            Long orderItemId,
+            Long productId,
+            @Schema(description = "드롭 주문에서만 채워진다.")
+            Long dropId,
+            String productName,
+            String imageUrl,
+            BigDecimal unitPrice,
+            int quantity,
+            BigDecimal subtotal,
+            LocalDate pickUpDate,
+            @Schema(description = "항목별 구매확정 상태", example = "UNCONFIRMED")
+            OrderItemStatus itemStatus,
+            @Schema(description = "이 항목의 구매확정 시각. 판매자가 아직 누르지 않았으면 null.")
+            LocalDateTime confirmedAt,
+            Seller seller
+    ) {
+    }
+
+    /**
+     * 상호명은 주문 시점 스냅샷, 주소·연락처는 조회 시점 최신값이다.
+     * 값이 null 이면 프론트는 지도·전화 버튼을 비활성화한다.
+     */
+    public record Seller(
+            Long sellerId,
+            String sellerName,
+            String address,
+            String phoneNumber
+    ) {
+    }
 
     public static OrderDetailResponse from(OrderDetailResult result) {
         return new OrderDetailResponse(
                 result.orderId(),
-                OrderItemInfo.from(result.orderItem()),
-                SellerInfo.from(result.seller()),
-                result.pickupDate(),
                 result.orderState(),
+                result.salesType(),
+                result.items().stream().map(OrderDetailResponse::toItem).toList(),
+                result.totalAmount(),
+                result.createdAt(),
                 result.paidAt(),
-                result.confirmedAt(),
-                result.canceledAt()
+                result.canceledAt(),
+                result.reservationExpiresAt()
         );
     }
 
-    public record OrderItemInfo(
-            @Schema(description = "드롭 ID", example = "7")
-            Long dropId,
-
-            @Schema(description = "주문 시점 상품명(스냅샷). 이후 드롭이 수정돼도 바뀌지 않는다.", example = "말차 크루아상")
-            String dropName,
-
-            @Schema(description = "주문 시점 단가(스냅샷)", example = "12000")
-            BigDecimal price,
-
-            @Schema(description = "수량", example = "2")
-            int quantity
-    ) {
-        public static OrderItemInfo from(OrderDetailResult.OrderItemInfo item) {
-            return new OrderItemInfo(
-                    item.dropId(),
-                    item.dropName(),
-                    item.price(),
-                    item.quantity()
-            );
-        }
-    }
-
-    public record SellerInfo(
-            @Schema(description = "판매자 ID", example = "3")
-            Long sellerId,
-
-            @Schema(description = "베이커리 상호명. 조회 시점 값이며 판매자를 찾지 못하면 null.", example = "오픈베이크 연남")
-            String sellerName,
-
-            String address,
-
-            String phoneNumber
-    ) {
-        public static SellerInfo from(OrderDetailResult.SellerInfo seller) {
-            return new SellerInfo(
-                    seller.sellerId(),
-                    seller.sellerName(),
-                    seller.address(),
-                    seller.phoneNumber()
-            );
-        }
+    private static Item toItem(OrderDetailResult.OrderItemInfo item) {
+        OrderDetailResult.SellerInfo seller = item.seller();
+        return new Item(
+                item.orderItemId(),
+                item.productId(),
+                item.dropId(),
+                item.productName(),
+                item.imageUrl(),
+                item.unitPrice(),
+                item.quantity(),
+                item.subtotal(),
+                item.pickUpDate(),
+                item.itemStatus(),
+                item.confirmedAt(),
+                new Seller(seller.sellerId(), seller.sellerName(), seller.address(), seller.phoneNumber())
+        );
     }
 }

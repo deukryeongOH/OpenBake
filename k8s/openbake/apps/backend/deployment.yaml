@@ -44,12 +44,22 @@ spec:
                     values:
                       - core
         podAntiAffinity:
-          # 03/05번 문서: backend replica 2개가 같은 Node에 오지 못하도록 강제(required).
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - topologyKey: kubernetes.io/hostname
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/name: backend
+          # 03/05번 문서는 backend replica 2개가 같은 Node에 오지 못하도록 required로
+          # 강제했으나, 2노드 구성에서는 nodeAffinity(core 선호)와 양립하지 않는다.
+          #
+          # 2026-08-24 실측: rollout restart 시 옛 Pod가 node-a에 살아 있어 required
+          # antiAffinity가 새 Pod를 node-b로 밀어냈고, node-b에서는 headless인
+          # elasticsearch Service를 찾지 못해(UnknownHostException) CrashLoopBackOff가
+          # 났다. backend는 ES·core-postgres가 있는 node-a에서만 살 수 있다.
+          #
+          # 분산은 여전히 선호하되 스케줄을 막지는 않는다.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: backend
       containers:
         - name: backend
           image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-backend:sha-placeholder

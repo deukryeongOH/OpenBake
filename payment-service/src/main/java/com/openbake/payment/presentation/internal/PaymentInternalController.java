@@ -36,7 +36,14 @@ public class PaymentInternalController {
     @PostMapping("/payments/refund")
     public ResponseEntity<PaymentResultResponse> refund(@RequestBody RefundRequest request) {
         PaymentIdempotentResult result = paymentService.refundIdempotent(
-                request.idempotencyKey(), request.orderId());
+                request.idempotencyKey(), request.orderId(), request.memberId(), request.amount());
+        return ResponseEntity.ok(PaymentResultResponse.from(result));
+    }
+
+    @GetMapping("/payments/pay-result/{idempotencyKey}")
+    public ResponseEntity<PaymentResultResponse> getPayResult(
+            @PathVariable String idempotencyKey) {
+        PaymentIdempotentResult result = paymentService.getPayResult(idempotencyKey);
         return ResponseEntity.ok(PaymentResultResponse.from(result));
     }
 

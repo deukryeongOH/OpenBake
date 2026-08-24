@@ -101,6 +101,12 @@ public enum ErrorCode {
     DUPLICATE_REQUEST(HttpStatus.CONFLICT, "OR006", "중복된 요청입니다."),
     DROP_ALREADY_CLOSED(HttpStatus.CONFLICT, "OR007", "판매가 마감된 드롭입니다."),
     INVALID_ORDER_STATE(HttpStatus.BAD_REQUEST, "OR008", "유효하지 않은 주문 상태입니다."),
+    //드롭 주문 전용. CA006 은 "다시 담아주세요"로 장바구니를 전제해 드롭 흐름에 맞지 않는다.
+    STOCK_NOT_RESERVED(HttpStatus.CONFLICT, "OR009", "재고 선점이 확인되지 않았습니다."),
+    //주문서에 표시한 금액과 결제 직전 실제 가격이 다르다. 자동 재계산하지 않고 사용자에게 되돌린다.
+    PRICE_CHANGED(HttpStatus.CONFLICT, "OR010", "상품 가격이 변경되었습니다. 주문서를 다시 확인해주세요."),
+    //주문 생성 시 안내용 재고 확인, 그리고 결제 성공 후 재고 차감이 실패했을 때.
+    OUT_OF_STOCK(HttpStatus.CONFLICT, "OR011", "재고가 부족합니다."),
 
     // Settlement - ST
     SETTLEMENT_BATCH_ALREADY_COMPLETED(HttpStatus.CONFLICT,"ST001","동일한 정산 기간의 배치가 이미 완료됐습니다."),

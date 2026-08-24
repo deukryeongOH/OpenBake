@@ -45,7 +45,7 @@ public record MemberInteractionEvent(
             require(dropId == null, "CART_ADD dropId must be null");
             require(orderId == null, "CART_ADD orderId must be null");
         } else if (interactionType == InteractionType.PURCHASE) {
-            require(dropId != null, "PURCHASE dropId is required");
+            //일반 상품 구매에는 dropId가 없다. productId는 위 공통 검증에서 필수로 확인한다.
             require(orderId != null, "PURCHASE orderId is required");
         }
     }

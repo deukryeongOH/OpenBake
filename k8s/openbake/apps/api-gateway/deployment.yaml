@@ -72,7 +72,9 @@ spec:
               port: 8080
             periodSeconds: 5
             timeoutSeconds: 2
-            failureThreshold: 12
+            # 실측 기동 45.5초. 기존 12회(60초)는 여유가 15초뿐이라
+            # 부하·재배포 시 startup probe 실패로 재시작 루프에 빠질 수 있다.
+            failureThreshold: 18
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness

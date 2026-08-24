@@ -24,6 +24,7 @@ SECRETS=(
     "ai-provider-credentials:ai-provider.env:openbake"
     "service-auth-credentials:service-auth.env:openbake"
     "s3-credentials:s3.env:openbake"
+    "backup-encryption-credentials:backup-encryption.env:openbake"
     "grafana-admin-credentials:grafana-admin.env:monitoring"
 )
 
@@ -44,6 +45,8 @@ source_hint() {
             echo "Compose와 동일. 같은 OpenAI 계정을 쓴다." ;;
         s3-credentials)
             echo "Compose와 동일. 같은 버킷을 쓴다." ;;
+        backup-encryption-credentials)
+            echo "*** PostgreSQL dump 암호화 passphrase. 새로 생성한다 (openssl rand -base64 48). 잃어버리면 백업을 복원할 수 없다 — 클러스터 밖 password manager에 반드시 별도 보관한다. ***" ;;
         grafana-admin-credentials)
             echo "새로 정한다. Grafana 최초 admin 계정." ;;
     esac

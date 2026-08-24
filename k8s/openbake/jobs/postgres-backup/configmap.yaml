@@ -9,6 +9,8 @@ metadata:
     app.kubernetes.io/part-of: openbake
     app.kubernetes.io/instance: production
 data:
-  # 설계 문서에 실제 bucket 이름과 region이 없어 placeholder로 둔다. 적용 전 실제 값으로 교체 필요 — 보고 대상.
-  BACKUP_S3_BUCKET: "REPLACE_WITH_BACKUP_BUCKET_NAME"
-  AWS_REGION: "REPLACE_WITH_AWS_REGION"
+  # 전용 백업 버킷이 없어 앱 이미지 서빙과 같은 버킷을 쓴다.
+  # dump는 `postgres/<db>/<date>/` prefix 아래에만 두고, 버킷 정책에 기대지 않도록
+  # dump 자체를 암호화해서 올린다(cronjob-*.yaml의 initContainer). README.md 참고.
+  BACKUP_S3_BUCKET: "team06-s3-bakerysite6"
+  AWS_REGION: "ap-northeast-2"

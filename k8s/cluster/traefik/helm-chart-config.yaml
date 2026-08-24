@@ -27,19 +27,20 @@ spec:
       storageClass: local-path-retain
       accessMode: ReadWriteOnce
 
-    ports:
-      web:
-        redirections:
-          entryPoint:
-            to: websecure
-            scheme: https
-            permanent: true
-
     additionalArguments:
       # ACME 등록 email: 사용자 확정값
       - "--certificatesresolvers.letsencrypt.acme.email=hhh3915@gmail.com"
       - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # HTTP → HTTPS 리다이렉트. chart의 `ports.web.redirections` 키는 이 버전에서
+      # args를 만들지 않아(2026-08-23 실측) 직접 넣는다. ACME HTTP-01 챌린지 라우터가
+      # 이 리다이렉트보다 우선하므로 인증서 갱신에는 영향이 없다.
+      #
+      # `to=websecure`(엔트리포인트 이름)로 주면 Location에 컨테이너 내부 포트 8443이
+      # 그대로 나가 외부에서 접속이 안 된다(2026-08-23 실측). 외부 포트를 직접 지정한다.
+      - "--entryPoints.web.http.redirections.entryPoint.to=:443"
+      - "--entryPoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entryPoints.web.http.redirections.entryPoint.permanent=true"
       # 최초 발급 검증 시에만 아래 staging 서버 라인을 추가해 rate limit 없이 흐름을 확인하고,
       # 확인 후 반드시 제거한 뒤 재배포한다. 기본 상태(이 파일)는 production CA를 사용한다.
       # - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"

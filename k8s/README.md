@@ -45,6 +45,47 @@ Loki·log-agent는 아직 없다(03번 문서에 자원 예약값만 있고 설�
 - `cluster/traefik/`, `openbake/entrypoint/`는 이슈 3 PR3(Traefik + 외부 진입점)으로 채워졌다. ACME email `hhh3915@gmail.com`, 외부 도메인 `3.38.24.67.sslip.io`(Node A Elastic IP)로 확정.
   - **이 둘은 cutover(이슈 5) 전까지 실제로 동작하지 않는다.** 아래 "외부 진입점은 cutover 전용" 참고.
 
+## Compose와 공존하는 동안의 메모리 제약
+
+**Node A 8GB에 Compose 전체 스택과 k3s 워크로드를 동시에 올릴 수 없다.**
+
+`03-two-node-workload-placement-plan.md`의 Node A 예산(앱 request 2.31Gi + 시스템 예약 2Gi = 여유 3.69Gi)은 **Compose가 사라진 뒤**를 전제로 계산된 값이다. cutover 전에는 같은 노드에서 Compose 14개 컨테이너가 그대로 돌고 있어 그 예산이 성립하지 않는다.
+
+2026-08-23 실제로 앱 5개를 동시에 올렸을 때 `available`이 81Mi까지 떨어져 kube-apiserver가 응답하지 못하는 상태가 됐다. 복구는 `systemctl stop k3s`로 했다.
+
+### 그래서 cutover 전에는
+
+- **애플리케이션 Deployment를 상시로 띄우지 않는다.** 기본 상태는 `replicas: 0`이다.
+- 검증할 때만 하나씩 올리고 확인 후 내린다.
+
+```bash
+kubectl -n openbake scale deployment <name> --replicas=1
+kubectl -n openbake rollout status deployment/<name> --timeout=240s
+kubectl -n openbake logs deployment/<name> --tail=20
+kubectl -n openbake scale deployment <name> --replicas=0
+free -h    # available이 1Gi 아래로 떨어지면 중단
+```
+
+- 데이터 계층 7개는 상시 유지해도 된다. Compose와 문제없이 공존한다.
+- swap 2GB를 켜두었다(`/etc/fstab`, `vm.swappiness=10`). 없으면 완충 없이 곧바로 교착에 빠진다.
+
+### 이슈 순서에 미치는 영향
+
+`docs/k3s-learning/issues.md`는 이슈 4(용량 측정)를 이슈 5(cutover) 앞에 두지만, **공존 상태에서 측정한 숫자는 두 스택이 메모리를 다투는 상황을 재는 것이라 의미가 없다.**
+
+용량 측정은 **cutover로 Compose를 내린 뒤**에 해야 한다. 즉 16번 문서가 상정한 "측정해서 k3s 도입 여부를 결정한다"가 아니라, "전환한 뒤 확보된 용량을 확인한다"가 된다. 이 차이를 Go/No-Go 판단에 반영한다.
+
+## 실측 기동 시간 (2026-08-23, Compose 공존 상태)
+
+| 서비스 | 실측 | startupProbe 유예 |
+| --- | ---: | ---: |
+| member-service | 41.2s | 90s |
+| payment-service | 37.0s | 90s |
+| api-gateway | 45.5s | 90s (60s에서 상향) |
+| backend | 87.0s | 120s |
+
+api-gateway는 `04-health-probe-design.md`의 초기값 60초에 실측 여유가 15초뿐이라 90초로 올렸다. 위 값은 메모리 압박 상태에서 측정한 것이므로 cutover 후에는 짧아질 수 있다.
+
 ## 외부 진입점은 cutover 전용
 
 Node A의 `80/443`은 아직 Compose nginx가 점유하고 있다(`docker-compose.yaml`의 `nginx` 서비스). 충돌을 막기 위해 k3s는 Traefik과 ServiceLB를 **끈 상태로 설치**했다.

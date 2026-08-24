@@ -9,3 +9,9 @@ resources:
   - redis
   - elasticsearch
   - kafka
+
+# apps/kustomization.yaml과 동일한 규칙. Elasticsearch는 자체 빌드 이미지라
+# 배포 시 `kustomize edit set image`로 이번 배포의 Git SHA를 주입한다.
+images:
+  - name: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-elasticsearch
+    newTag: sha-placeholder

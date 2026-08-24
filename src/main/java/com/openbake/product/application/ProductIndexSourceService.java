@@ -18,6 +18,6 @@ public class ProductIndexSourceService {
     @Transactional(readOnly = true)
     public Page<ProductIndexSourceResponse> findPage(int page, int size) {
         PageRequest request = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "id"));
-        return productRepository.findAll(request).map(ProductIndexSourceResponse::from);
+        return productRepository.findAllIndexTargets(request).map(ProductIndexSourceResponse::from);
     }
 }

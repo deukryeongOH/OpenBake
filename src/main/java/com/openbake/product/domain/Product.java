@@ -46,7 +46,7 @@ public class Product {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ProductStatus status = ProductStatus.SELLING; // 상품 상태 (판매중/품절)
+    private ProductStatus status = ProductStatus.SELLING; // 상품 상태 (판매중/품절/삭제됨)
 
     @ElementCollection(fetch = FetchType.LAZY)
     @BatchSize(size = 20)
@@ -135,5 +135,9 @@ public class Product {
 
     public void markSelling() {
         this.status = ProductStatus.SELLING;
+    }
+
+    public void markDeleted() {
+        this.status = ProductStatus.DELETED;
     }
 }

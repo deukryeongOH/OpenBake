@@ -1,5 +1,11 @@
 server:
   shutdown: graceful
+  tomcat:
+    mbeanregistry:
+      # Tomcat 스레드 풀 지표(tomcat_threads_busy_threads / config_max_threads)는
+      # JMX MBean 등록에 의존하는데 Spring Boot 기본값이 false다.
+      # 끄면 부하 테스트에서 스레드 풀 포화 여부를 아예 관측할 수 없다.
+      enabled: true
 
 spring:
   application:

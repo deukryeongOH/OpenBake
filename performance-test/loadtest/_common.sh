@@ -125,6 +125,10 @@ run_scenario() {
 
   local k6_status=0
   set +e
+  # k6 기본 summaryTrendStats 는 avg/min/med/max/p(90)/p(95) 뿐이라 p(99) 가 summary-export 에도
+  # 빠진다. NFR 판정 기준(P99 3000ms)이 이 값에 의존하므로 명시적으로 넣지 않으면
+  # diagnose.py 가 "측정값 없음"을 통과로 오인할 수 있다.
+  K6_SUMMARY_TREND_STATS='avg,min,med,p(90),p(95),p(99),max' \
   k6 run \
     --summary-export "$run_dir/summary.json" \
     --tag "testid=${ts}-${scenario}-u${users}" \
@@ -158,6 +162,16 @@ core_base_url=$CORE_BASE_URL
 k6_exit=$k6_status
 EOF_META
 
+  # SQL 로깅이 켜져 있는지는 매니페스트만 봐서는 알 수 없다.
+  # application-prod.yml 이 show-sql=false 로 덮으므로 ConfigMap 에 오버라이드가
+  # 없다는 사실만으로 단정하면 오진이다. 실제 Pod 에서 확인해 그 값을 넘긴다.
+  local active_profile hibernate_lines
+  active_profile="$($KUBECTL -n "$NAMESPACE" exec "deployment/$DEPLOYMENT" -c "$DEPLOYMENT" \
+    -- printenv SPRING_PROFILES_ACTIVE 2>/dev/null | tr -d '\r' || echo "")"
+  hibernate_lines="$($KUBECTL -n "$NAMESPACE" logs "deployment/$DEPLOYMENT" --tail=500 2>/dev/null \
+    | grep -c '^Hibernate:' || true)"
+  [[ "$hibernate_lines" =~ ^[0-9]+$ ]] || hibernate_lines=0
+
   log "$scenario 판정 및 진단"
   local diag_status=0
   set +e
@@ -170,6 +184,9 @@ EOF_META
     --drop-id "$drop_id" \
     --expected-success "$expected_success" \
     --expected-sold-out "$expected_sold_out" \
+    --active-profile "$active_profile" \
+    --hibernate-log-count "$hibernate_lines" \
+    --load-generator-location "${LOAD_GENERATOR_LOCATION:-$(hostname) (측정 대상과 동일 호스트 여부 확인 필요)}" \
     --out "$run_dir/diagnosis.txt" \
     --log "$NFR_LOG"
   diag_status=$?

@@ -44,7 +44,7 @@ FIELDS = [
     "gc_pause_sec_per_sec",
     "hikari_active", "hikari_idle", "hikari_pending", "hikari_max",
     "http_req_per_sec", "http_latency_avg_ms",
-    "replicas_ready", "replicas_desired", "hpa_current_pct", "hpa_target_pct",
+    "replicas_ready", "replicas_desired", "hpa_exists", "hpa_current_pct", "hpa_target_pct",
 ]
 
 
@@ -168,6 +168,10 @@ def read_scale_state(kubectl: list[str], namespace: str,
                      deployment: str, hpa: str) -> dict[str, Any]:
     state: dict[str, Any] = {
         "replicas_ready": "", "replicas_desired": "",
+        # HPA 자체가 클러스터에 없는 경우와, 있지만 아직 값이 안 잡힌 경우는
+        # 해석이 완전히 다르다. 빈 값 하나로 뭉뚱그리면 "HPA가 반응 안 했다"는
+        # 잘못된 결론이 나오므로 존재 여부를 따로 남긴다.
+        "hpa_exists": "false",
         "hpa_current_pct": "", "hpa_target_pct": "",
     }
     try:
@@ -185,12 +189,14 @@ def read_scale_state(kubectl: list[str], namespace: str,
         raw = run([*kubectl, "-n", namespace, "get", "hpa", hpa, "-o", "jsonpath="
                    "{.status.currentMetrics[0].resource.current.averageUtilization} "
                    "{.spec.metrics[0].resource.target.averageUtilization}"])
+        state["hpa_exists"] = "true"
         parts = raw.split()
         if len(parts) >= 1:
             state["hpa_current_pct"] = parts[0]
         if len(parts) >= 2:
             state["hpa_target_pct"] = parts[1]
     except Exception:
+        # 조회 실패 = HPA 미배포로 본다. hpa_exists 는 false 로 남는다.
         pass
 
     return state

@@ -66,6 +66,11 @@ spec:
                 secretKeyRef:
                   name: jwt-credentials
                   key: JWT_SECRET
+            - name: CORE_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: service-auth-credentials
+                  key: CORE_SERVICE_TOKEN
           envFrom:
             - configMapRef:
                 name: member-config

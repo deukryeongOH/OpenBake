@@ -11,7 +11,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.math.BigDecimal;
 
-@FeignClient(name = "payment-service", url = "${payment-service.url}")
+@FeignClient(
+        name = "payment-service",
+        url = "${payment-service.url}",
+        configuration = CoreServiceFeignConfiguration.class)
 public interface PaymentClient extends PaymentPort {
 
     @PostMapping("/internal/v1/payments/pay")

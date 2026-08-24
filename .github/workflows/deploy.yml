@@ -93,6 +93,24 @@ jobs:
               exit 1
             fi
 
+            # 데이터 계층 — Elasticsearch만 자체 빌드 이미지라 SHA 주입이 필요하다.
+            # 이 단계를 빼두면 사람이 `apply -k data`를 돌릴 때마다 ES가 저장소
+            # 기본값 sha-placeholder로 되돌아가 ImagePullBackOff가 난다.
+            # 2026-08-24에 실제로 93분 장애가 났고, ES가 headless Service라
+            # endpoint가 사라지면서 backend까지 DNS 해석 실패로 연쇄 실패했다.
+            # postgres/redis/kafka는 고정 태그라 apply 해도 재시작되지 않는다.
+            cd k8s/openbake/data
+            kustomize edit set image "$BASE-elasticsearch=$BASE-elasticsearch:$SHA"
+            if kubectl kustomize . | grep -q "sha-placeholder"; then
+              echo "data에 sha-placeholder가 남아 있다. 배포를 중단한다." >&2
+              git checkout kustomization.yaml
+              exit 1
+            fi
+            kubectl apply -k .
+            git checkout kustomization.yaml
+            cd -
+            kubectl -n openbake rollout status statefulset/elasticsearch --timeout=300s
+
             cd k8s/openbake/apps
             kustomize edit set image \
               "$BASE-backend=$BASE-backend:$SHA" \

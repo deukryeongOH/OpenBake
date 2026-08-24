@@ -36,6 +36,13 @@ spec:
         - name: kafka
           image: apache/kafka:3.9.0
           env:
+            # 이 값이 없으면 log.dirs가 설정되지 않아 Kafka 내장 기본값
+            # /tmp/kafka-logs 로 떨어진다. PVC를 /var/lib/kafka/data 에 붙여놓고도
+            # topic과 KRaft 메타데이터가 컨테이너 임시 영역에 쌓여 Pod 재시작마다
+            # 사라진다 (2026-08-24 실측: meta.properties가 /tmp/kafka-logs 에 있었고
+            # 브로커 조회에서도 log.dirs=null 이었다).
+            - name: KAFKA_LOG_DIRS
+              value: /var/lib/kafka/data
             - name: KAFKA_NODE_ID
               value: "1"
             - name: KAFKA_PROCESS_ROLES

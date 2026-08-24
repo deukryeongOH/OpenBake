@@ -20,6 +20,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: member-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ai-service
       ports:
         - protocol: TCP
           port: 6379

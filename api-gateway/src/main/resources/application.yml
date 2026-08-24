@@ -13,6 +13,8 @@ openbake:
 spring:
   application:
     name: api-gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -93,4 +95,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info
+        include: health, info, metrics, prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}

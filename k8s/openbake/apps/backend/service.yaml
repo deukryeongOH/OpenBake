@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: core
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PERF_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT_DIR="$(cd "$PERF_DIR/.." && pwd)"
 PLAN_FILE="${1:-$SCRIPT_DIR/capacity-plan.csv}"
+# run-k6.sh는 {local|server} 첫 인자를 요구한다. 없으면 즉시 usage 후 exit 1이라 모든 step이 실패한다.
+CAPACITY_PROFILE="${CAPACITY_PROFILE:-server}"
 RESULTS_ROOT="${RESULTS_ROOT:-$PERF_DIR/results/runs}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
 PROMETHEUS_JOB="${PROMETHEUS_JOB:-openbake-core}"
@@ -100,6 +102,7 @@ echo "========================================"
 echo "Plan       : $PLAN_FILE"
 echo "Users      : $actual_users"
 echo "Results    : $RESULTS_ROOT"
+echo "Profile    : $CAPACITY_PROFILE"
 echo "Prometheus : $PROMETHEUS_URL"
 echo "Job        : $PROMETHEUS_JOB"
 echo "Rate window: $PROMETHEUS_RATE_WINDOW"
@@ -145,14 +148,16 @@ while IFS=, read -r users drop_id expected_success expected_sold_out; do
         DROP_ID="$drop_id" \
         EXPECTED_SUCCESS="$expected_success" \
         EXPECTED_SOLD_OUT="$expected_sold_out" \
-        ./run-k6.sh lock
+        ./run-k6.sh "$CAPACITY_PROFILE" lock
     )
     step_status=$?
     set -e
 
+    # -printf는 GNU 전용이라 macOS/BSD find에서 실패한다. run_id 접두사가 UTC 타임스탬프
+    # (YYYYMMDDTHHMMSSZ)라 사전순 정렬이 곧 시간순 정렬이므로 mtime 없이도 최신 run을 고를 수 있다.
     latest_run="$(find "$RESULTS_ROOT" -maxdepth 1 -mindepth 1 -type d \
-        -name "*lock-concurrency-u${users}-drop${drop_id}*" -printf '%T@ %p\n' 2>/dev/null \
-        | sort -nr | head -n 1 | cut -d' ' -f2- || true)"
+        -name "*lock-concurrency-u${users}-drop${drop_id}*" 2>/dev/null \
+        | sort | tail -n 1 || true)"
 
     if [[ "$COLLECT_OBSERVABILITY" == "true" && -n "$latest_run" ]]; then
         echo

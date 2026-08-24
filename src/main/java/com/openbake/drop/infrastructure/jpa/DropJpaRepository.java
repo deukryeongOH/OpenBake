@@ -23,11 +23,26 @@ public interface DropJpaRepository extends JpaRepository<Drop, Long> {
 
     Optional<Drop> findByProductId(Long productId);
 
-    @Modifying(clearAutomatically = true)
-    @Query("Update Drop d Set d.dropStatus = 'ACTIVE' WHERE d.id = :dropId")
-    void activeStatus(@Param("dropId") Long dropId);
+    /*
+     * 상태 전환은 모두 조건부 UPDATE다. "드롭당 정확히 1회"를 DB가 반환 행 수로 보장하게 해서
+     * CachedDrop 의 tryMarkStarted/tryMarkEnded 플래그에 의존하지 않는다.
+     * 그 플래그는 TodayDropCache.refresh() 때마다 초기화되므로(당일 드롭 등록/수정/삭제로도 트리거된다)
+     * 무조건 UPDATE 하면 품절로 COMPLETED 가 된 드롭이 ACTIVE 로 되살아난다.
+     */
 
+    // 시작 전환: 아직 시작 전인 드롭만. 진행 중(ACTIVE)이나 품절(COMPLETED) 상태를 덮어쓰지 않는다.
     @Modifying(clearAutomatically = true)
-    @Query("Update Drop d Set d.dropStatus = 'COMPLETED' WHERE d.id = :dropId")
-    void completeStatus(Long dropId);
+    @Query("Update Drop d Set d.dropStatus = 'ACTIVE' WHERE d.id = :dropId AND d.dropStatus = 'UPCOMING'")
+    int activeStatus(@Param("dropId") Long dropId);
+
+    // 마감/품절 전환: 이미 COMPLETED 면 건드리지 않는다.
+    // UPCOMING 도 대상에 포함해야 한다. 드롭 진행 시간 내내 서버가 내려가 있었다면 ACTIVE 를 거치지 않고 마감된다.
+    @Modifying(clearAutomatically = true)
+    @Query("Update Drop d Set d.dropStatus = 'COMPLETED' WHERE d.id = :dropId AND d.dropStatus <> 'COMPLETED'")
+    int completeStatus(@Param("dropId") Long dropId);
+
+    // 품절 복구: 품절된 드롭만 되살린다. 상태를 읽고 쓰는 대신 조건을 UPDATE 에 넣어 SELECT 를 없앤다.
+    @Modifying(clearAutomatically = true)
+    @Query("Update Drop d Set d.dropStatus = 'ACTIVE' WHERE d.id = :dropId AND d.dropStatus = 'COMPLETED'")
+    int reviveFromSoldOut(@Param("dropId") Long dropId);
 }

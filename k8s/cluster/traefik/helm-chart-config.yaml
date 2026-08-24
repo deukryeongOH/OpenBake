@@ -1,0 +1,46 @@
+# k3s 기본 packaged Traefik(HelmChart, kube-system)에 대한 값 오버라이드.
+# 05번 문서 5장: cert-manager 없이 Traefik 자체 ACME(HTTP-01)를 사용한다.
+#
+# 05번 문서는 이 CR을 Node A의 /var/lib/rancher/k3s/server/manifests에 파일로 두는 절차를
+# 설명하지만, HelmChartConfig는 helm-controller(kube-system)가 지속적으로 감시하는 일반
+# Custom Resource이므로 다른 cluster/ 리소스와 동일하게 `kubectl apply -k`로 적용해도
+# 동작이 같다. 이 저장소의 GitOps 흐름(k8s/README.md 적용 순서)과 맞추기 위해 후자를 택함
+# — 05번 문서 대비 적용 방식의 차이이며 결과는 동일하다.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      replicas: 1
+
+    nodeSelector:
+      openbake.io/node-pool: core
+
+    persistence:
+      enabled: true
+      name: traefik-acme
+      path: /data
+      size: 1Gi
+      storageClass: local-path-retain
+      accessMode: ReadWriteOnce
+
+    additionalArguments:
+      # ACME 등록 email: 사용자 확정값
+      - "--certificatesresolvers.letsencrypt.acme.email=hhh3915@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # HTTP → HTTPS 리다이렉트. chart의 `ports.web.redirections` 키는 이 버전에서
+      # args를 만들지 않아(2026-08-23 실측) 직접 넣는다. ACME HTTP-01 챌린지 라우터가
+      # 이 리다이렉트보다 우선하므로 인증서 갱신에는 영향이 없다.
+      #
+      # `to=websecure`(엔트리포인트 이름)로 주면 Location에 컨테이너 내부 포트 8443이
+      # 그대로 나가 외부에서 접속이 안 된다(2026-08-23 실측). 외부 포트를 직접 지정한다.
+      - "--entryPoints.web.http.redirections.entryPoint.to=:443"
+      - "--entryPoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entryPoints.web.http.redirections.entryPoint.permanent=true"
+      # 최초 발급 검증 시에만 아래 staging 서버 라인을 추가해 rate limit 없이 흐름을 확인하고,
+      # 확인 후 반드시 제거한 뒤 재배포한다. 기본 상태(이 파일)는 production CA를 사용한다.
+      # - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"

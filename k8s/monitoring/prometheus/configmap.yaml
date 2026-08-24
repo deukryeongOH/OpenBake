@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  # k3s 운영용 설정. monitoring/prometheus/prometheus.yml(Compose, 1초 scrape·고정 target)은
+  # 용량 측정 전용이므로 그대로 옮기지 않는다. 여기서는 15초 scrape·Kubernetes Pod Discovery를 쓴다.
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: "openbake-apps"
+        metrics_path: "/actuator/prometheus"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - openbake
+        relabel_configs:
+          # 다섯 서비스만 남긴다. 05번 문서 4장: HPA가 만든 backend replica도 label로 자동 포함된다.
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "backend|api-gateway|member-service|payment-service|ai-service"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_container_port_number]
+            separator: ":"
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            target_label: service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          # job을 서비스별로 나눈다. Compose(monitoring/prometheus/prometheus.yml.template)와
+          # 같은 이름을 쓰므로 Grafana 대시보드의 label_values(up{job=~"openbake-.*"}, job)
+          # 변수가 Compose에서와 동일하게 동작한다. 단일 job으로 두면 다섯 서비스가
+          # 한 덩어리로 합쳐져 1 replica / 2 replica 비교를 할 수 없다.
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "backend"
+            target_label: job
+            replacement: "openbake-core"
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "member-service"
+            target_label: job
+            replacement: "openbake-member"
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "payment-service"
+            target_label: job
+            replacement: "openbake-payment"
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "ai-service"
+            target_label: job
+            replacement: "openbake-ai"
+          # Compose에는 gateway job이 없었다. 이슈 1에서 registry를 추가해 이번에 새로 생긴다.
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "api-gateway"
+            target_label: job
+            replacement: "openbake-gateway"

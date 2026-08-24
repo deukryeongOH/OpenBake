@@ -2,12 +2,16 @@ spring:
   application:
     name: openbake-payment
 
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
+
   datasource:
     url: ${PAYMENT_DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
       connection-init-sql: SET SESSION lock_timeout = '10s'
+      maximum-pool-size: 10
 
   jpa:
     hibernate:
@@ -20,6 +24,7 @@ spring:
 
 server:
   port: 8082
+  shutdown: graceful
 
 payment:
   toss:
@@ -39,6 +44,8 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
   metrics:
     tags:
       application: ${spring.application.name}

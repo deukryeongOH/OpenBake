@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - backend
+  - member-service
+  - payment-service
+  - api-gateway
+  - ai-service
+
+# 10번 문서 10장: 배포 job이 임시 디렉터리에서 `kustomize edit set image`로
+# 이번 배포의 Git SHA를 주입한다. 이 repository의 기본값은 치환 대상 표시용 placeholder다.
+images:
+  - name: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-backend
+    newTag: sha-placeholder
+  - name: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-member-service
+    newTag: sha-placeholder
+  - name: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-payment-service
+    newTag: sha-placeholder
+  - name: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-api-gateway
+    newTag: sha-placeholder
+  - name: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-ai-service
+    newTag: sha-placeholder

@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ai-postgres
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: ai-postgres
+    app.kubernetes.io/component: ai
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  serviceName: ai-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-postgres
+        app.kubernetes.io/component: ai
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      automountServiceAccountToken: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - core
+      containers:
+        - name: postgres
+          # pgvector extension이 필요해 표준 postgres:17이 아니라 pgvector/pgvector:pg17 사용.
+          # 설계 문서 09/10번은 postgres:17만 명시했고 pgvector 이미지는 없어 이번에 정한 값 — 보고 대상.
+          image: pgvector/pgvector:pg17
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: "openbake_ai"
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ai-db-credentials
+                  key: DB_USERNAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-db-credentials
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: 500m
+              memory: 640Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path-retain
+        resources:
+          requests:
+            storage: 5Gi

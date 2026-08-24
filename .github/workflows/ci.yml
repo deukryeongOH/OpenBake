@@ -15,7 +15,7 @@ jobs:
 
     services:
       elasticsearch:
-        image: ghcr.io/prgrms-be-adv-devcourse/openbake-elasticsearch:9.0.3
+        image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-elasticsearch:latest
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -53,5 +53,4 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - run: chmod +x gradlew
-      - run: ./gradlew build
-      - run: ./gradlew :ai-service:integrationTest
+      - run: ./gradlew build :ai-service:integrationTest

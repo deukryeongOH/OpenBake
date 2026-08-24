@@ -1,0 +1,69 @@
+# docker-compose.yaml의 kafka-init에 대응한다.
+# KAFKA_AUTO_CREATE_TOPICS_ENABLE=false이므로 topic을 명시적으로 만들어야 하며,
+# 없으면 ai-service consumer가 UNKNOWN_TOPIC_OR_PARTITION을 반복한다.
+#
+# --if-not-exists라 여러 번 실행해도 안전하다.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics-init
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: kafka-topics-init
+    app.kubernetes.io/component: event-broker
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka-topics-init
+        app.kubernetes.io/component: event-broker
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - core
+      containers:
+        - name: kafka-topics-init
+          image: apache/kafka:3.9.0
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              BOOTSTRAP=kafka:29092
+
+              echo "kafka 응답 대기"
+              until /opt/kafka/bin/kafka-broker-api-versions.sh \
+                      --bootstrap-server "$BOOTSTRAP" >/dev/null 2>&1; do
+                sleep 5
+              done
+
+              for t in product.changed.v1 product.viewed.v1 cart.item-added.v1 \
+                       order.purchase-confirmed.v1 member.withdrawn.v1; do
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" \
+                  --create --if-not-exists --topic "$t" --partitions 3 --replication-factor 1
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" \
+                  --create --if-not-exists --topic "$t.dlt" --partitions 1 --replication-factor 1
+              done
+
+              echo "생성된 topic:"
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --list
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

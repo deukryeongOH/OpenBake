@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: openbake
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: core
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  # HPA(이슈 4)가 replica를 관리한다. 필드를 생략하면 생성 시 기본 1로 시작하고 이후 apply가
+  # 건드리지 않는다. replicas: 1을 남겨두면 HPA가 2로 올린 뒤 apply가 다시 1로 되돌려 충돌한다.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  minReadySeconds: 10
+  progressDeadlineSeconds: 300
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+        app.kubernetes.io/component: core
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: registry-credentials
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - core
+        podAntiAffinity:
+          # 03/05번 문서: backend replica 2개가 같은 Node에 오지 못하도록 강제(required).
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: backend
+      containers:
+        - name: backend
+          image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-backend:sha-placeholder
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms256m -Xmx512m"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: core-db-credentials
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: core-db-credentials
+                  key: DB_PASSWORD
+            - name: TOSS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: toss-credentials
+                  key: TOSS_SECRET_KEY
+            - name: SETTLEMENT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: settlement-credentials
+                  key: SETTLEMENT_ENCRYPTION_KEY
+            - name: AWS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: AWS_ACCESS_KEY
+            - name: AWS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: AWS_SECRET_KEY
+            - name: AI_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: service-auth-credentials
+                  key: AI_SERVICE_TOKEN
+            - name: CORE_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: service-auth-credentials
+                  key: CORE_SERVICE_TOKEN
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          resources:
+            requests:
+              cpu: 300m
+              memory: 640Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3

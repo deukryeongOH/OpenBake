@@ -1,5 +1,7 @@
 package com.openbake.drop.application.dto;
 
+import com.openbake.drop.application.cache.CachedDrop;
+
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
@@ -15,6 +17,19 @@ public record ConfirmEntryResult(
         return new ConfirmEntryResult(
                 result.name(), result.description(),
                 result.imageUrl(), result.price(), limitQuantity, result.remainQuantity(), new HashSet<>(result.pickUpAvailableDates())
+        );
+    }
+
+    /**
+     * 캐시된 상품 스냅샷 + 실시간 잔여 수량으로 조립한다.
+     *
+     * 표시 정보는 드롭 중 불변이라 캐시가 정확하고, 잔여 수량만 드롭 중 정본인 Redis 카운터에서 받는다.
+     * pickupDates는 캐시에 이미 복사본으로 들어 있어 여기서 다시 복사하지 않는다.
+     */
+    public static ConfirmEntryResult of(CachedDrop drop, int remainQuantity){
+        return new ConfirmEntryResult(
+                drop.name(), drop.description(), drop.imageUrl(), drop.price(),
+                drop.limitQuantity(), remainQuantity, drop.pickupDates()
         );
     }
 }

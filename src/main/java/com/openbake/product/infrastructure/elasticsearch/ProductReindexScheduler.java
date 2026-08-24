@@ -33,8 +33,15 @@ public class ProductReindexScheduler {
 
     @Scheduled(cron = "${openbake.reindex.cron}")
     public void reindex() {
-        log.info("[재색인] 배치 시작");
+        log.info("[재색인] 스케줄 배치 시작");
+        reindexNow();
+    }
 
+    /**
+     * cutover 등 원하는 시점에 한 번 실행해야 할 때 쓰는 진입점.
+     * {@link com.openbake.product.presentation.AdminProductReindexController}가 호출한다.
+     */
+    public ReindexResult reindexNow() {
         // 1. RDB에서 GENERAL 상품 전체 조회 (ES 색인 대상)
         List<Product> products = productRepository.findAllByType(Type.GENERAL);
 
@@ -58,5 +65,9 @@ public class ProductReindexScheduler {
         }
 
         log.info("[재색인] 배치 완료 — upsert={}, orphan_deleted={}", products.size(), orphanIds.size());
+        return new ReindexResult(products.size(), orphanIds.size());
+    }
+
+    public record ReindexResult(int upsertCount, int orphanDeletedCount) {
     }
 }

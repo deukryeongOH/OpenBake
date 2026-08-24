@@ -1,11 +1,14 @@
 package com.openbake.drop.application;
 
+import com.openbake.common.exception.BusinessException;
+import com.openbake.common.exception.ErrorCode;
+import com.openbake.drop.application.cache.CachedDrop;
+import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.application.dto.ConfirmEntryResult;
 import com.openbake.drop.application.dto.DropProductInfoResult;
-import com.openbake.drop.application.dto.QueueRankResult;
 import com.openbake.drop.application.port.CurrentMemberPort;
 import com.openbake.drop.application.port.ProductPort;
-import com.openbake.drop.application.queue.QueueManager;
+import com.openbake.drop.application.port.StockReservationPort;
 import com.openbake.drop.application.service.DropEnterService;
 import com.openbake.drop.domain.*;
 import com.openbake.drop.domain.entity.Drop;
@@ -26,11 +29,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,9 +45,6 @@ class DropEnterServiceTest {
     private DropEntryRepository dropEntryRepository;
 
     @Mock
-    private QueueManager queueManager;
-
-    @Mock
     private DropRepository dropRepository;
 
     @Mock
@@ -50,6 +52,12 @@ class DropEnterServiceTest {
 
     @Mock
     private ProductPort productPort;
+
+    @Mock
+    private TodayDropCache todayDropCache;
+
+    @Mock
+    private StockReservationPort stockReservationPort;
 
     @InjectMocks
     private DropEnterService dropEnterService;
@@ -81,6 +89,25 @@ class DropEnterServiceTest {
         ReflectionTestUtils.setField(activeDrop, "dropEnd", now.minusMinutes(10).plusHours(1));
     }
 
+    private CachedDrop cachedDrop() {
+        return new CachedDrop(LocalDate.now(), dropId, productId,
+                LocalDateTime.now().minusMinutes(10), LocalDateTime.now().plusMinutes(30),
+                new AtomicBoolean(true), new AtomicBoolean(false), 5,
+                "두쫀쿠", "원물 맛이 많이 나요.", "image.jpg", 8000, Set.of(LocalDate.of(2028, 7, 28)));
+    }
+
+    // 정상 경로: 상품 정보는 캐시, 잔여 수량은 Redis에서 온다 (DB 상품 조회 없음)
+    private void givenProductFromCacheAndRedis() {
+        given(stockReservationPort.peek(dropId)).willReturn(97L);
+        given(todayDropCache.find(dropId)).willReturn(Optional.of(cachedDrop()));
+    }
+
+    private DropProductInfoResult productInfo() {
+        return DropProductInfoResult.of(
+                "두쫀쿠", "원물 맛이 많이 나요.", "image.jpg",
+                Set.of(LocalDate.of(2028, 7, 28)), 8000, 100, 97, 1L, productId);
+    }
+
     @Test
     @DisplayName("오늘 진행하는 드롭 ID 리스트 조회 성공")
     void getTodayDropIds_Success() {
@@ -96,52 +123,15 @@ class DropEnterServiceTest {
     }
 
     @Test
-    @DisplayName("대기열 진입 성공 - 대기 순번을 반환한다")
-    void enterQueue_Success() {
-        // given
-        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
-        given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
-        given(dropEntryRepository.existsByDropIdAndMemberIdAndEntryStatusIn(
-                eq(dropId), eq(memberId), any(List.class))).willReturn(false);
-        given(queueManager.enqueue(dropId, memberId)).willReturn(3L);
-
-        // when
-        QueueRankResult result = dropEnterService.enterQueue(dropId);
-
-        // then
-        assertThat(result.rank()).isEqualTo(3L);
-        assertThat(result.status()).isEqualTo("WAITING");
-        verify(queueManager).enqueue(dropId, memberId);
-    }
-
-    @Test
-    @DisplayName("대기열 순번 조회 성공")
-    void getRank_Success() {
-        // given
-        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
-        given(queueManager.getRank(dropId, memberId)).willReturn(0L);
-
-        // when
-        QueueRankResult result = dropEnterService.getRank(dropId);
-
-        // then
-        assertThat(result.rank()).isEqualTo(0L);
-        assertThat(result.status()).isEqualTo("ACTIVE");
-    }
-
-    @Test
-    @DisplayName("입장 확정 성공 - 대기열 권한을 검증하고 진입 내역을 저장한다")
+    @DisplayName("입장 확정 성공 - 진입 내역을 저장한다")
     void confirmEntry_Success() {
         // given
         given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
-        given(queueManager.isActive(dropId, memberId)).willReturn(true);
         given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)).willReturn(Optional.empty());
+        givenProductFromCacheAndRedis();
 
-        DropProductInfoResult productInfo = DropProductInfoResult.of(
-                "두쫀쿠", "원물 맛이 많이 나요.", "image.jpg",
-                Set.of(LocalDate.of(2028, 7, 28)), 8000, 100, 97, 1L, productId);
-        given(productPort.getProductInfo(productId)).willReturn(productInfo);
-
+        DropProductInfoResult productInfo = productInfo();
         given(dropEntryRepository.save(any(DropEntry.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -158,56 +148,155 @@ class DropEnterServiceTest {
         assertThat(result.pickupDates()).isEqualTo(productInfo.pickUpAvailableDates());
 
         verify(dropEntryRepository).save(any(DropEntry.class));
-        verify(queueManager).removeActiveUser(dropId, memberId);
     }
 
     @Test
-    @DisplayName("만료된 멤버 중 ENTERED 상태인 경우 FAILED로 전환한다")
-    void failExpiredEntries_FailsEnteredEntries() {
+    @DisplayName("입장 확정 실패 - 드롭 진행 기간이 아니면 거부한다 (대기열이 하던 시간 검증을 이관)")
+    void confirmEntry_OutsideDropWindow_Throws() {
         // given
-        Long otherMemberId = 20L;
-        DropEntry enteredEntry = DropEntry.builder()
-                .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.ENTERED).build();
-        DropEntry otherEnteredEntry = DropEntry.builder()
-                .dropId(dropId).memberId(otherMemberId).entryStatus(EntryStatus.ENTERED).build();
+        LocalDateTime now = LocalDateTime.now();
+        ReflectionTestUtils.setField(activeDrop, "dropStart", now.plusMinutes(10));
+        ReflectionTestUtils.setField(activeDrop, "dropEnd", now.plusMinutes(70));
 
-        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
-                .willReturn(Optional.of(enteredEntry));
-        given(dropEntryRepository.findByDropIdAndMemberId(dropId, otherMemberId))
-                .willReturn(Optional.of(otherEnteredEntry));
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
 
-        // when
-        dropEnterService.failExpiredEntries(dropId, Set.of(memberId, otherMemberId));
+        // when & then
+        assertThatThrownBy(() -> dropEnterService.confirmEntry(dropId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DROP_NOT_ACTIVE);
 
-        // then
-        assertThat(enteredEntry.getEntryStatus()).isEqualTo(EntryStatus.FAILED);
-        assertThat(otherEnteredEntry.getEntryStatus()).isEqualTo(EntryStatus.FAILED);
+        verify(dropEntryRepository, never()).save(any(DropEntry.class));
     }
 
     @Test
-    @DisplayName("이미 RESERVED/COMPLETED 등으로 넘어간 멤버는 건드리지 않는다")
-    void failExpiredEntries_SkipsNonEnteredStatus() {
+    @DisplayName("입장 확정 실패 - 이미 재고를 선점했거나 구매를 마친 유저는 거부한다 (대기열이 하던 중복 차단을 이관)")
+    void confirmEntry_AlreadyReservedOrCompleted_Throws() {
         // given
-        DropEntry reservedEntry = DropEntry.builder()
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
+        DropEntry reserved = DropEntry.builder()
                 .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.RESERVED).build();
         given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
-                .willReturn(Optional.of(reservedEntry));
+                .willReturn(Optional.of(reserved));
 
-        // when
-        dropEnterService.failExpiredEntries(dropId, Set.of(memberId));
+        // when & then
+        assertThatThrownBy(() -> dropEnterService.confirmEntry(dropId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_ENTERED);
 
-        // then
-        assertThat(reservedEntry.getEntryStatus()).isEqualTo(EntryStatus.RESERVED);
+        verify(dropEntryRepository, never()).save(any(DropEntry.class));
     }
 
     @Test
-    @DisplayName("confirmEntry를 한 번도 호출하지 않아 DropEntry가 없는 멤버는 예외 없이 건너뛴다")
-    void failExpiredEntries_SkipsWhenNoDropEntryExists() {
+    @DisplayName("입장 확정 실패 - 존재하지 않는 드롭이면 거부한다")
+    void confirmEntry_DropNotFound_Throws() {
         // given
-        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
-                .willReturn(Optional.empty());
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.empty());
 
-        // when & then (예외 없이 통과)
-        dropEnterService.failExpiredEntries(dropId, Set.of(memberId));
+        // when & then
+        assertThatThrownBy(() -> dropEnterService.confirmEntry(dropId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DROP_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("재입장이면 새 엔트리를 만들지 않고 기존 엔트리를 ENTERED로 되돌린다")
+    void confirmEntry_ReEntry_ReusesExistingEntry() {
+        // given
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
+        givenProductFromCacheAndRedis();
+
+        DropEntry existing = DropEntry.builder()
+                .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.FAILED).build();
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .willReturn(Optional.of(existing));
+        given(dropEntryRepository.save(any(DropEntry.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        dropEnterService.confirmEntry(dropId);
+
+        // then
+        assertThat(existing.getEntryStatus()).isEqualTo(EntryStatus.ENTERED);
+        verify(dropEntryRepository).save(existing);
+    }
+
+    @Test
+    @DisplayName("이미 ENTERED인 유저가 다시 호출하면 저장 없이 정보만 돌려준다 (반복 호출로 쓰기가 쌓이지 않는다)")
+    void confirmEntry_AlreadyEntered_DoesNotWriteAgain() {
+        // given
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
+        givenProductFromCacheAndRedis();
+
+        DropEntry alreadyEntered = DropEntry.builder()
+                .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.ENTERED).build();
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId))
+                .willReturn(Optional.of(alreadyEntered));
+
+        // when
+        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId);
+
+        // then
+        assertThat(result.limitQuantity()).isEqualTo(activeDrop.getLimitQuantity());
+        verify(dropEntryRepository, never()).save(any(DropEntry.class));
+    }
+
+    @Test
+    @DisplayName("정상 경로에서는 상품 정보를 DB가 아니라 캐시와 Redis에서 읽는다")
+    void confirmEntry_ReadsProductFromCacheAndRedis() {
+        // given
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)).willReturn(Optional.empty());
+        givenProductFromCacheAndRedis();
+        given(dropEntryRepository.save(any(DropEntry.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId);
+
+        // then: 잔여 수량은 Redis 실시간 값이고, 표시 정보는 캐시 값이다
+        assertThat(result.remainQuantity()).isEqualTo(97);
+        assertThat(result.name()).isEqualTo("두쫀쿠");
+        // 상품·재고·픽업일 3개 쿼리를 태우던 경로를 타지 않는다
+        verify(productPort, never()).getProductInfo(any());
+    }
+
+    @Test
+    @DisplayName("Redis 카운터가 없으면 기존 DB 경로로 폴백한다")
+    void confirmEntry_RedisMissing_FallsBackToDb() {
+        // given
+        given(currentMemberPort.getCurrentMemberId()).willReturn(memberId);
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(activeDrop));
+        given(dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)).willReturn(Optional.empty());
+        given(stockReservationPort.peek(dropId)).willReturn(null);
+        given(productPort.getProductInfo(productId)).willReturn(productInfo());
+        given(dropEntryRepository.save(any(DropEntry.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        ConfirmEntryResult result = dropEnterService.confirmEntry(dropId);
+
+        // then
+        assertThat(result.remainQuantity()).isEqualTo(97);
+        verify(productPort).getProductInfo(productId);
+    }
+
+    @Test
+    @DisplayName("마감 정리는 드롭당 UPDATE 한 번으로 ENTERED 잔여 엔트리를 실패 처리한다")
+    void expireRemainingEntries_DelegatesToSingleUpdate() {
+        // given
+        given(dropEntryRepository.expireEnteredEntries(dropId)).willReturn(3);
+
+        // when
+        int expired = dropEnterService.expireRemainingEntries(dropId);
+
+        // then
+        assertThat(expired).isEqualTo(3);
+        verify(dropEntryRepository).expireEnteredEntries(dropId);
     }
 }

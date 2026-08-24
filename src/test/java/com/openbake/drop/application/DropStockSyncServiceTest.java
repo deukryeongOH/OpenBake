@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.Set;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -43,10 +44,12 @@ class DropStockSyncServiceTest {
 
     private final Long dropId = 1L;
     private final Long productId = 100L;
+    private static final int LIMIT_QUANTITY = 5;
 
     private CachedDrop drop(LocalDateTime end) {
         return new CachedDrop(LocalDate.now(), dropId, productId,
-                LocalDateTime.now().minusMinutes(10), end, new AtomicBoolean(true), new AtomicBoolean(false));
+                LocalDateTime.now().minusMinutes(10), end, new AtomicBoolean(true), new AtomicBoolean(false), LIMIT_QUANTITY,
+                "두쫀쿠", "설명", "image.jpg", 8000, Set.of(LocalDate.now().plusDays(7)));
     }
 
     @Test
@@ -144,14 +147,66 @@ class DropStockSyncServiceTest {
         // given
         CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
         given(stockReservationPort.peek(dropId)).willReturn(42L);
-        given(productPort.getTotalQuantity(productId)).willReturn(100);
-        given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(58);
 
         // when
         dropStockSyncService.sync(cached);
 
         // then
         verify(productPort).syncRemainQuantity(productId, 42);
+        // 대조 검사가 checkDrift로 빠졌으므로 주기 동기화에서는 DB를 읽지 않는다
+        verify(productPort, never()).getTotalQuantity(any());
+        verify(dropEntryRepository, never()).sumReservedQuantity(any());
+    }
+
+    @Test
+    @DisplayName("드리프트 검사는 drop_entry 합계와 대조하되 Redis도 DB도 고치지 않는다")
+    void checkDrift_ComparesWithoutCorrecting() {
+        // given: Redis 42, drop_entry 기준 100-58=42 (일치)
+        CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
+        given(stockReservationPort.peek(dropId)).willReturn(42L);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(58);
+
+        // when
+        dropStockSyncService.checkDrift(cached);
+
+        // then: 검출만 한다
+        verify(dropEntryRepository).sumReservedQuantity(dropId);
+        verify(productPort, never()).syncRemainQuantity(any(), anyInt());
+        verify(stockReservationPort, never()).initIfAbsent(any(), anyInt(), any());
+        verify(stockReservationPort, never()).clear(any());
+    }
+
+    @Test
+    @DisplayName("불일치가 있어도 자동 보정하지 않는다")
+    void checkDrift_OnMismatch_DoesNotCorrect() {
+        // given: Redis 42, drop_entry 기준 100-50=50 (불일치)
+        CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
+        given(stockReservationPort.peek(dropId)).willReturn(42L);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(50);
+
+        // when
+        dropStockSyncService.checkDrift(cached);
+
+        // then
+        verify(productPort, never()).syncRemainQuantity(any(), anyInt());
+        verify(stockReservationPort, never()).clear(any());
+    }
+
+    @Test
+    @DisplayName("카운터가 아직 없으면 드리프트 검사도 집계 쿼리를 돌리지 않는다")
+    void checkDrift_NoCounter_SkipsAggregate() {
+        // given
+        CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
+        given(stockReservationPort.peek(dropId)).willReturn(null);
+
+        // when
+        dropStockSyncService.checkDrift(cached);
+
+        // then
+        verify(dropEntryRepository, never()).sumReservedQuantity(any());
+        verify(productPort, never()).getTotalQuantity(any());
     }
 
     @Test

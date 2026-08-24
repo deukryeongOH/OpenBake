@@ -167,12 +167,12 @@ export default function () {
     /*
      * 기존 테스트의 오류 분류는 유지합니다.
      *
-     * DR009: 아직 입장 가능한 활성 상태가 아님
+     * DR008: 드롭 진행 기간이 아님 (대기열 제거로 DR009 -> DR008)
      * DR001: 드롭 없음
      */
     const unauthorized =
         response.status === 400 &&
-        errorCode === 'DR009';
+        errorCode === 'DR008';
 
     const dropNotFound =
         response.status === 404 &&
@@ -185,7 +185,7 @@ export default function () {
 
         console.error(
             [
-                'UNAUTHORIZED_QUEUE_ACCESS',
+                'DROP_NOT_ACTIVE',
                 `memberId=${user.memberId}`,
                 `status=${response.status}`,
                 `code=${errorCode}`,

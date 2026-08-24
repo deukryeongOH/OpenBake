@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-kafka
+  namespace: openbake
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  policyTypes:
+    - Ingress
+  ingress:
+    # docker-compose.yaml 확인 결과 실제 producer/consumer:
+    #   backend(root), member-service → producer (KafkaOutboxSender)
+    #   ai-service → consumer (ProductChangedEventConsumer, MemberWithdrawnEventConsumer, MemberInteractionEventConsumer)
+    # payment-service, api-gateway는 Kafka를 호출하지 않는다.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: member-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ai-service
+        # topic 생성 Job(Compose의 kafka-init 대응). broker port만 사용하며
+        # controller port(29093)는 열지 않는다.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka-topics-init
+      ports:
+        - protocol: TCP
+          port: 29092

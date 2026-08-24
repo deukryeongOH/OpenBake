@@ -2,6 +2,8 @@ package com.openbake.common.exception;
 
 import com.openbake.common.response.ApiResponse;
 import com.openbake.common.response.ApiResponse.ApiError;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +55,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException e) {
         ErrorCode errorCode = ErrorCode.ENTITY_NOT_FOUND;
+        return build(errorCode.getStatus(), errorCode.getCode(), errorCode.getMessage());
+    }
+
+    /**
+     * 유니크 제약 위반 등 DB 무결성 제약 충돌.
+     *
+     * 같은 사용자의 동시 요청이 같은 행을 만들려 할 때 발생한다(예: confirm-entry 중복 클릭 →
+     * drop_entries 의 uk_drop_member). 서버 결함이 아니라 요청 간 경합이므로 500이 아니라 409로 응답한다.
+     * 도메인별 세부 코드를 붙이지 않는 이유는 이 예외가 어느 도메인에서든 올 수 있기 때문이다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        log.warn("데이터 무결성 제약 충돌", e);
+        ErrorCode errorCode = ErrorCode.DUPLICATE_REQUEST;
         return build(errorCode.getStatus(), errorCode.getCode(), errorCode.getMessage());
     }
 

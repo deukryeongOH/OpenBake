@@ -35,10 +35,12 @@ spec:
         - name: registry-credentials
       affinity:
         nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
+          # backend는 elasticsearch(headless, node-a 고정)와 core-postgres에 붙어야
+          # 하므로 core 노드에서만 동작한다. preferred로 두면 rollout 때 스케줄러가
+          # 자원이 덜 찬 node-b를 골라 CrashLoopBackOff가 난다(2026-08-24 실측).
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
                   - key: openbake.io/node-pool
                     operator: In
                     values:

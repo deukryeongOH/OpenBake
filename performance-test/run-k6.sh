@@ -8,7 +8,7 @@ PROFILE="${1:-}"
 CMD="${2:-}"
 
 usage() {
-  echo "사용법: ./run-k6.sh {local|server} {users|enter|wait-active|confirm|lock}"
+  echo "사용법: ./run-k6.sh {local|server} {users|flow|enter|wait-active|confirm|lock}"
 }
 
 if [[ "$PROFILE" != "local" && "$PROFILE" != "server" ]]; then
@@ -92,6 +92,9 @@ EOF_META
 case "$CMD" in
   users)
     python3 generate-user-json.py
+    ;;
+  flow)
+    run_k6 "drop-user-flow" "drop-user-flow.js"
     ;;
   enter)
     run_k6 "drop-enter-concurrency" "drop-enter-concurrency.js"

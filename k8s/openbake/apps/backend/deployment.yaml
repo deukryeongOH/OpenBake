@@ -127,7 +127,11 @@ spec:
               port: 8080
             periodSeconds: 5
             timeoutSeconds: 2
-            failureThreshold: 24
+            # 실측 87초(2026-08-23, 여유로운 상태)였으나 rollout 중에는 옛 Pod와
+            # JVM 기동이 겹쳐 CPU를 다투느라 120초를 넘겨 kill 됐다(2026-08-24).
+            # 기동이 느린 것 자체는 정상이므로 유예를 240초로 늘린다.
+            # 이 값은 기동 중에만 쓰이고 정상 운영 중 응답성은 livenessProbe가 본다.
+            failureThreshold: 48
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness

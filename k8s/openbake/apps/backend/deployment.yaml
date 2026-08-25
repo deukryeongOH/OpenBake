@@ -121,7 +121,12 @@ spec:
                 name: backend-config
           resources:
             requests:
-              cpu: 300m
+              # 2026-08-25 실측: 300 동시 부하에서 Pod CPU 피크 0.78(=780m).
+              # request 300m 은 실사용 대비 낮아 HPA(목표 65%)가 195m 에서
+              # 확장을 시작했다. limit 1000m 의 20%도 안 쓴 시점이라 과민했고,
+              # 배포 시 JVM 기동 스파이크만으로도 replica 가 늘었다.
+              # 500m 이면 65% = 325m 으로 실제 부하 구간에 가까워진다.
+              cpu: 500m
               memory: 640Mi
             limits:
               cpu: 1000m

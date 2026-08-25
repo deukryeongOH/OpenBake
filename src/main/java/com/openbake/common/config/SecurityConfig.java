@@ -3,6 +3,8 @@ package com.openbake.common.config;
 import com.openbake.common.security.gateway.HeaderAuthenticationFilter;
 import com.openbake.common.security.ServiceAuthenticationFilter;
 import com.openbake.common.security.service.AiServicePaths;
+import java.util.Arrays;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,9 +15,36 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
+
+    /**
+     * .cors(Customizer.withDefaults())는 컨텍스트에서 CorsConfigurationSource 빈을 찾아 그대로 쓴다 —
+     * 이 빈이 없으면(원래 상태) 아무 CORS 헤더도 안 붙고, OPTIONS만 permitAll이라 200은 뜨지만
+     * Access-Control-Allow-Origin이 없어 브라우저가 preflight 실패로 처리한다. member-service/
+     * payment-service와 동일한 원인이라 같은 방식으로 고친다.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${openbake.security.cors.allowed-origins:http://localhost:3000}") String allowedOrigins) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList());
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        // 명시적 오리진만 허용하므로(와일드카드 아님) 인증 헤더를 실어 보내는 요청도 credentials 모드로 안전하게 허용한다.
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(

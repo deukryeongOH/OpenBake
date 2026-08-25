@@ -19,6 +19,20 @@ spec:
     nodeSelector:
       openbake.io/node-pool: core
 
+    # 자원을 지정하지 않으면 QoS가 BestEffort가 되어 node-a의 CPU 경쟁에서 가장 먼저
+    # 밀린다. Traefik은 모든 외부 트래픽의 TLS 종단을 혼자 처리하므로 여기서 밀리면
+    # 뒤쪽 서비스가 아무리 한가해도 처리량이 오르지 않는다.
+    #
+    # 2026-08-24 실측: 300 동시 요청에서 Traefik 경유 18 req/s vs 게이트웨이 직접
+    # 34 req/s. backend는 Tomcat 스레드 6/200으로 놀고 있었다.
+    resources:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 256Mi
+
     persistence:
       enabled: true
       name: traefik-acme

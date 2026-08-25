@@ -14,6 +14,10 @@ metadata:
     app.kubernetes.io/part-of: openbake
     app.kubernetes.io/instance: production
 spec:
+  # Job의 spec.template은 불변이라, 완료된 Job이 남아 있으면 내용이 바뀐 뒤의
+  # apply가 실패한다. 완료 10분 뒤 스스로 사라지게 해 재적용을 막지 않는다.
+  # topic 생성은 --if-not-exists라 다시 실행돼도 무해하다.
+  ttlSecondsAfterFinished: 600
   backoffLimit: 6
   template:
     metadata:

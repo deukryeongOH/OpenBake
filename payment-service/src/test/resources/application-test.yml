@@ -22,3 +22,5 @@ jwt:
   secret: test-secret-key-for-ci-do-not-use-in-production-32bytes+
   access-token-expiration: 1800000
   refresh-token-expiration: 1209600000
+
+CORE_SERVICE_TOKEN: test-core-service-token

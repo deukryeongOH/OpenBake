@@ -131,13 +131,11 @@ public class ProductService {
         Long sellerId = currentSellerPort.getCurrentSellerId();
 
         Product product = validateSellerProduct(productId, sellerId); // 해당 상품이 판매자의 상품인지 확인
-        ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
 
         if (product.getType() != type) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
         }
-        productInventoryRepository.delete(productInventory);
-        productRepository.delete(product);
+        product.markDeleted();
         productChangedOutboxWriter.deleted(productId);
 
     }
@@ -247,8 +245,14 @@ public class ProductService {
     }
 
     private Product getProduct(Long productId) {
-        return productRepository.findById(productId)
+        Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        if (product.getStatus() == ProductStatus.DELETED) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        return product;
     }
 
     @Transactional(readOnly = true)

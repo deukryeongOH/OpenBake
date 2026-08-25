@@ -1,5 +1,11 @@
 server:
   shutdown: graceful
+  tomcat:
+    mbeanregistry:
+      # Spring Boot 3에서 tomcat.threads.* 메트릭은 MBean registry가 켜져 있어야
+      # actuator에 노출된다. 스레드 풀 포화가 부하 테스트 진단의 핵심 항목인데
+      # 이 값이 없으면 "측정값 없음"으로 나온다(2026-08-24 실측).
+      enabled: true
 
 spring:
   application:

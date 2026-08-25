@@ -114,6 +114,7 @@ services:
       DB_PASSWORD: openbake
       TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      CORE_SERVICE_TOKEN: ${CORE_SERVICE_TOKEN}
     depends_on:
       payment-postgres:
         condition: service_healthy
@@ -244,6 +245,7 @@ services:
       REDIS_HOST: redis    # 기존 Redis 컨테이너 재사용 (블랙리스트/토큰 저장, 키 네임스페이스로 구분됨)
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CORE_SERVICE_TOKEN: ${CORE_SERVICE_TOKEN}
     depends_on:
       member-postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

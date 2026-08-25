@@ -1,5 +1,7 @@
 package com.openbake.common.security.gateway;
 
+import com.openbake.common.security.service.AiServicePaths;
+import com.openbake.common.security.service.CoreServicePaths;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -169,6 +171,30 @@ class HeaderAuthenticationFilterTest {
         );
 
         assertRejected(request);
+    }
+
+    @Test
+    void skipsServiceAuthenticatedInternalEndpoints() throws Exception {
+        assertSkipped(new MockHttpServletRequest(
+                "POST",
+                AiServicePaths.RECOMMENDATION_CANDIDATES
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "GET",
+                AiServicePaths.LATEST_RECOMMENDATION_CANDIDATES
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "GET",
+                AiServicePaths.PRODUCT_INDEX_SOURCES
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "POST",
+                "/internal/v1/ai/embedding-tasks"
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "POST",
+                CoreServicePaths.SEMANTIC_SEARCH
+        ));
     }
 
     @Test

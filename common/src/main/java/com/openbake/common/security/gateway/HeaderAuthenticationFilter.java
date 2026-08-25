@@ -1,5 +1,7 @@
 package com.openbake.common.security.gateway;
 
+import com.openbake.common.security.service.AiServicePaths;
+import com.openbake.common.security.service.CoreServicePaths;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,6 +46,12 @@ public final class HeaderAuthenticationFilter extends OncePerRequestFilter {
                         || path.startsWith("/internal/");
 
         if (!protectedPath) {
+            return true;
+        }
+
+        // 서비스 간 인증 경로는 ServiceAuthenticationFilter가 담당한다.
+        // 게이트웨이 신원 헤더가 없는 호출이므로 여기서 다시 검사하면 401이 된다.
+        if (AiServicePaths.matches(path) || CoreServicePaths.matches(path)) {
             return true;
         }
 

@@ -31,8 +31,9 @@ public class ProductClient implements ProductPort {
 
     @Override
     public Optional<ProductInfo> findProduct(Long productId) {
-        //상품 삭제는 하드 삭제라 행이 사라진다. 장바구니에 남은 항목은 비활성으로 표시한다.
+        //소프트 삭제된 상품은 없는 상품처럼 내려 장바구니에 남은 항목을 비활성으로 표시한다.
         return productRepository.findById(productId)
+                .filter(product -> product.getStatus() != ProductStatus.DELETED)
                 .map(product -> new ProductInfo(
                         product.getId(),
                         product.getSellerId(),

@@ -31,5 +31,9 @@ public interface ProductRepository {
 
     List<Product> findAllByType(Type type);
 
-    Page<Product> findAll(Pageable pageable);
+    /**
+     * ai-service 백필·정합성 대조가 열거하는 임베딩 대상.
+     * 삭제된 상품은 제외한다 — 포함하면 reconcile이 삭제 상품의 벡터를 다시 만든다.
+     */
+    Page<Product> findAllIndexTargets(Pageable pageable);
 }

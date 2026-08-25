@@ -1,53 +1,44 @@
 package com.openbake.product.application;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.openbake.product.domain.Product;
+import com.openbake.product.domain.ProductRepository;
+import com.openbake.product.presentation.dto.ProductIndexSourceResponse;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.openbake.product.domain.Category;
-import com.openbake.product.domain.Product;
-import com.openbake.product.domain.ProductRepository;
-import com.openbake.product.domain.Type;
-import java.time.LocalDate;
-import java.util.Set;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.test.util.ReflectionTestUtils;
-
+/**
+ * {@code GET /internal/v1/products/ids}는 ai-service 백필·정합성 대조가
+ * 임베딩 대상을 열거하는 소스다.
+ *
+ * <p>삭제된 상품이 섞이면 reconcile이 "core에는 있는데 벡터가 없다"고 판단해
+ * <b>삭제한 상품의 벡터를 다시 만든다.</b> 삭제 대상 판정에서도 빠져 정리되지 않는다.
+ * 그래서 전체 조회가 아니라 삭제 제외 조회를 써야 한다.
+ */
 class ProductIndexSourceServiceTest {
 
     @Test
-    void returnsGeneralAndDropInForcedIdOrder() {
-        ProductRepository repository = org.mockito.Mockito.mock(ProductRepository.class);
-        Product general = product(Type.GENERAL, 1L);
-        Product drop = product(Type.DROP, 2L);
-        when(repository.findAll(any(Pageable.class)))
-                .thenReturn(new PageImpl<>(java.util.List.of(general, drop)));
+    void indexSourcesExcludeDeletedProducts() {
+        ProductRepository productRepository = mock(ProductRepository.class);
+        Page<Product> page = new PageImpl<>(List.of());
+        when(productRepository.findAllIndexTargets(any(Pageable.class))).thenReturn(page);
 
-        var result = new ProductIndexSourceService(repository).findPage(0, 100);
+        new ProductIndexSourceService(productRepository).findPage(0, 100);
 
-        assertThat(result.getContent()).extracting("productId").containsExactly(1L, 2L);
-        assertThat(result.getContent()).extracting("type").containsExactly("GENERAL", "DROP");
-        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(repository).findAll(pageable.capture());
-        assertThat(pageable.getValue().getSort().getOrderFor("id").isAscending()).isTrue();
-    }
-
-    private Product product(Type type, Long id) {
-        Product product = Product.builder()
-                .name("bread-" + id)
-                .description("description")
-                .imageUrl("image")
-                .price(1000)
-                .sellerId(1L)
-                .pickUpAvailableDates(Set.of(LocalDate.now().plusDays(1)))
-                .category(Category.MEAL_BREADS)
-                .type(type)
-                .build();
-        ReflectionTestUtils.setField(product, "id", id);
-        return product;
+        verify(productRepository).findAllIndexTargets(PageRequest.of(
+                0, 100, org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Direction.ASC, "id")));
+        // 삭제 상품까지 돌려주는 전체 조회로 되돌아가면 안 된다.
+        verify(productRepository, never()).findAllByType(any());
     }
 }

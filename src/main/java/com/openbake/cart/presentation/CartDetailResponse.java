@@ -43,7 +43,8 @@ public record CartDetailResponse(
             @Schema(description = "판매자 상호명. 조회 시점 최신값이라 판매자가 상호를 바꾸면 그대로 바뀐다(별도 안내 없음). 상품이 삭제된 항목은 담을 때 저장해 둔 값이다.", example = "오픈베이크 베이커리")
             String bakeryName,
 
-            @Schema(description = "상품 이미지 URL", example = "https://cdn.openbake.com/products/7.jpg")
+            @Schema(description = "상품 이미지의 S3 오브젝트 키. 절대 URL이 아니라 키이므로 클라이언트가 버킷 base URL을 붙여 사용한다.",
+                    example = "products/7/64d7b77c-20bf-4859-abf5-2e40c4e5db0a")
             String imageUrl,
 
             @Schema(description = "단가. 조회 시점 최신값이며 스냅샷이 아니다. 결제 금액은 항상 이 값을 기준으로 한다.", example = "12000")

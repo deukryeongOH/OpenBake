@@ -64,10 +64,19 @@ public interface ProductJpaRepository extends JpaRepository<Product, Long> {
 
     Long findSellerIdById(Long id);
 
-    Page<Product> findAllBySellerIdAndType(Long sellerId, Type type, Pageable pageable);
+    @Query("SELECT p FROM Product p "
+         + "WHERE p.sellerId = :sellerId AND p.type = :type "
+         + "AND p.status <> com.openbake.product.domain.ProductStatus.DELETED")
+    Page<Product> findAllBySellerIdAndType(@Param("sellerId") Long sellerId,
+                                           @Param("type") Type type,
+                                           Pageable pageable);
 
     Page<Product> findAllByType(Type type, Pageable pageable);
 
     List<Product> findAllByType(Type type);
+
+    @Query("SELECT p FROM Product p "
+         + "WHERE p.status <> com.openbake.product.domain.ProductStatus.DELETED")
+    Page<Product> findAllIndexTargets(Pageable pageable);
 
 }

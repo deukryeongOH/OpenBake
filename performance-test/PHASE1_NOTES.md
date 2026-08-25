@@ -36,3 +36,57 @@
 - 실행별 `summary.json` 및 `metadata.env` 생성
 
 이 상태가 확보되면 다음 단계에서 Grafana와 서버 지표 확인을 먼저 완성한 뒤, `ramping-vus` 기반 Capacity Test로 확장합니다.
+
+## Drop 유저 플로우
+
+기존의 개별 Drop 테스트를 한 사용자의 실제 흐름으로 연결한 시나리오입니다.
+
+```text
+GET  /api/v1/drops/{dropId}/info
+  -> POST /api/v1/drops/{dropId}/enter
+  -> GET  /api/v1/drops/{dropId}/queue/rank (ACTIVE까지 polling)
+  -> POST /api/v1/drops/{dropId}/confirm-entry
+  -> POST /api/v1/drops/{dropId}/lock-start
+```
+
+주문/장바구니/결제는 이 시나리오에 포함하지 않습니다.
+
+### 1. 테스트 데이터 준비
+
+```bash
+cd performance-test/prepare
+./prepare-drop.sh local 1
+```
+
+사용자 수를 늘릴 때는 `1`을 원하는 수로 변경합니다.
+
+### 2. Drop 유저 플로우 실행
+
+```bash
+cd ..
+./run-k6.sh local flow
+```
+
+### 3. 기존 단계별 테스트
+
+기존 테스트도 그대로 사용할 수 있습니다.
+
+```bash
+./run-k6.sh local enter
+./run-k6.sh local wait-active
+./run-k6.sh local confirm
+./run-k6.sh local lock
+```
+
+### 주요 유저 플로우 메트릭
+
+- `drop_user_flow_success`: 전체 Drop 흐름 성공 사용자 수
+- `drop_user_flow_failed`: 중간 단계 실패 사용자 수
+- `drop_flow_info_duration`: 드롭 상세 조회 시간
+- `drop_flow_enter_duration`: 대기열 진입 시간
+- `drop_flow_wait_active_duration`: ACTIVE가 되기까지의 사용자 대기 시간
+- `drop_flow_confirm_duration`: 입장 확정 시간
+- `drop_flow_lock_duration`: 재고 선점 시간
+- `drop_flow_total_duration`: 한 사용자의 전체 Drop 흐름 시간
+
+각 HTTP 요청에는 `test_type=drop-user-flow`와 `flow_step` 태그가 들어갑니다.

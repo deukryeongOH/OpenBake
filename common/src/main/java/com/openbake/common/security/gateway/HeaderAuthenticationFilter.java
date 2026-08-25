@@ -31,6 +31,18 @@ public final class HeaderAuthenticationFilter extends OncePerRequestFilter {
     private static final Pattern OPTIONAL_DROP_DETAIL_PATH =
             Pattern.compile("^/api/v1/drops/[1-9][0-9]*/info$");
 
+    // 게이트웨이 PublicEndpointPolicy.isOptionallyAuthenticated와 대칭 — 그쪽에서 익명 통과를
+    // 허용한 경로는 여기서도 신원 헤더 없이 통과시켜야 한다(안 그러면 헤더가 없다는 이유로
+    // 이 필터가 401로 막아버려 게이트웨이 정책이 무의미해진다).
+    private static final Pattern OPTIONAL_PRODUCT_LIST_PATH =
+            Pattern.compile("^/api/v1/products/product-list$");
+
+    private static final Pattern OPTIONAL_PRODUCT_AUTOCOMPLETE_PATH =
+            Pattern.compile("^/api/v1/products/autocomplete$");
+
+    private static final Pattern OPTIONAL_DROP_UPCOMING_PATH =
+            Pattern.compile("^/api/v1/drops/upcoming$");
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String method = request.getMethod();
@@ -72,7 +84,10 @@ public final class HeaderAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (OPTIONAL_PRODUCT_DETAIL_PATH.matcher(path).matches()
-                || OPTIONAL_DROP_DETAIL_PATH.matcher(path).matches()) {
+                || OPTIONAL_DROP_DETAIL_PATH.matcher(path).matches()
+                || OPTIONAL_PRODUCT_LIST_PATH.matcher(path).matches()
+                || OPTIONAL_PRODUCT_AUTOCOMPLETE_PATH.matcher(path).matches()
+                || OPTIONAL_DROP_UPCOMING_PATH.matcher(path).matches()) {
             return request.getHeader(GatewayIdentityHeaders.MEMBER_ID) == null
                     && request.getHeader(GatewayIdentityHeaders.MEMBER_ROLE) == null
                     && request.getHeader(GatewayIdentityHeaders.AUTH_SOURCE) == null;

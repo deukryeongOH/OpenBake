@@ -63,6 +63,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/sellers/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/drops/*/info").permitAll()
+                        // 홈/카테고리/검색 게스트 접근 허용 — product-list/autocomplete는 위 "/products/*"
+                        // 와일드카드가 이미 커버하지만, drops/upcoming은 "/drops/*/info"(2세그먼트) 패턴에
+                        // 걸리지 않아 별도로 명시해야 한다.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/drops/upcoming").permitAll()
                         .requestMatchers(AiServicePaths.SECURITY_MATCHERS)
                         .hasAuthority("SERVICE_AI")
                         /** 2. 관리자 전용 내부 API: 현재는 정산만 사용중 */

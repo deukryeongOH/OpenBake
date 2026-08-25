@@ -51,6 +51,17 @@ public class PublicEndpointPolicy {
     private static final Pattern OPTIONAL_DROP_DETAIL_PATH =
             Pattern.compile("^/api/v1/drops/[1-9][0-9]*/info$");
 
+    // 홈/카테고리/검색 화면의 목록·자동완성 조회 — 개인화 없이 누구나 볼 수 있는 데이터라
+    // 상세 조회와 같은 optional-auth로 연다. 추천(recommendations)은 개인화가 본질이라 제외.
+    private static final Pattern OPTIONAL_PRODUCT_LIST_PATH =
+            Pattern.compile("^/api/v1/products/product-list$");
+
+    private static final Pattern OPTIONAL_PRODUCT_AUTOCOMPLETE_PATH =
+            Pattern.compile("^/api/v1/products/autocomplete$");
+
+    private static final Pattern OPTIONAL_DROP_UPCOMING_PATH =
+            Pattern.compile("^/api/v1/drops/upcoming$");
+
     public boolean isPublic(ServerHttpRequest request) {
         HttpMethod method = request.getMethod();
         String rawPath = request.getURI().getRawPath();
@@ -80,7 +91,10 @@ public class PublicEndpointPolicy {
             return false;
         }
         return OPTIONAL_PRODUCT_DETAIL_PATH.matcher(rawPath).matches()
-                || OPTIONAL_DROP_DETAIL_PATH.matcher(rawPath).matches();
+                || OPTIONAL_DROP_DETAIL_PATH.matcher(rawPath).matches()
+                || OPTIONAL_PRODUCT_LIST_PATH.matcher(rawPath).matches()
+                || OPTIONAL_PRODUCT_AUTOCOMPLETE_PATH.matcher(rawPath).matches()
+                || OPTIONAL_DROP_UPCOMING_PATH.matcher(rawPath).matches();
     }
 
     private boolean isAllowedOAuthEndpoint(

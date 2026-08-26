@@ -71,7 +71,8 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 15m
+          # 순차 롤아웃이라 5개 기동 시간의 합이 든다(약 8~10분). 데이터 계층까지 포함해 여유를 둔다.
+          command_timeout: 30m
           script: |
             set -Eeuo pipefail
             export KUBECONFIG=$HOME/.kube/config
@@ -126,15 +127,34 @@ jobs:
               exit 1
             fi
 
+            # 2코어 노드에서 JVM 5개가 동시에 기동하면 서로 CPU를 뺏어 startupProbe를
+            # 넘기지 못한다. 2026-08-26에 새 Pod 4개가 한 노드에 몰려 전부 7~8회씩
+            # 재시작하며 10분 가까이 서로를 죽였다(옛 Pod가 살아 있어 서비스는 유지).
+            #
+            # apply 한 번으로 5개가 동시에 롤링되는 것이 원인이므로, 먼저 전부 멈춰둔
+            # 뒤 apply 하고 하나씩 재개해 기동을 직렬화한다. 배포 시간은 가장 느린
+            # 하나가 아니라 합이 되지만(약 8~10분), 동시 기동 실패보다 낫다.
+            APPS="member-service payment-service backend api-gateway ai-service"
+            for d in $APPS; do
+              kubectl -n openbake rollout pause "deployment/$d" || true
+            done
+
+            # 중간에 실패해 스크립트가 끊겨도 일시정지 상태가 남으면 이후 배포가
+            # 반영되지 않는다. 어떤 경로로 끝나든 반드시 재개한다.
+            trap 'for d in '"$APPS"'; do kubectl -n openbake rollout resume "deployment/$d" 2>/dev/null || true; done' EXIT
+
             kubectl apply -k .
             git checkout kustomization.yaml
-
-            # apply 한 번으로 5개 Deployment가 동시에 롤링된다. 아래 status는
-            # 순차로 기다릴 뿐이라 전체 소요는 합이 아니라 가장 느린 하나다.
             cd -
-            for d in member-service payment-service backend api-gateway ai-service; do
-              kubectl -n openbake rollout status "deployment/$d" --timeout=300s
+
+            # 하나씩 재개하고 Ready 를 확인한 뒤 다음으로 넘어간다.
+            # startupProbe 유예가 240초이므로 timeout 은 그보다 넉넉해야 한다.
+            for d in $APPS; do
+              echo "--- rollout: $d"
+              kubectl -n openbake rollout resume "deployment/$d" 2>/dev/null || true
+              kubectl -n openbake rollout status "deployment/$d" --timeout=420s
             done
+            trap - EXIT
 
             kubectl -n openbake get pod -o wide
             free -h

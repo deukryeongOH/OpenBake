@@ -1,31 +1,24 @@
 #!/usr/bin/env python3
-"""backend Pod 의 누적 카운터를 1초 해상도로 기록한다.
+"""api-gateway 의 누적 카운터를 1초 해상도로 기록한다.
 
-sample-backend.py 는 게이지(active/pending/process_cpu)만 본다. 그런데
-19번 문서 4-2 에서 정리했듯 `process_cpu_usage` 는 JVM 이 자체 계산하는
-롤링값이라 1초 해상도로 처리량과 짝지으면 오차가 커서, 같은 CSV 안에서도
-0.0 과 1.0 이 섞여 나온다. 그걸로 요청당 CPU 를 계산했다가 "CPU 가 병목"
-이라는 오진을 한 번 냈다.
+backend 쪽은 poll-backend.py 가 본다. 이 스크립트는 그 앞단인 게이트웨이를 본다.
+게이트웨이는 두 종류의 타이머를 노출한다.
 
-그래서 이 스크립트는 게이지 대신 **누적 카운터**만 모은다.
+    http_server_requests   게이트웨이가 요청 하나를 받아 응답할 때까지의 전체 시간
+    http_client_requests   그중 업스트림(backend·member-service)을 호출한 시간
 
-    요청당 CPU   = cpu.stat usage_usec 구간 차이 / 요청 수 구간 차이
-    acquire 평균 = hikaricp_connections_acquire_seconds_sum 차이 / count 차이
-    usage 평균   = hikaricp_connections_usage_seconds_sum   차이 / count 차이
+    필터 체인 몫 = 전체 - 업스트림
+                 = JWT 검증 + Redis 블랙리스트 확인 + 라우팅
 
-두 지점의 차이만 쓰므로 샘플 하나의 흔들림에 영향을 받지 않는다.
+이 차이를 구간별로 뽑아야 "지연이 게이트웨이 안에서 생기는가, 그 앞(Traefik·TLS·
+네트워크)에서 생기는가"를 가를 수 있다. 누적값을 한 번만 읽으면 여러 실행이
+뒤섞이므로 1초 해상도로 받아 구간 차이를 쓴다.
 
-수집 경로
-  - cpu.stat  : 노드의 컨테이너 cgroup 을 직접 읽는다(그래서 sudo 가 필요하고,
-                backend Pod 가 뜬 노드에서 실행해야 한다). kubectl exec 를 매초
-                돌리면 그 자체가 CPU 를 먹어 측정을 흔든다.
-  - 나머지    : Pod IP 로 /actuator/prometheus 를 직접 긁는다. k3s 노드에서는
-                Pod CIDR 이 라우팅되므로 port-forward 없이 닿는다.
-
-Pod 는 롤아웃마다 바뀌므로 읽기에 실패하면 대상을 다시 찾는다.
+cgroup 은 게이트웨이 Pod 가 도는 노드에서만 읽히므로 이 스크립트도 그 노드에서
+돌려야 하고, 그래서 sudo 가 필요하다.
 
 사용법
-    sudo -E python3 poll-backend.py <출력.csv>        # Ctrl-C 로 종료
+    sudo -E python3 poll-gateway.py <출력.csv>        # Ctrl-C 로 종료
 """
 import csv
 import re
@@ -34,18 +27,17 @@ import sys
 import time
 
 NS = "openbake"
-LABEL_SELECTOR = "app.kubernetes.io/name=backend"
+LABEL_SELECTOR = "app.kubernetes.io/name=api-gateway"
 
 FIELDS = [
     "ts", "pod",
     "cpu_usage_usec", "throttled_usec", "nr_throttled", "nr_periods", "psi_some_usec", "psi_full_usec",
-    "acq_sum", "acq_cnt", "use_sum", "use_cnt",
-    "http_cnt", "http_sum",
-    "tomcat_busy", "hikari_active", "hikari_pending", "process_cpu",
+    "srv_cnt", "srv_sum",          # 게이트웨이 전체 처리 (POST 성공분)
+    "cli_core_cnt", "cli_core_sum",  # backend 업스트림 호출
+    "srv_503_cnt",                 # 블랙리스트 타임아웃으로 잘린 요청
+    "process_cpu",
 ]
 
-# 라벨 값에 /api/v1/drops/{dropId}/... 처럼 '}' 가 들어간다.
-# [^}]* 로 끊으면 그 줄들이 통째로 누락되므로 탐욕적 .* 로 마지막 '}' 까지 먹는다.
 NUM = r"([0-9.eE+-]+)"
 
 
@@ -87,14 +79,7 @@ def sh(cmd: str) -> str:
 
 
 def resolve():
-    """이 노드에서 도는 backend Pod 의 이름 / IP / cgroup 경로를 찾는다.
-
-    replica 가 2개면 첫 번째 Pod 가 다른 노드에 있을 수 있다. cgroup 은 그 컨테이너가
-    실제로 도는 노드에서만 읽히므로, Pod 를 전부 훑어 **이 노드에 cgroup 이 있는 것**을
-    고른다. 그래서 이 폴러가 보는 것은 언제나 로컬 노드의 Pod 하나뿐이다 —
-    처리량은 전체의 일부지만, 요청당 CPU 와 acquire/usage 평균은 Pod 단위 값이라
-    그대로 유효하다.
-    """
+    """이 노드에서 도는 게이트웨이 Pod 의 이름 / IP / cgroup 경로."""
     rows = sh(
         f"kubectl -n {NS} get pod -l {LABEL_SELECTOR} -o jsonpath="
         "'{range .items[*]}{.metadata.name} {.status.podIP} "
@@ -111,9 +96,18 @@ def resolve():
     return None
 
 
-def metric(text: str, name: str):
-    m = re.search(r"^" + name + r"\{.*\}\s+" + NUM, text, re.M)
-    return m.group(1) if m else ""
+def sum_matching(text: str, metric: str, *must_contain) -> float:
+    """라벨에 must_contain 이 모두 들어간 줄만 합산한다."""
+    total = 0.0
+    for line in text.splitlines():
+        if not line.startswith(metric + "{"):
+            continue
+        if not all(token in line for token in must_contain):
+            continue
+        m = re.search(r"\}\s+" + NUM + r"\s*$", line)
+        if m:
+            total += float(m.group(1))
+    return total
 
 
 def main(out_path: str) -> None:
@@ -147,18 +141,19 @@ def main(out_path: str) -> None:
                 if not prom:
                     target = None
                 else:
-                    row["acq_sum"] = metric(prom, "hikaricp_connections_acquire_seconds_sum")
-                    row["acq_cnt"] = metric(prom, "hikaricp_connections_acquire_seconds_count")
-                    row["use_sum"] = metric(prom, "hikaricp_connections_usage_seconds_sum")
-                    row["use_cnt"] = metric(prom, "hikaricp_connections_usage_seconds_count")
-                    row["hikari_active"] = metric(prom, "hikaricp_connections_active")
-                    row["hikari_pending"] = metric(prom, "hikaricp_connections_pending")
-                    row["tomcat_busy"] = metric(prom, "tomcat_threads_busy_threads")
-                    row["process_cpu"] = metric(prom, "process_cpu_usage")
-                    counts = re.findall(r"^http_server_requests_seconds_count\{.*\}\s+" + NUM, prom, re.M)
-                    sums = re.findall(r"^http_server_requests_seconds_sum\{.*\}\s+" + NUM, prom, re.M)
-                    row["http_cnt"] = str(sum(float(c) for c in counts)) if counts else ""
-                    row["http_sum"] = str(sum(float(c) for c in sums)) if sums else ""
+                    # 드롭 부하는 전부 POST 다. 액추에이터 GET 이 섞이면 평균이 희석된다.
+                    row["srv_cnt"] = sum_matching(
+                        prom, "http_server_requests_seconds_count", 'method="POST"', 'status="200"')
+                    row["srv_sum"] = sum_matching(
+                        prom, "http_server_requests_seconds_sum", 'method="POST"', 'status="200"')
+                    row["srv_503_cnt"] = sum_matching(
+                        prom, "http_server_requests_seconds_count", 'method="POST"', 'status="503"')
+                    row["cli_core_cnt"] = sum_matching(
+                        prom, "http_client_requests_seconds_count", 'method="POST"', 'route_id="core-api"')
+                    row["cli_core_sum"] = sum_matching(
+                        prom, "http_client_requests_seconds_sum", 'method="POST"', 'route_id="core-api"')
+                    m = re.search(r"^process_cpu_usage\{.*\}\s+" + NUM, prom, re.M)
+                    row["process_cpu"] = m.group(1) if m else ""
 
             writer.writerow(row)
             fh.flush()
@@ -167,7 +162,7 @@ def main(out_path: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit("사용법: sudo -E python3 poll-backend.py <출력.csv>")
+        sys.exit("사용법: sudo -E python3 poll-gateway.py <출력.csv>")
     try:
         main(sys.argv[1])
     except KeyboardInterrupt:

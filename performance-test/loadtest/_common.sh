@@ -128,7 +128,7 @@ run_scenario() {
   # k6 기본 summaryTrendStats 는 avg/min/med/max/p(90)/p(95) 뿐이라 p(99) 가 summary-export 에도
   # 빠진다. NFR 판정 기준(P99 3000ms)이 이 값에 의존하므로 명시적으로 넣지 않으면
   # diagnose.py 가 "측정값 없음"을 통과로 오인할 수 있다.
-  K6_SUMMARY_TREND_STATS='avg,min,med,p(90),p(95),p(99),max' \
+  K6_SUMMARY_TREND_STATS='avg,min,med,p(90),p(95),p(99),max,count' \
   k6 run \
     --summary-export "$run_dir/summary.json" \
     --tag "testid=${ts}-${scenario}-u${users}" \

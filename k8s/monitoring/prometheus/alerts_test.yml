@@ -107,6 +107,55 @@ tests:
         alertname: PodRestartingRepeatedly
         exp_alerts: []
 
+  # 회로가 잠깐 열렸다 닫히는 것은 정상 동작이라 발화하면 안 된다(for: 5m).
+  - interval: 1m
+    input_series:
+      - series: 'resilience4j_circuitbreaker_state{state="open",name="elasticsearch"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: CircuitBreakerOpen
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'resilience4j_circuitbreaker_state{state="open",name="ai-semantic-search"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CircuitBreakerOpen
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              name: ai-semantic-search
+            exp_annotations:
+              summary: "ai-semantic-search 회로 차단기가 5분 이상 OPEN"
+              description: "해당 의존성 호출이 차단되고 폴백으로 처리 중이다. elasticsearch는 RDB 폴백, ai-semantic-search는 BM25 검색으로 내려간다. 의존성 자체를 확인한다."
+
+  - interval: 1m
+    input_series:
+      - series: 'openbake_order_active_slot_leaked'
+        values: '2x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OrderActiveSlotLeaked
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "주문 슬롯 누수 2건"
+              description: "종료된 주문이 진행 중 슬롯을 반납하지 않았다. 해당 회원은 새 주문을 만들 수 없다."
+
+  # 누수가 0이면 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_order_active_slot_leaked'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OrderActiveSlotLeaked
+        exp_alerts: []
+
   # Outbox 가장 오래된 PENDING이 600초. 임계값 300초를 넘겨야 한다.
   - interval: 1m
     input_series:

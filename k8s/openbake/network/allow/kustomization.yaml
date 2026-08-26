@@ -24,4 +24,6 @@ resources:
   - allow-backend-to-elasticsearch.yaml
   - allow-to-kafka.yaml
   - allow-grafana-to-prometheus.yaml
+  - allow-prometheus-to-node-exporter.yaml
+  - allow-prometheus-to-kube-state-metrics.yaml
   - allow-to-loki.yaml

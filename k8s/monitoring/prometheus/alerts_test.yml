@@ -1,0 +1,125 @@
+# configmap.yaml의 alerts.yml 키에 대한 promtool 단위 테스트.
+# kustomization.yaml의 resource가 아니므로 클러스터에 배포되지 않는다.
+#
+# 실행: configmap에서 alerts.yml 키를 꺼내 이 파일과 같은 디렉터리에 둔 뒤
+#   promtool test rules alerts_test.yml
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # 사용률 75%: warning만 발화하고 critical/emergency는 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",fstype="ext4",node="node-a"}'
+        values: '25x20'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",fstype="ext4",node="node-a"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NodeDiskUsageWarning
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              mountpoint: "/"
+              fstype: ext4
+              node: node-a
+            exp_annotations:
+              summary: "node-a root 디스크 사용률 70% 초과"
+              description: "현재 75.0%. 큰 directory·image·log·TSDB 증가 원인을 확인한다."
+      - eval_time: 15m
+        alertname: NodeDiskUsageCritical
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: NodeDiskUsageEmergency
+        exp_alerts: []
+
+  # 사용률 95%: 세 단계가 모두 발화해야 한다(단계별 for가 짧을수록 먼저 뜬다).
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",fstype="ext4",node="node-b"}'
+        values: '5x20'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",fstype="ext4",node="node-b"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NodeDiskUsageEmergency
+        exp_alerts:
+          - exp_labels:
+              severity: emergency
+              mountpoint: "/"
+              fstype: ext4
+              node: node-b
+            exp_annotations:
+              summary: "node-b root 디스크 사용률 90% 초과"
+              description: "현재 95.0%. 쓰기 폭증을 차단하고 즉시 용량을 회수한다."
+
+  # tmpfs/overlay는 root EBS가 아니므로 제외되어야 한다. 100% 차 있어도 발화하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",fstype="tmpfs",node="node-a"}'
+        values: '0x20'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",fstype="tmpfs",node="node-a"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NodeDiskUsageWarning
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_last_terminated_reason{reason="OOMKilled",namespace="openbake",pod="backend-0",container="backend"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PodOOMKilled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              reason: OOMKilled
+              namespace: openbake
+              pod: backend-0
+              container: backend
+            exp_annotations:
+              summary: "openbake/backend-0 OOMKilled"
+              description: "container=backend. memory limit과 누수 여부를 확인한다."
+
+  # 15분간 4회 재시작하는 Pod. increase() > 2 조건을 넘겨야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="openbake",pod="ai-service-0",container="ai-service"}'
+        values: '0 0 0 1 1 2 2 3 3 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PodRestartingRepeatedly
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: openbake
+              pod: ai-service-0
+              container: ai-service
+            exp_annotations:
+              summary: "openbake/ai-service-0 반복 재시작"
+              description: "15분간 약 4회 재시작. 프로세스가 살아나도 Outbox·DLT·PENDING 적체는 별도 확인이 필요하다."
+      # 재시작이 멈춘 뒤에는 창이 지나가면서 스스로 해제되어야 한다.
+      - eval_time: 30m
+        alertname: PodRestartingRepeatedly
+        exp_alerts: []
+
+  # Outbox 가장 오래된 PENDING이 600초. 임계값 300초를 넘겨야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_outbox_oldest_age_seconds{job="openbake-core"}'
+        values: '600x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OutboxPendingAgeHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              threshold_status: provisional
+              job: openbake-core
+            exp_annotations:
+              summary: "openbake-core Outbox 미발행 이벤트 정체"
+              description: "가장 오래된 PENDING 이벤트가 600초. 발행기·브로커·DB 락을 확인한다. count가 적어도 age가 크면 특정 데이터가 계속 낡는다."

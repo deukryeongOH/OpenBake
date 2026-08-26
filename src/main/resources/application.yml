@@ -29,7 +29,18 @@ spring:
     password: ${DB_PASSWORD}
     hikari:
       connection-init-sql: SET SESSION lock_timeout = '10s'
-      maximum-pool-size: 10
+      # 2026-08-25 실측(300 동시, drop lock-start):
+      #   커넥션 점유 avg 135ms / 대기 avg 1,123ms — 대기가 점유의 8배다.
+      #   풀 10 ÷ 점유 135ms = 이론 74 req/s 가 처리량 상한을 만들고 있었다.
+      #   Tomcat 스레드 144/200 이 도는 동안 pending 이 98까지 갔다.
+      #
+      # core-postgres 의 max_connections 는 100이다. replica 3까지 늘려도
+      # 20 × 3 = 60 이라 예약분(3)과 백업 Job 을 빼도 여유가 있다.
+      #
+      # 점유 135ms 자체가 과하다 — @Transactional 안에서 Redis Lua 응답을
+      # 기다리는 동안 커넥션을 놓지 않기 때문이다. 그 범위를 줄이는 것이
+      # 근본 해결이며 별도 과제로 둔다. 풀 상향은 그전까지의 완화책이다.
+      maximum-pool-size: 20
 
   data:
     redis:

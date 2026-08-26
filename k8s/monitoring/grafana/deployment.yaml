@@ -63,10 +63,17 @@ spec:
           resources:
             requests:
               cpu: 100m
+              # request는 일부러 올리지 않는다. 2026-08-26 기준 Node B는 메모리
+              # request가 87%이고 HPA가 backend replica 2개째(640Mi)를 이 노드에
+              # 띄운다. request를 올리면 그 자리를 먹어 HPA 확장을 막을 수 있다.
+              # 실사용 하한(249Mi)보다 낮지만, 스케줄 압박을 만들지 않는 쪽을 택했다.
               memory: 128Mi
             limits:
               cpu: 300m
-              memory: 512Mi
+              # 2026-08-26: reason=OOMKilled로 재시작이 반복됐다. 실측 최고가
+              # 498Mi로 limit 512Mi에 계속 부딪혔다(패널 47개를 조회할 때 몰린다).
+              # limit은 스케줄링에 쓰이지 않으므로 올려도 배치에 영향이 없다.
+              memory: 768Mi
           volumeMounts:
             - name: data
               mountPath: /var/lib/grafana

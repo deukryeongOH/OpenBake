@@ -179,8 +179,12 @@ public class JwtAuthenticationGlobalFilter
                 .getURI()
                 .getRawPath();
 
+        // /internal/**(관리자 전용 정산 API)도 이 필터를 거쳐야 X-Openbake-Member-Id/Role이
+        // 채워진다 — 안 그러면 유효한 관리자 토큰으로 요청해도 신원 헤더 없이 그대로 넘어가
+        // root의 HeaderAuthenticationFilter가 비로그인 요청으로 보고 401을 낸다(게이트웨이에
+        // /internal/** 라우트를 추가한 뒤 2026-08-26 브라우저 E2E로 발견).
         return rawPath != null
-                && rawPath.startsWith("/api/");
+                && (rawPath.startsWith("/api/") || rawPath.startsWith("/internal/"));
     }
 
     private ServerWebExchange withVerifiedIdentity(

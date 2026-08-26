@@ -4,6 +4,7 @@ kind: Kustomization
 # Loki와 log-agent는 이번 범위에서 제외한다. 03번 문서에 자원 예약값만 있고 설정 설계가 없다.
 resources:
   - prometheus
+  - alertmanager
   - grafana
   - node-exporter
   - kube-state-metrics

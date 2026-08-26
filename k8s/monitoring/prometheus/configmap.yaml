@@ -17,9 +17,14 @@ data:
       evaluation_interval: 15s
 
     # 같은 ConfigMap의 alerts.yml 키가 statefulset의 config 볼륨을 통해 이 경로에 붙는다.
-    # Alertmanager는 아직 없다. 규칙은 Prometheus /alerts와 ALERTS metric으로만 보인다.
     rule_files:
       - /etc/prometheus/alerts.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager.monitoring.svc.cluster.local:9093
 
     scrape_configs:
       - job_name: "openbake-apps"
@@ -197,6 +202,65 @@ data:
 
   alerts.yml: |
     groups:
+      # 09번 문서 3장은 Job 실행만으로 성공을 판단하지 말라고 한다. 실패는 물론
+      # "예정대로 돌지 않은 것"과 "최근 성공이 없는 것"도 따로 봐야 한다.
+      # 2026-08-26: member·payment 백업이 31시간째 실패 중이었는데 아무도 몰랐다.
+      # kube_job_status_failed는 그때도 값을 내고 있었고 경보만 없었다.
+      - name: backup
+        rules:
+          - alert: BackupJobFailed
+            expr: kube_job_status_failed{namespace="openbake", job_name=~"postgres-backup-.*"} > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.job_name }} 백업 실패"
+              description: "DB 백업 Job이 실패했다. 실패가 반복되면 복구 지점이 사라진다."
+              runbook: "docs/infra/k3s/09-storage-backup-disaster-recovery-design.md"
+          # 성공 자체가 오래 없으면 실패 경보가 없어도 문제다. CronJob이 아예
+          # 스케줄되지 않는 경우(suspend, 노드 문제)를 여기서 잡는다.
+          - alert: BackupNotSucceededRecently
+            expr: |
+              time() - max by (cronjob) (
+                kube_cronjob_status_last_schedule_time{namespace="openbake", cronjob=~"postgres-backup-.*"}
+              ) > 93600
+            for: 30m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.cronjob }} 26시간 이상 실행되지 않음"
+              description: "마지막 스케줄 이후 {{ $value | printf \"%.0f\" }}초 경과. 일 1회 주기이므로 26시간을 넘으면 한 번 걸렀다는 뜻이다."
+              runbook: "docs/infra/k3s/09-storage-backup-disaster-recovery-design.md"
+
+      # 수집이 멈춰도 지금은 아무 신호가 없다. 관측 시스템이 눈이 먼 것을
+      # 탐지하는 유일한 경로다. up은 target이 살아 있을 때만 존재하므로,
+      # target 자체가 사라지는 경우를 위해 absent()를 함께 둔다.
+      - name: scrape-health
+        rules:
+          - alert: TargetDown
+            expr: up == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.job }} 수집 실패"
+              description: "instance={{ $labels.instance }}. 이 대상의 지표가 더 이상 들어오지 않는다. 관련 경보도 함께 침묵하므로 다른 신호를 신뢰할 수 없다."
+          # 아래 job들은 항상 존재해야 한다. 사라지면 up 자체가 없어져
+          # TargetDown이 발화하지 못하므로 absent로 따로 잡는다.
+          - alert: ScrapeJobAbsent
+            expr: |
+              absent(up{job="openbake-core"}) or absent(up{job="openbake-gateway"})
+              or absent(up{job="node-exporter"}) or absent(up{job="kube-state-metrics"})
+              or absent(up{job="redis-exporter"}) or absent(up{job="kafka-exporter"})
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              # absent()는 셀렉터의 라벨을 그대로 결과에 남긴다. 어느 job이
+              # 사라졌는지 여기서 드러난다.
+              summary: "{{ $labels.job }} scrape job이 사라졌다"
+              description: "Pod discovery에서 대상이 빠졌거나 Prometheus 설정이 잘못됐다. up 지표 자체가 없어 TargetDown으로는 잡히지 않는다."
+
       # 09번 문서 5장이 확정한 root EBS 사용률 기준을 그대로 옮긴 것이다.
       # 두 Node의 PVC가 물리적으로 같은 디스크를 쓰므로 한 워크로드의 폭증이
       # 같은 Node의 DB·kubelet까지 함께 무너뜨린다(09번 문서 1장).

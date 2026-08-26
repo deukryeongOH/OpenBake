@@ -28,4 +28,5 @@ resources:
   - allow-prometheus-to-kube-state-metrics.yaml
   - allow-prometheus-to-redis-exporter.yaml
   - allow-prometheus-to-kafka-exporter.yaml
+  - allow-prometheus-to-alertmanager.yaml
   - allow-to-loki.yaml

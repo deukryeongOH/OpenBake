@@ -36,7 +36,10 @@ spec:
                       - service
       containers:
         - name: grafana
-          image: grafana/grafana:latest
+          # latest는 imagePullPolicy가 Always로 잡혀 재시작마다 새 버전을 받는다.
+          # 예고 없이 메이저 버전이 바뀌면 기동 시 DB 마이그레이션이 돌고 그동안
+          # /api/health가 응답하지 못해 probe에 걸린다. 2026-08-26 실측 버전으로 고정한다.
+          image: grafana/grafana:13.2.0
           ports:
             - containerPort: 3000
               name: http
@@ -88,7 +91,10 @@ spec:
               path: /api/health
               port: 3000
             periodSeconds: 10
-            timeoutSeconds: 2
+            # 2026-08-26: 대시보드를 열면 패널 쿼리가 몰려 /api/health가 2초를 넘기고,
+            # 정상 동작 중인 Grafana가 liveness에 걸려 죽었다(exitCode 137).
+            # 로그상 내부 처리가 4초 이상 막힌 구간이 있어 5초로 늘린다.
+            timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:

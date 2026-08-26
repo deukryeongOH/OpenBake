@@ -61,6 +61,11 @@ export PERF_WARMUP_SECONDS="${PERF_WARMUP_SECONDS:-60}"
 export ACCOUNT_WORKERS="${ACCOUNT_WORKERS:-16}"
 # 토큰이 이만큼 이상 남아 있으면 재발급하지 않는다(300명 재발급에 7분이 든다).
 MIN_TOKEN_MINUTES="${MIN_TOKEN_MINUTES:-15}"
+# 만들 드롭 개수. 첫 번째는 예열용(버림), 나머지가 측정용이다.
+# TodayDropCache 는 당일 드롭을 리스트로 들고 기동 시 refresh 하므로, 롤아웃 전에
+# 여러 개를 만들어두면 한 번의 기동으로 전부 캐시에 올라온다. 경로나 구성을 바꿔가며
+# 여러 번 재야 할 때, 재기동 없이 같은 JVM 예열 상태에서 비교할 수 있다.
+DROP_COUNT="${DROP_COUNT:-2}"
 
 RESULTS_ROOT="${RESULTS_ROOT:-$PERF_DIR/results/loadtest/warm-$LABEL}"
 export RESULTS_ROOT
@@ -83,7 +88,9 @@ start_poller() {
     warn "sudo 가 통하지 않아 누적 카운터 수집을 건너뜁니다(요청당 CPU·acquire 평균 없음)."
     return
   fi
-  sudo -n env "KUBECONFIG=${KUBECONFIG:-$HOME/.kube/config}" \
+  # PYTHONDONTWRITEBYTECODE: sudo 로 돌면 __pycache__ 가 root 소유로 남아
+  # 일반 계정이 지우지 못한다(2026-08-26에 실제로 걸렸다).
+  sudo -n env "KUBECONFIG=${KUBECONFIG:-$HOME/.kube/config}" PYTHONDONTWRITEBYTECODE=1 \
     python3 "$LOADTEST_DIR/poll-backend.py" "$POLL_CSV" \
     > "$RESULTS_ROOT/poll.log" 2>&1 < /dev/null &
   POLLER_PID=$!
@@ -187,13 +194,18 @@ fi
 cp "$USERS_FILE" "$PERF_DIR/users.json"
 
 # --- 2) 드롭 두 개 ---
-log "드롭 2개 생성 (예열용 A, 측정용 B / 각 재고 ${STOCK})"
+log "드롭 ${DROP_COUNT}개 생성 (1번=예열용, 나머지=측정용 / 각 재고 ${STOCK})"
 # make_drop 안의 die 는 $( ) 서브셸만 끝낸다. 부모가 그걸 모르고 계속 가면
 # 빈 dropId 로 측정을 돌게 되므로 여기서 종료 코드와 값을 모두 확인한다.
-DROP_A="$(make_drop a)" || die "드롭 생성 실패(A). $RESULTS_ROOT/prepare-a.txt 확인"
-DROP_B="$(make_drop b)" || die "드롭 생성 실패(B). $RESULTS_ROOT/prepare-b.txt 확인"
-[[ -n "$DROP_A" && -n "$DROP_B" ]] || die "dropId 를 찾지 못했습니다. $RESULTS_ROOT/prepare-*.txt 확인"
-echo "  예열용 A = $DROP_A / 측정용 B = $DROP_B"
+DROPS=()
+for i in $(seq 1 "$DROP_COUNT"); do
+  d="$(make_drop "$i")" || die "드롭 생성 실패($i). $RESULTS_ROOT/prepare-$i.txt 확인"
+  [[ -n "$d" ]] || die "dropId 를 찾지 못했습니다. $RESULTS_ROOT/prepare-$i.txt 확인"
+  DROPS+=("$d")
+done
+DROP_A="${DROPS[0]}"
+DROP_B="${DROPS[1]}"
+echo "  예열용 = $DROP_A / 측정용 = ${DROPS[*]:1}"
 
 start_poller
 
@@ -209,8 +221,8 @@ if [[ "$PREP_ONLY" == "true" ]]; then
 ========================================================
  준비 완료 — k6 는 다른 호스트에서 돌린다
 ========================================================
- 예열용 드롭 A : $DROP_A
- 측정용 드롭 B : $DROP_B
+ 예열용 드롭   : $DROP_A
+ 측정용 드롭   : ${DROPS[*]:1}
  계정 파일     : $PERF_DIR/users-${USERS}.json
 ========================================================
 EOF_PREP

@@ -53,14 +53,18 @@ def find_windows(rows, min_rps):
 
 def report(rows, a, b):
     first, last = rows[a], rows[b]
-    d = lambda k: (num(last, k) or 0) - (num(first, k) or 0)
+    def d(k):
+        a, b = num(first, k), num(last, k)
+        if a is None or b is None:
+            return None
+        return b - a
     reqs = d("http_cnt")
-    if reqs <= 0:
+    if not reqs or reqs <= 0:
         return
-    secs = d("http_sum")
-    cpu = d("cpu_usage_usec") / 1e6
-    periods, throttled = d("nr_periods"), d("nr_throttled")
-    acq_n = d("acq_cnt")
+    secs = d("http_sum") or 0
+    cpu = (d("cpu_usage_usec") or 0) / 1e6
+    periods, throttled = d("nr_periods") or 0, d("nr_throttled") or 0
+    acq_n = d("acq_cnt") or 0
     span = b - a
 
     peak = lambda k: max((num(r, k) or 0) for r in rows[a:b + 1])
@@ -70,11 +74,20 @@ def report(rows, a, b):
           + (f"  서버 처리 평균 {secs / reqs * 1000:.0f}ms" if secs else ""))
     print(f"  요청당 CPU  {cpu / reqs * 1000:.1f}ms   (구간 CPU {cpu:.2f}s)")
     if periods:
-        print(f"  스로틀      {d('throttled_usec') / 1000:.0f}ms / {throttled:.0f}회"
+        print(f"  스로틀      {(d('throttled_usec') or 0) / 1000:.0f}ms / {throttled:.0f}회"
               f"  ({throttled / periods * 100:.1f}% of {periods:.0f} periods)")
+
+    # PSI. 스로틀이 0이어도 여기가 높으면 "쿼터는 남았는데 노드가 CPU를 안 준" 상태다.
+    # 그 경우 limit 이 아니라 request(=cpu.weight)를 올려야 한다.
+    psi_some, psi_full = d("psi_some_usec"), d("psi_full_usec")
+    if psi_some is not None and span > 0:
+        window_usec = span * 1_000_000
+        print(f"  CPU 정체    some {psi_some / window_usec * 100:.0f}%"
+              f"  full {(psi_full or 0) / window_usec * 100:.0f}%"
+              "   (일할 준비가 됐는데 CPU를 못 받은 시간)")
     if acq_n:
-        print(f"  커넥션 대기 acquire 평균 {d('acq_sum') / acq_n * 1000:.0f}ms   "
-              f"점유 usage 평균 {d('use_sum') / acq_n * 1000:.0f}ms   (n={acq_n:.0f})")
+        print(f"  커넥션 대기 acquire 평균 {(d('acq_sum') or 0) / acq_n * 1000:.0f}ms   "
+              f"점유 usage 평균 {(d('use_sum') or 0) / acq_n * 1000:.0f}ms   (n={acq_n:.0f})")
     print(f"  피크        Hikari active {peak('hikari_active'):.0f} / "
           f"pending {peak('hikari_pending'):.0f} / "
           f"Tomcat busy {peak('tomcat_busy'):.0f}")

@@ -1543,7 +1543,7 @@
       "id": 131,
       "type": "timeseries",
       "title": "Kafka consumer lag",
-      "description": "컨슈머가 생산 속도를 따라가는지. 지속적으로 우상향이면 처리량이 부족한 것이다. 클라이언트 측 지표라 컨슈머가 살아 있을 때만 나온다.",
+      "description": "컨슈머가 생산 속도를 따라가는지. 파티션별 lag 중 최댓값이다. 클라이언트 측 지표라 컨슈머가 죽으면 지표 자체가 사라진다 — '밀리는 중'은 보이지만 '죽어서 안 먹는 중'은 브로커 측 exporter가 있어야 보인다.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1560,8 +1560,158 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (client_id) (kafka_consumer_fetch_manager_records_lag_max)",
-          "legendFormat": "{{client_id}}",
+          "expr": "max by (topic) (kafka_consumer_fetch_manager_records_lag{topic=~\".*\\..*\"})",
+          "legendFormat": "{{topic}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 140,
+      "type": "row",
+      "title": "외부 의존성 격리 — 회로 차단기",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 95,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 141,
+      "type": "timeseries",
+      "title": "회로 차단기 상태 (OPEN=1)",
+      "description": "elasticsearch·ai-semantic-search 회로가 열리면 해당 의존성을 끊고 폴백으로 넘어간 것이다. 열렸다는 사실만 알려줄 뿐 왜 느린지는 알려주지 않으므로, 원인은 해당 서비스에서 확인한다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 96,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name) (resilience4j_circuitbreaker_state{state=\"open\"})",
+          "legendFormat": "{{name}} OPEN",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name) (resilience4j_circuitbreaker_state{state=\"half_open\"})",
+          "legendFormat": "{{name}} HALF_OPEN",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 142,
+      "type": "timeseries",
+      "title": "회로 차단기 실패율",
+      "description": "임계치(50%)에 근접하면 곧 열린다. -1은 표본이 최소 호출 수에 못 미쳐 판정 전이라는 뜻이다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 96,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name) (resilience4j_circuitbreaker_failure_rate)",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 143,
+      "type": "timeseries",
+      "title": "회로 차단으로 거부된 호출",
+      "description": "회로가 열린 동안 아예 시도조차 못 한 호출 수. 사용자가 폴백 품질을 체감하는 양이다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 96,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (name) (rate(resilience4j_circuitbreaker_not_permitted_calls_total[5m]))",
+          "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],

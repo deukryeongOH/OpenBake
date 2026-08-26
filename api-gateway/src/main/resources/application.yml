@@ -8,7 +8,18 @@ jwt:
 openbake:
   security:
     gateway-jwt-enabled: ${GATEWAY_JWT_ENABLED:false}
-    blacklist-timeout: ${BLACKLIST_TIMEOUT:300ms}
+    # 모든 요청이 게이트웨이에서 Redis 블랙리스트를 한 번 확인하고, 이 시간을 넘기면
+    # 503 AUTHENTICATION_SERVICE_UNAVAILABLE 로 잘린다(fail-closed). 값이 작으면
+    # Redis 가 살아 있는데도 잠깐 밀린 요청까지 죽인다.
+    #
+    # 2026-08-25 실측(300 동시, k3s): 노드 CPU 포화 구간에서 이 확인이 2초를 넘긴
+    # 요청이 13% 나왔다. 서버 작업 자체는 EXISTS 한 번이라 마이크로초 단위이므로,
+    # 넘긴 원인은 Redis 가 아니라 큐 지연이다. 300ms 는 그 지연을 감당하지 못한다.
+    #
+    # 운영 클러스터는 ConfigMap(gateway-config.yaml)에서 2000ms 로 덮어쓰고 있다.
+    # 여기 기본값은 ConfigMap 이 없는 환경(로컬·신규 환경)에 적용되므로, 그쪽이
+    # 300ms 로 남지 않도록 1000ms 로 둔다. NFR(p95 1500ms) 안에 들어가는 값이다.
+    blacklist-timeout: ${BLACKLIST_TIMEOUT:1000ms}
 
 spring:
   application:

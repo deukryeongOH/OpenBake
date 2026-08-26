@@ -156,6 +156,52 @@ tests:
         alertname: OrderActiveSlotLeaked
         exp_alerts: []
 
+  # 외부에서 접근이 안 되면 발화한다. 내부 지표가 정상이어도 사용자 영향이다.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",instance="https://3.38.24.67.sslip.io/api/v1/products/product-list"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ExternalEndpointDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox-http
+              instance: "https://3.38.24.67.sslip.io/api/v1/products/product-list"
+            exp_annotations:
+              summary: "외부에서 https://3.38.24.67.sslip.io/api/v1/products/product-list 접근 실패"
+              description: "Pod가 살아 있어도 Traefik·TLS·게이트웨이 경로가 깨지면 사용자는 못 쓴다. 내부 지표가 모두 정상이어도 이 경보는 사용자 영향을 뜻한다."
+              runbook: "docs/observability/roadmap.md"
+
+  # 정상이면 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",instance="https://3.38.24.67.sslip.io/api/v1/drops/upcoming"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ExternalEndpointDown
+        exp_alerts: []
+
+  # CORS 거부 — 2026-08-26에 실제로 있었던 상황이다.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http-cors",instance="https://3.38.24.67.sslip.io/api/v1/products/product-list"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FrontendOriginRejected
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox-http-cors
+              instance: "https://3.38.24.67.sslip.io/api/v1/products/product-list"
+            exp_annotations:
+              summary: "운영 프론트엔드 Origin이 거부되고 있다"
+              description: "Vercel Origin으로 보낸 요청이 200을 받지 못한다. CORS 설정(OPENBAKE_SECURITY_CORS_ALLOWED_ORIGINS)이나 게이트웨이 경로를 확인한다."
+              runbook: "docs/observability/rollout-log.md"
+
   # 백업 Job이 실패하면 발화한다.
   - interval: 1m
     input_series:

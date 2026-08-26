@@ -169,6 +169,12 @@ openbake:
     auto-confirm-delay: PT1H
 
 logging:
+  # 요청 하나가 서비스를 가로지른 경로를 로그로 따라가려면 X-Request-Id가 로그에
+  # 있어야 한다. 게이트웨이의 RequestIdFilter는 헤더 전달만 하고, 각 서비스가
+  # common의 RequestIdMdcFilter로 MDC에 넣어야 %X{requestId}가 채워진다.
+  # 값이 없는 로그(기동·배치)는 대괄호 안이 비어 보인다.
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
   level:
     org.hibernate.orm.jdbc.bind: trace
 

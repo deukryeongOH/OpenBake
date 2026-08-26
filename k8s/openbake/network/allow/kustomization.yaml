@@ -29,4 +29,5 @@ resources:
   - allow-prometheus-to-redis-exporter.yaml
   - allow-prometheus-to-kafka-exporter.yaml
   - allow-prometheus-to-alertmanager.yaml
+  - allow-prometheus-to-blackbox-exporter.yaml
   - allow-to-loki.yaml

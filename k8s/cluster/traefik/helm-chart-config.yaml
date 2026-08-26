@@ -46,6 +46,25 @@ spec:
       - "--certificatesresolvers.letsencrypt.acme.email=hhh3915@gmail.com"
       - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # 인증서 키를 ECDSA P-256으로. Traefik ACME 기본값은 RSA4096이다.
+      #
+      # 2026-08-26 실측(node-a, openssl speed): TLS 1.3에서 핸드셰이크마다 서버가
+      # 개인키 서명을 한 번 한다. 그 연산이
+      #     RSA 4096      초당    186회   <- 기본값
+      #     RSA 2048      초당  1,141회
+      #     ECDSA P-256   초당 28,201회
+      # 이다. 드롭 오픈은 300명이 동시에 새 연결을 맺으므로 RSA4096이면 그 서명에만
+      # 1.61 CPU-초가 필요하고, Traefik의 limit은 1코어다. 실제로 신규 연결 측정에서
+      # 요청이 게이트웨이에 닿기까지 2.18초가 걸렸다(연결을 미리 세우면 0.30초).
+      #
+      # 클라이언트 검증은 RSA 10,843회/s 대 ECDSA 8,778회/s로 차이가 미미하다.
+      # 보안 강도는 P-256이 RSA 3072 상당이라 4096보다 낮지만 현실적 공격 임계보다
+      # 한참 위이고, 주요 CDN의 기본 선택이다.
+      #
+      # keytype만 바꾸면 acme.json에 저장된 기존 인증서를 만료 30일 전까지 계속 쓴다.
+      # 전환하려면 저장된 인증서를 지워 재발급을 유도해야 하며, 그 사이 10~60초 동안
+      # 자체 서명 인증서로 응답한다.
+      - "--certificatesresolvers.letsencrypt.acme.keytype=EC256"
       # HTTP → HTTPS 리다이렉트. chart의 `ports.web.redirections` 키는 이 버전에서
       # args를 만들지 않아(2026-08-23 실측) 직접 넣는다. ACME HTTP-01 챌린지 라우터가
       # 이 리다이렉트보다 우선하므로 인증서 갱신에는 영향이 없다.

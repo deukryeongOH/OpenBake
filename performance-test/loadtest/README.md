@@ -21,8 +21,32 @@ NFR을 넘겼을 때 원인을 진단해 로그에 남긴다.
 | `run-<N>.sh` | 티어별 진입점. 사용자 수와 재고만 정하고 `run_tier` 호출 |
 | `_common.sh` | 실제 절차. 계정 → 드롭 → 롤아웃 → 예열 → confirm → lock → 판정 |
 | `create-users.py` | 계정 생성 + 로그인 → `users-<N>.json` |
-| `sample-backend.py` | backend Pod 지표를 **1초 해상도**로 수집 |
+| `sample-backend.py` | backend Pod 지표를 **1초 해상도**로 수집 (게이지) |
 | `diagnose.py` | NFR 판정 + 원인 진단 + 로그 기록 |
+| `warm-measure.sh` | **쓰기 경로까지 예열**하는 측정. 구성 A/B 비교용 |
+| `poll-backend.py` | 누적 카운터 수집 (cgroup `cpu.stat` + `/actuator/prometheus`) |
+| `poll-report.py` | 부하 구간 자동 탐지 + 구간 차이로 지표 계산 |
+| `run-k6-local.sh` | k6만 다른 호스트에서 실행 |
+
+### `run-<N>.sh` vs `warm-measure.sh`
+
+`run-<N>.sh`의 예열은 **`GET /drops/{id}/info` 300회뿐**이다. 정작 재려는
+`confirm-entry`·`lock-start`는 한 번도 실행되지 않은 채 k6가 시작하므로,
+**측정 구간이 그대로 JIT 컴파일 구간이 된다.** 같은 구성인데 예열 유무로
+lock p95가 6.08s와 3.48s로 갈렸다(2026-08-25 실측).
+
+**구성을 바꿔가며 비교할 때는 `warm-measure.sh`를 쓴다.** 드롭 두 개를 만들어
+첫 드롭으로 쓰기 경로를 데우고, 재기동 없이 두 번째 드롭에서 잰다.
+
+```bash
+export KUBECONFIG=$HOME/.kube/config
+kubectl -n openbake port-forward svc/api-gateway 18080:8080 &
+CORE_BASE_URL=http://127.0.0.1:18080 ./warm-measure.sh <라벨> 300 300
+python3 poll-report.py ../results/loadtest/warm-<라벨>/poll.csv
+```
+
+측정 결과와 해석은 `performance-test/LOAD-TEST-REPORT.md`에 있다.
+**절대 수치를 인용하기 전에 그 문서의 2절(답할 수 있는 질문/없는 질문)을 읽는다.**
 
 절차를 `_common.sh` 한 곳에 모은 이유는, 티어별로 복사하면 한쪽만 수정되는 사고가 나기 때문이다.
 티어 파일은 값만 다르다.

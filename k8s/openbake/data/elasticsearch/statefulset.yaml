@@ -54,7 +54,13 @@ spec:
               name: http
           resources:
             requests:
-              cpu: 300m
+              # 2026-08-26 자원 재배분. node-a 의 CPU request 가 100%라 api-gateway 를
+              # 올릴 자리를 만들어야 했다(사유는 ai-service/deployment.yaml 참고).
+              #
+              # 유휴 실사용은 8m 다. 다만 상품 검색 경로에 있어 실사용자 트래픽에서는
+              # 이만큼 한가하지 않을 수 있으므로 절반만 줄인다. 검색 부하를 섞어 재본
+              # 뒤에 더 줄일지 판단한다.
+              cpu: 150m
               memory: 1Gi
             limits:
               cpu: 1000m

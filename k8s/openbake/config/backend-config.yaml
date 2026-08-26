@@ -9,6 +9,12 @@ metadata:
     app.kubernetes.io/part-of: openbake
     app.kubernetes.io/instance: production
 data:
+  # SecurityConfig의 기본값이 http://localhost:3000 하나뿐이라, 이 값이 없으면
+  # 운영 프론트엔드(Vercel)에서 온 요청을 백엔드가 "Invalid CORS request" 403으로
+  # 거부한다. 게이트웨이가 Access-Control-Allow-Origin 헤더를 붙여주므로 헤더만
+  # 보면 정상으로 보이지만, 실제 본문은 403이다(2026-08-26 실측).
+  # 게이트웨이 application.yml의 globalcors 목록과 같은 값을 유지한다.
+  OPENBAKE_SECURITY_CORS_ALLOWED_ORIGINS: "https://bakery-site6-fe.vercel.app,http://localhost:3000,http://localhost:5173"
   DB_URL: "jdbc:postgresql://core-postgres:5432/openbake"
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"

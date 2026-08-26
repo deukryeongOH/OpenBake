@@ -23,6 +23,15 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: ai-service
+        # 관측 전용. redis_exporter는 INFO로 상태만 읽는다. Redis Pod를 재시작하지
+        # 않으려고 사이드카 대신 monitoring 네임스페이스의 별도 Deployment로 뒀기 때문에
+        # 네임스페이스를 넘는 허용이 필요하다.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis-exporter
       ports:
         - protocol: TCP
           port: 6379

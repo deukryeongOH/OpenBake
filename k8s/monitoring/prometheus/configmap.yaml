@@ -129,6 +129,48 @@ data:
             regex: "(POD|)"
             action: drop
 
+      # Redis는 maxmemory 128mb + noeviction이라 한계에 닿으면 오래된 키를 지우는 것이
+      # 아니라 쓰기가 실패한다. 그러면 드롭 재고 선점과 인증이 동시에 깨진다.
+      # 사용량을 미리 보기 위한 유일한 경로다.
+      - job_name: "redis-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "redis-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9121"
+
+      # 브로커 측 consumer group lag. 애플리케이션이 내보내는 클라이언트 측 lag은
+      # 컨슈머가 죽으면 지표 자체가 사라져서 "밀리는 중"과 "죽어서 안 먹는 중"을
+      # 구분하지 못한다. exporter는 openbake 네임스페이스에 있다(advertised listener 제약).
+      - job_name: "kafka-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - openbake
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "kafka-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9308"
+
       # Pod 재시작·OOMKilled·HPA replica 변화는 애플리케이션 /actuator/prometheus에
       # 나오지 않는다. kube-state-metrics가 API server 상태를 metric으로 바꿔준다.
       - job_name: "kube-state-metrics"
@@ -236,6 +278,80 @@ data:
             annotations:
               summary: "주문 슬롯 누수 {{ $value }}건"
               description: "종료된 주문이 진행 중 슬롯을 반납하지 않았다. 해당 회원은 새 주문을 만들 수 없다."
+
+      # 브로커가 1대라 죽으면 전체 이벤트 흐름이 멈춘다. 클라이언트 측 지표로는
+      # 이 상태를 볼 수 없어서(컨슈머도 함께 죽으면 지표가 사라진다) 브로커 측이 필요하다.
+      - name: kafka
+        rules:
+          - alert: KafkaBrokerDown
+            expr: kafka_brokers < 1
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Kafka 브로커에 접근할 수 없다"
+              description: "브로커가 1대뿐이라 이벤트 발행·소비가 모두 멈춘다. Outbox는 PENDING으로 쌓이므로 복구 후 소진 여부를 확인한다."
+          # 임계값 1000은 가설이다. 정상 부하의 lag 기준선을 확보한 뒤 교정한다.
+          - alert: KafkaConsumerGroupLagHigh
+            expr: max by (consumergroup, topic) (kafka_consumergroup_lag) > 1000
+            for: 10m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.consumergroup }} / {{ $labels.topic }} 소비 지연"
+              description: "lag {{ $value | printf \"%.0f\" }}건이 10분간 지속. 컨슈머 처리량이 생산 속도를 못 따라간다."
+          # 컨슈머가 죽으면 클라이언트 측 지표는 사라지지만 브로커 측 lag은 계속 늘어난다.
+          # 이 규칙이 그 상태를 잡는 유일한 경로다.
+          - alert: KafkaConsumerGroupStalled
+            expr: |
+              max by (consumergroup, topic) (kafka_consumergroup_lag) > 0
+              and max by (consumergroup, topic) (delta(kafka_consumergroup_current_offset[15m])) == 0
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.consumergroup }} / {{ $labels.topic }} 소비 정지"
+              description: "밀린 이벤트가 있는데 15분간 offset이 전혀 움직이지 않았다. 컨슈머가 죽었거나 특정 메시지에서 막혀 있다."
+
+      # Redis는 noeviction이라 한계 도달이 "느려짐"이 아니라 "쓰기 실패"다. 도달한
+      # 뒤에는 이미 늦으므로 여유가 있을 때 경고해야 한다. 09번 문서 6장이 정한
+      # maxmemory 128mb가 분모다.
+      - name: redis
+        rules:
+          - alert: RedisMemoryHigh
+            expr: 100 * (redis_memory_used_bytes / redis_memory_max_bytes) >= 70
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Redis 메모리 사용률 70% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. noeviction 정책이라 한계에 닿으면 키를 지우지 않고 쓰기가 실패한다. 드롭 재고 선점과 Refresh Token이 동시에 영향을 받는다."
+          - alert: RedisMemoryCritical
+            expr: 100 * (redis_memory_used_bytes / redis_memory_max_bytes) >= 85
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis 메모리 사용률 85% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. 쓰기 실패가 임박했다. 만료 정책과 키 증가 원인을 즉시 확인한다."
+          # 실제로 거부가 시작되면 이미 사용자 영향이 발생한 뒤다. 0보다 크면 사건이다.
+          - alert: RedisRejectedConnections
+            expr: increase(redis_rejected_connections_total[5m]) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis 연결 거부 발생"
+              description: "5분간 {{ $value | printf \"%.0f\" }}건. maxclients 한계이거나 자원 고갈이다."
+          - alert: RedisDown
+            expr: redis_up == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis에 접근할 수 없다"
+              description: "exporter가 Redis에 연결하지 못한다. 재고 선점은 fail-closed라 판매가 중단되고, 인증도 함께 막힌다."
 
       # 회로가 열린 것 자체는 설계대로 격리가 동작한 것이다. 문제는 오래 열려 있는
       # 경우이므로 지속 시간으로 판단한다. 임계값이 아니라 상태라서 추정이 필요 없다.

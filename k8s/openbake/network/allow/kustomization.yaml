@@ -26,4 +26,6 @@ resources:
   - allow-grafana-to-prometheus.yaml
   - allow-prometheus-to-node-exporter.yaml
   - allow-prometheus-to-kube-state-metrics.yaml
+  - allow-prometheus-to-redis-exporter.yaml
+  - allow-prometheus-to-kafka-exporter.yaml
   - allow-to-loki.yaml

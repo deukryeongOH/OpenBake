@@ -8,6 +8,15 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 25s
 
+  task:
+    scheduling:
+      # 기본값은 스레드 1개다. core에는 @Scheduled가 9개 있고 그중 드롭 재고 동기화는
+      # 200ms 주기라, 한 스레드를 공유하면 느린 작업 하나가 그 루프를 통째로 밀어낸다.
+      # ScheduledThreadPoolExecutor는 같은 작업의 겹친 실행을 막으므로, 풀을 키워도
+      # 개별 작업이 자기 자신과 동시에 도는 일은 없다.
+      pool:
+        size: 4
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}

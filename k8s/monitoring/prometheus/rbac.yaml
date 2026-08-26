@@ -23,6 +23,13 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "namespaces"]
     verbs: ["get", "list", "watch"]
+  # 컨테이너별 실제 CPU·메모리 사용량은 kubelet의 cAdvisor에만 있다.
+  # kube-state-metrics는 "몇 번 재시작했는가" 같은 객체 상태만 알려주고
+  # "지금 CPU를 얼마나 쓰는가"는 모른다. nodes/proxy는 API server를 거쳐
+  # 각 Node의 /metrics/cadvisor를 읽기 위해 필요하다.
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/metrics", "nodes/proxy"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

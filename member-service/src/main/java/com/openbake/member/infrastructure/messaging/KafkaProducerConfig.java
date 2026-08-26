@@ -5,8 +5,10 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.MicrometerProducerListener;
 import org.springframework.kafka.core.ProducerFactory;
 
 @Configuration
@@ -18,10 +20,13 @@ public class KafkaProducerConfig {
      * producer 재시도로 인한 브로커 측 중복 적재를 Kafka 클라이언트 레벨에서 막는다.
      */
     @Bean
-    public ProducerFactory<String, String> producerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, String> producerFactory(
+            KafkaProperties kafkaProperties, MeterRegistry meterRegistry) {
         Map<String, Object> props = kafkaProperties.buildProducerProperties();
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-        return new DefaultKafkaProducerFactory<>(props);
+        DefaultKafkaProducerFactory<String, String> factory = new DefaultKafkaProducerFactory<>(props);
+        factory.addListener(new MicrometerProducerListener<>(meterRegistry));
+        return factory;
     }
 
     @Bean

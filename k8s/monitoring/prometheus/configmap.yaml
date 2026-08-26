@@ -16,6 +16,11 @@ data:
       scrape_interval: 15s
       evaluation_interval: 15s
 
+    # 같은 ConfigMap의 alerts.yml 키가 statefulset의 config 볼륨을 통해 이 경로에 붙는다.
+    # Alertmanager는 아직 없다. 규칙은 Prometheus /alerts와 ALERTS metric으로만 보인다.
+    rule_files:
+      - /etc/prometheus/alerts.yml
+
     scrape_configs:
       - job_name: "openbake-apps"
         metrics_path: "/actuator/prometheus"
@@ -66,3 +71,157 @@ data:
             regex: "api-gateway"
             target_label: job
             replacement: "openbake-gateway"
+
+      # 09번 문서 5장의 root EBS 사용률 기준(70/80/90%)을 평가할 유일한 데이터 소스다.
+      # DaemonSet이므로 Node A·B 모두에서 target이 하나씩 잡힌다.
+      - job_name: "node-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "node-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9100"
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      # 컨테이너별 실제 CPU·메모리 사용량. Node 전체(node-exporter)도, 객체 상태
+      # (kube-state-metrics)도 이 값을 주지 못한다. kubelet에 직접 붙는 대신 API server
+      # proxy를 거치므로 Node IP나 10250 포트 접근 규칙이 따로 필요하지 않다.
+      - job_name: "kubelet-cadvisor"
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+        metric_relabel_configs:
+          # cAdvisor는 컨테이너마다 수백 개 시계열을 낸다. Prometheus PVC가 3Gi·보존
+          # 상한 1GB라 전부 담으면 보존 기간이 3일 아래로 떨어진다. 자원 포화 판단에
+          # 실제로 쓰는 것만 남긴다.
+          - source_labels: [__name__]
+            regex: "container_(cpu_usage_seconds_total|memory_working_set_bytes|cpu_cfs_throttled_seconds_total)"
+            action: keep
+          # POD(일시정지 컨테이너)와 컨테이너 이름이 빈 집계 행은 중복이라 뺀다.
+          # 네트워크 지표는 Pod 단위라 container 라벨이 비어 있어 이 규칙에 걸린다.
+          # 지금 쓰는 패널이 없으므로 keep 목록에도 넣지 않았다 — 필요해지면 이 drop보다
+          # 앞에서 따로 살려야 한다.
+          - source_labels: [container]
+            regex: "(POD|)"
+            action: drop
+
+      # Pod 재시작·OOMKilled·HPA replica 변화는 애플리케이션 /actuator/prometheus에
+      # 나오지 않는다. kube-state-metrics가 API server 상태를 metric으로 바꿔준다.
+      - job_name: "kube-state-metrics"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "kube-state-metrics"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          # telemetry(8081)까지 잡히지 않도록 metrics 포트를 직접 지정한다.
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:8080"
+          # kube-state-metrics가 내보내는 metric은 이미 관측 대상의 pod/node/namespace
+          # label을 갖는다. 여기서 같은 이름의 target label을 붙이면 Prometheus가
+          # 원본을 exported_pod 등으로 밀어내므로 추가하지 않는다.
+
+  alerts.yml: |
+    groups:
+      # 09번 문서 5장이 확정한 root EBS 사용률 기준을 그대로 옮긴 것이다.
+      # 두 Node의 PVC가 물리적으로 같은 디스크를 쓰므로 한 워크로드의 폭증이
+      # 같은 Node의 DB·kubelet까지 함께 무너뜨린다(09번 문서 1장).
+      - name: node-disk
+        rules:
+          - alert: NodeDiskUsageWarning
+            expr: |
+              100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) >= 70
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.node }} root 디스크 사용률 70% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. 큰 directory·image·log·TSDB 증가 원인을 확인한다."
+          - alert: NodeDiskUsageCritical
+            expr: |
+              100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) >= 80
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.node }} root 디스크 사용률 80% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. retention 축소·불필요 image 정리, 신규 배포 중지를 검토한다."
+          - alert: NodeDiskUsageEmergency
+            expr: |
+              100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) >= 90
+            for: 2m
+            labels:
+              severity: emergency
+            annotations:
+              summary: "{{ $labels.node }} root 디스크 사용률 90% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. 쓰기 폭증을 차단하고 즉시 용량을 회수한다."
+
+      # 관측 문서의 자원 관점 표가 요구하는 Pod 재시작 신호. 애플리케이션
+      # /actuator/prometheus에는 없고 kube-state-metrics에서만 나온다.
+      - name: pod-stability
+        rules:
+          - alert: PodRestartingRepeatedly
+            expr: increase(kube_pod_container_status_restarts_total{namespace=~"openbake|monitoring"}[15m]) > 2
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.namespace }}/{{ $labels.pod }} 반복 재시작"
+              description: "15분간 약 {{ $value | printf \"%.0f\" }}회 재시작. 프로세스가 살아나도 Outbox·DLT·PENDING 적체는 별도 확인이 필요하다."
+          - alert: PodOOMKilled
+            expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.namespace }}/{{ $labels.pod }} OOMKilled"
+              description: "container={{ $labels.container }}. memory limit과 누수 여부를 확인한다."
+
+      # 임계값 300초는 가설이다. 관측 문서가 명시했듯 실측 기준선과 E8 훈련 전에는
+      # 확정할 수 없으므로, E8 결과가 나오면 이 값을 먼저 교정한다.
+      - name: async-backlog
+        rules:
+          - alert: OutboxPendingAgeHigh
+            expr: openbake_outbox_oldest_age_seconds > 300
+            for: 5m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.job }} Outbox 미발행 이벤트 정체"
+              description: "가장 오래된 PENDING 이벤트가 {{ $value }}초. 발행기·브로커·DB 락을 확인한다. count가 적어도 age가 크면 특정 데이터가 계속 낡는다."

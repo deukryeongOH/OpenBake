@@ -43,6 +43,17 @@ class ActuatorEndpointTest {
     }
 
     @Test
+    @DisplayName("/actuator/prometheus에 주문 적체 gauge가 노출된다")
+    void prometheusEndpoint_exposesOrderBacklogGauges() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/actuator/prometheus", String.class);
+
+        assertThat(response.getBody())
+                .contains("openbake_order_pending_expired")
+                .contains("openbake_order_pending_oldest_age_seconds")
+                .contains("openbake_order_active_slot_leaked");
+    }
+
+    @Test
     @DisplayName("/actuator/health/liveness는 200을 반환한다")
     void livenessEndpoint_returnsOk() {
         ResponseEntity<String> response = restTemplate.getForEntity("/actuator/health/liveness", String.class);

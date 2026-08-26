@@ -5,3 +5,5 @@ kind: Kustomization
 resources:
   - prometheus
   - grafana
+  - node-exporter
+  - kube-state-metrics

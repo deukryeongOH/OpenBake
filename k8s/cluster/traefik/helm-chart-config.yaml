@@ -33,6 +33,34 @@ spec:
         cpu: 1000m
         memory: 256Mi
 
+    # Prometheus 지표를 켠다. 2026-08-26 부하 테스트에서 지연의 42%가
+    # Traefik+TLS 구간이었는데(LOAD-TEST-REPORT.md §7) 정작 이 구간에 지표가 없어
+    # 관측 대상 밖이었다. backend·member·payment의 서블릿 처리 시간만 보고 있었다.
+    #
+    # metrics 엔트리포인트를 따로 두어 9100 포트로만 노출한다. web/websecure에
+    # 얹으면 외부에서 /metrics가 열린다.
+    metrics:
+      prometheus:
+        entryPoint: metrics
+        addEntryPointsLabels: true
+        addServicesLabels: true
+        # 요청 지연 히스토그램. 이게 있어야 진입점 p95를 계산할 수 있다.
+        buckets:
+          - 0.1
+          - 0.3
+          - 0.5
+          - 1.0
+          - 2.0
+          - 5.0
+
+    ports:
+      metrics:
+        port: 9100
+        expose:
+          default: false
+        exposedPort: 9100
+        protocol: TCP
+
     persistence:
       enabled: true
       name: traefik-acme

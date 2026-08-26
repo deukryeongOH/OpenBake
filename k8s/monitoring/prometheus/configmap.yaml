@@ -134,6 +134,64 @@ data:
             regex: "(POD|)"
             action: drop
 
+      # Traefik은 모든 외부 트래픽의 TLS 종단이고, 부하 테스트에서 지연의 42%를
+      # 차지했다(LOAD-TEST-REPORT.md §7). kube-system에 있어 별도 job으로 둔다.
+      - job_name: "traefik"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - kube-system
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "traefik"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9100"
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      # 밖에서 실제 사용자 경로를 찔러본다. Pod가 Running이고 target이 전부 up이어도
+      # Traefik·TLS·게이트웨이·CORS가 깨지면 사용자는 못 쓴다. 2026-08-26 CORS 장애가
+      # 정확히 그 경우였다 — 내부 지표는 모두 정상이었고 사용자만 403을 받았다.
+      - job_name: "blackbox-http"
+        metrics_path: /probe
+        params:
+          module: [http_2xx]
+        static_configs:
+          - targets:
+              # 공개 엔드포인트. 인증 없이 200과 데이터가 나와야 한다.
+              - https://3.38.24.67.sslip.io/api/v1/products/product-list
+              - https://3.38.24.67.sslip.io/api/v1/drops/upcoming
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter.monitoring.svc.cluster.local:9115
+
+      # 운영 프론트엔드 Origin으로 확인한다. 헤더가 아니라 상태 코드를 본다.
+      - job_name: "blackbox-http-cors"
+        metrics_path: /probe
+        params:
+          module: [http_2xx_cors]
+        static_configs:
+          - targets:
+              - https://3.38.24.67.sslip.io/api/v1/products/product-list
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter.monitoring.svc.cluster.local:9115
+
       # Redis는 maxmemory 128mb + noeviction이라 한계에 닿으면 오래된 키를 지우는 것이
       # 아니라 쓰기가 실패한다. 그러면 드롭 재고 선점과 인증이 동시에 깨진다.
       # 사용량을 미리 보기 위한 유일한 경로다.
@@ -202,6 +260,43 @@ data:
 
   alerts.yml: |
     groups:
+      # ── Symptom 경보 ────────────────────────────────────────────────
+      # 나머지 경보는 대부분 Cause(원인)다. 여기 있는 것만 "사용자가 지금 서비스를
+      # 못 쓴다"를 직접 말한다. 강의자료의 원칙: 사용자 영향으로 깨우고 원인은
+      # 대시보드에서 본다.
+      #
+      # 2026-08-26 CORS 장애 때 모든 Pod가 Running이고 target이 10/10 up이며
+      # 발화 경보가 0건인데 사용자는 403을 받고 있었다. 아래 규칙이 그 상황을 잡는다.
+      - name: user-facing
+        rules:
+          - alert: ExternalEndpointDown
+            expr: probe_success{job="blackbox-http"} == 0
+            for: 3m
+            labels:
+              severity: critical
+            annotations:
+              summary: "외부에서 {{ $labels.instance }} 접근 실패"
+              description: "Pod가 살아 있어도 Traefik·TLS·게이트웨이 경로가 깨지면 사용자는 못 쓴다. 내부 지표가 모두 정상이어도 이 경보는 사용자 영향을 뜻한다."
+              runbook: "docs/observability/roadmap.md"
+          # 운영 프론트엔드 Origin이 거부되는 경우. 헤더가 아니라 상태 코드로 판정한다.
+          - alert: FrontendOriginRejected
+            expr: probe_success{job="blackbox-http-cors"} == 0
+            for: 3m
+            labels:
+              severity: critical
+            annotations:
+              summary: "운영 프론트엔드 Origin이 거부되고 있다"
+              description: "Vercel Origin으로 보낸 요청이 200을 받지 못한다. CORS 설정(OPENBAKE_SECURITY_CORS_ALLOWED_ORIGINS)이나 게이트웨이 경로를 확인한다."
+              runbook: "docs/observability/rollout-log.md"
+          - alert: TLSCertExpiringSoon
+            expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 14
+            for: 1h
+            labels:
+              severity: warning
+            annotations:
+              summary: "TLS 인증서 만료까지 {{ $value | printf \"%.0f\" }}일"
+              description: "{{ $labels.instance }}. 만료되면 모든 외부 요청이 실패한다."
+
       # 09번 문서 3장은 Job 실행만으로 성공을 판단하지 말라고 한다. 실패는 물론
       # "예정대로 돌지 않은 것"과 "최근 성공이 없는 것"도 따로 봐야 한다.
       # 2026-08-26: member·payment 백업이 31시간째 실패 중이었는데 아무도 몰랐다.

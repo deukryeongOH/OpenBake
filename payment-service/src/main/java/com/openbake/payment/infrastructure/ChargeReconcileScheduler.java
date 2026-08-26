@@ -4,6 +4,7 @@ import com.openbake.payment.application.ChargeReconcileService;
 import com.openbake.payment.domain.ChargeRequest;
 import com.openbake.payment.domain.ChargeRequestRepository;
 import com.openbake.payment.domain.ChargeStatus;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -29,6 +30,7 @@ public class ChargeReconcileScheduler {
 
     private final ChargeRequestRepository chargeRequestRepository;
     private final ChargeReconcileService chargeReconcileService;
+    private final MeterRegistry meterRegistry;
 
     @Scheduled(fixedRate = 5 * 60 * 1000)  // 5분마다
     public void reconcileInProgressCharges() {
@@ -44,7 +46,11 @@ public class ChargeReconcileScheduler {
             try {
                 chargeReconcileService.reconcile(request);
             } catch (Exception e) {
-                // PG 조회 실패 시 해당 건만 스킵하고 다음 건 처리 계속
+                // PG 조회 실패 시 해당 건만 스킵하고 다음 건 처리 계속.
+                // 실패가 반복되면 IN_PROGRESS가 수렴하지 못하고 사용자 돈이 계속 묶인다.
+                // chargeRequestId는 계속 늘어나는 값이라 label로 쓰지 않는다 —
+                // 어느 건인지는 아래 로그에서 찾는다.
+                meterRegistry.counter("openbake.payment.reconcile.failed").increment();
                 log.warn("[배치] reconcile 실패 — chargeRequestId={}, error={}",
                         request.getId(), e.getMessage());
             }

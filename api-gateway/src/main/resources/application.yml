@@ -117,3 +117,33 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+    # 게이트웨이는 모든 외부 요청이 지나는 지점이라 여기 지연 분포가 사용자
+    # 체감에 가장 가깝다. bucket이 없으면 histogram_quantile로 p95를 계산할 수
+    # 없어 "사용자가 느린가"를 판단할 근거가 사라진다(2026-08-26 확인:
+    # http_server_requests_seconds_bucket이 gateway에만 없었다).
+    # 버킷 경계는 core/member/payment와 같게 두어 서비스 간 비교가 되게 한다.
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+
+      slo:
+        "[http.server.requests]":
+          - 100ms
+          - 300ms
+          - 500ms
+          - 1s
+          - 2s
+
+logging:
+  # 뒤쪽 서비스와 같은 형식으로 맞춰 로그를 나란히 읽을 수 있게 한다.
+  #
+  # ⚠️ 게이트웨이는 WebFlux라 이 자리는 현재 항상 비어 있다. common의
+  # RequestIdMdcFilter는 서블릿 필터(OncePerRequestFilter)이고, MDC는
+  # ThreadLocal이라 리액터의 스레드 전환을 넘지 못한다. 게이트웨이 로그에 ID를
+  # 남기려면 Reactor Context 전파(ContextRegistry/Hooks)를 따로 붙여야 한다.
+  #
+  # 그래도 자리를 비워 두는 이유: RequestIdFilter가 헤더는 정확히 넣어 보내므로
+  # 뒤쪽 서비스 로그에는 값이 찍힌다. 형식이 같아야 두 로그를 같은 눈으로 본다.
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"

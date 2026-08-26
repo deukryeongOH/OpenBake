@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    # Discord webhook URL은 Secret으로 주입한다. 값이 매니페스트에 남지 않도록
+    # 파일 경로를 참조하는 *_file 형태를 쓴다(Alertmanager 0.26+).
+    route:
+      receiver: discord
+      # 같은 경보의 인스턴스를 묶는 기준. alertname과 severity가 같으면 한 번에 보낸다.
+      group_by: ["alertname", "severity"]
+      # 첫 알림 전 대기. 같은 시점에 뜬 관련 경보를 모아 보내려는 것이다.
+      group_wait: 30s
+      # 같은 그룹에 새 경보가 추가됐을 때 다시 보내기까지의 간격.
+      group_interval: 5m
+      # 해결되지 않은 경보를 다시 알리는 간격. 너무 짧으면 알람 피로가 생긴다.
+      repeat_interval: 4h
+      routes:
+        # critical은 묶지 않고 빨리 보낸다.
+        - receiver: discord
+          matchers:
+            - severity = "critical"
+          group_wait: 10s
+          repeat_interval: 1h
+
+    # 파생 경보 억제. 강의자료가 경고하는 알람 피로를 처음부터 막는다.
+    inhibit_rules:
+      # 수집이 끊기면 그 대상의 다른 경보는 신뢰할 수 없다. 원인 하나만 알린다.
+      - source_matchers:
+          - alertname = "TargetDown"
+        target_matchers:
+          - severity =~ "warning|critical"
+        equal: ["job"]
+      # Redis에 접근 자체가 안 되면 메모리 경보는 의미가 없다.
+      - source_matchers:
+          - alertname = "RedisDown"
+        target_matchers:
+          - alertname =~ "RedisMemory.*|RedisRejectedConnections"
+      # 브로커가 죽으면 consumer lag 경보는 파생이다.
+      - source_matchers:
+          - alertname = "KafkaBrokerDown"
+        target_matchers:
+          - alertname =~ "KafkaConsumerGroup.*"
+      # 같은 대상에 대해 critical이 떠 있으면 warning은 보내지 않는다.
+      - source_matchers:
+          - severity = "critical"
+        target_matchers:
+          - severity = "warning"
+        equal: ["alertname"]
+
+    receivers:
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/DISCORD_WEBHOOK_URL
+            send_resolved: true
+            title: '{{ if eq .Status "firing" }}[{{ .CommonLabels.severity | toUpper }}]{{ else }}[해제]{{ end }} {{ .CommonLabels.alertname }}'
+            message: |
+              {{ range .Alerts }}{{ .Annotations.summary }}
+              {{ .Annotations.description }}
+              {{ if .Annotations.runbook }}런북: {{ .Annotations.runbook }}
+              {{ end }}{{ end }}

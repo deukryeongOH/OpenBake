@@ -156,6 +156,81 @@ tests:
         alertname: OrderActiveSlotLeaked
         exp_alerts: []
 
+  # 백업 Job이 실패하면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_status_failed{namespace="openbake",job_name="postgres-backup-member-29794650"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BackupJobFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: openbake
+              job_name: postgres-backup-member-29794650
+            exp_annotations:
+              summary: "postgres-backup-member-29794650 백업 실패"
+              description: "DB 백업 Job이 실패했다. 실패가 반복되면 복구 지점이 사라진다."
+              runbook: "docs/infra/k3s/09-storage-backup-disaster-recovery-design.md"
+
+  # 성공한 Job(failed=0)은 발화하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_status_failed{namespace="openbake",job_name="postgres-backup-core-29794630"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BackupJobFailed
+        exp_alerts: []
+
+  # 필수 job이 하나라도 없으면 ScrapeJobAbsent가 발화한다.
+  # (redis-exporter만 빠뜨리고 나머지는 존재하게 둔다)
+  - interval: 1m
+    input_series:
+      - series: 'up{job="openbake-core"}'
+        values: '1x30'
+      - series: 'up{job="openbake-gateway"}'
+        values: '1x30'
+      - series: 'up{job="node-exporter"}'
+        values: '1x30'
+      - series: 'up{job="kube-state-metrics"}'
+        values: '1x30'
+      - series: 'up{job="kafka-exporter"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ScrapeJobAbsent
+        exp_alerts:
+          # absent()가 셀렉터 라벨을 남기므로 어느 job이 없는지 드러난다.
+          - exp_labels:
+              severity: critical
+              job: redis-exporter
+            exp_annotations:
+              summary: "redis-exporter scrape job이 사라졌다"
+              description: "Pod discovery에서 대상이 빠졌거나 Prometheus 설정이 잘못됐다. up 지표 자체가 없어 TargetDown으로는 잡히지 않는다."
+      # 전부 살아 있으면 TargetDown도 조용해야 한다.
+      - eval_time: 20m
+        alertname: TargetDown
+        exp_alerts: []
+
+  # up이 0이면 TargetDown이 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="openbake-payment",instance="10.42.1.5:8082"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: openbake-payment
+              instance: "10.42.1.5:8082"
+            exp_annotations:
+              summary: "openbake-payment 수집 실패"
+              description: "instance=10.42.1.5:8082. 이 대상의 지표가 더 이상 들어오지 않는다. 관련 경보도 함께 침묵하므로 다른 신호를 신뢰할 수 없다."
+
   # 컨슈머가 죽어 offset이 멈췄고 lag은 남아 있다 → 정지로 판정해야 한다.
   - interval: 1m
     input_series:

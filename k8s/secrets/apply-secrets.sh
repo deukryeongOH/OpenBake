@@ -26,6 +26,7 @@ SECRETS=(
     "s3-credentials:s3.env:openbake"
     "backup-encryption-credentials:backup-encryption.env:openbake"
     "grafana-admin-credentials:grafana-admin.env:monitoring"
+    "alertmanager-credentials:alertmanager.env:monitoring"
 )
 
 # 값 출처 안내. scaffold가 각 파일 상단에 주석으로 넣는다.
@@ -49,6 +50,8 @@ source_hint() {
             echo "*** PostgreSQL dump 암호화 passphrase. 새로 생성한다 (openssl rand -base64 48). 잃어버리면 백업을 복원할 수 없다 — 클러스터 밖 password manager에 반드시 별도 보관한다. ***" ;;
         grafana-admin-credentials)
             echo "새로 정한다. Grafana 최초 admin 계정." ;;
+        alertmanager-credentials)
+            echo "Discord 채널 설정 > 연동 > 웹후크에서 URL을 만들어 넣는다. Alertmanager가 이 파일 경로를 직접 읽으므로 값이 매니페스트에 남지 않는다." ;;
     esac
 }
 

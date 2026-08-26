@@ -7,3 +7,6 @@ resources:
   - grafana
   - node-exporter
   - kube-state-metrics
+  - redis-exporter
+  # kafka-exporter만 openbake 네임스페이스다. 이유는 해당 매니페스트 주석 참고.
+  - kafka-exporter

@@ -156,6 +156,136 @@ tests:
         alertname: OrderActiveSlotLeaked
         exp_alerts: []
 
+  # 컨슈머가 죽어 offset이 멈췄고 lag은 남아 있다 → 정지로 판정해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{consumergroup="openbake-ai",topic="product.changed.v1"}'
+        values: '500x30'
+      - series: 'kafka_consumergroup_current_offset{consumergroup="openbake-ai",topic="product.changed.v1"}'
+        values: '1000x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KafkaConsumerGroupStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              consumergroup: openbake-ai
+              topic: product.changed.v1
+            exp_annotations:
+              summary: "openbake-ai / product.changed.v1 소비 정지"
+              description: "밀린 이벤트가 있는데 15분간 offset이 전혀 움직이지 않았다. 컨슈머가 죽었거나 특정 메시지에서 막혀 있다."
+
+  # lag이 있어도 offset이 움직이고 있으면 정지가 아니다 — 발화하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{consumergroup="openbake-ai",topic="product.viewed.v1"}'
+        values: '500+0x30'
+      - series: 'kafka_consumergroup_current_offset{consumergroup="openbake-ai",topic="product.viewed.v1"}'
+        values: '1000+50x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KafkaConsumerGroupStalled
+        exp_alerts: []
+
+  # lag이 0이면 offset이 멈춰 있어도 정상이다(처리할 게 없는 것).
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{consumergroup="openbake-ai",topic="member.withdrawn.v1"}'
+        values: '0x30'
+      - series: 'kafka_consumergroup_current_offset{consumergroup="openbake-ai",topic="member.withdrawn.v1"}'
+        values: '1000x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KafkaConsumerGroupStalled
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'kafka_brokers'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: KafkaBrokerDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Kafka 브로커에 접근할 수 없다"
+              description: "브로커가 1대뿐이라 이벤트 발행·소비가 모두 멈춘다. Outbox는 PENDING으로 쌓이므로 복구 후 소진 여부를 확인한다."
+
+  # Redis 75%: warning만 발화하고 critical은 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_memory_used_bytes'
+        values: '75x20'
+      - series: 'redis_memory_max_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RedisMemoryHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Redis 메모리 사용률 70% 초과"
+              description: "현재 75.0%. noeviction 정책이라 한계에 닿으면 키를 지우지 않고 쓰기가 실패한다. 드롭 재고 선점과 Refresh Token이 동시에 영향을 받는다."
+      - eval_time: 15m
+        alertname: RedisMemoryCritical
+        exp_alerts: []
+
+  # 90%면 둘 다 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_memory_used_bytes'
+        values: '90x20'
+      - series: 'redis_memory_max_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RedisMemoryCritical
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Redis 메모리 사용률 85% 초과"
+              description: "현재 90.0%. 쓰기 실패가 임박했다. 만료 정책과 키 증가 원인을 즉시 확인한다."
+
+  # 50%면 아무것도 울리지 않아야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_memory_used_bytes'
+        values: '50x20'
+      - series: 'redis_memory_max_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RedisMemoryHigh
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'redis_up'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RedisDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Redis에 접근할 수 없다"
+              description: "exporter가 Redis에 연결하지 못한다. 재고 선점은 fail-closed라 판매가 중단되고, 인증도 함께 막힌다."
+
+  # Redis가 살아 있으면 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_up'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RedisDown
+        exp_alerts: []
+
   # Outbox 가장 오래된 PENDING이 600초. 임계값 300초를 넘겨야 한다.
   - interval: 1m
     input_series:

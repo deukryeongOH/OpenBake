@@ -87,16 +87,6 @@ spring:
               predicates:
                 - Path=/api/**
               order: 0
-            # /internal/v1/** (관리자 전용 정산 API)는 지금까지 게이트웨이에 라우트가 아예 없어서
-            # 인증된 관리자 요청도 게이트웨이 404로 막혔다(권한 검사 자체는 root의 SecurityConfig
-            # hasRole("ADMIN")이 그대로 담당 — 여기선 프록시만 추가한다). 2026-08-26 브라우저 E2E로
-            # 발견: FE는 게이트웨이 단일 진입점만 쓰므로 라우트가 없으면 관리자 화면 자체가
-            # 원천적으로 동작할 수 없었다.
-            - id: core-internal-api
-              uri: ${CORE_SERVICE_URL:http://localhost:8080}
-              predicates:
-                - Path=/internal/**
-              order: 10
           httpclient:
             # 부하 테스트 시에만 늘린다. 운영 기본값은 그대로 유지할 것.
             # 이 값이 인증된 요청의 실질적인 응답시간 상한이라,

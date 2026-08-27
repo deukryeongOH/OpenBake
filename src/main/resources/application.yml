@@ -193,11 +193,30 @@ logging:
   # common의 RequestIdMdcFilter로 MDC에 넣어야 %X{requestId}가 채워진다.
   # 값이 없는 로그(기동·배치)는 대괄호 안이 비어 보인다.
   pattern:
-    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
   level:
     org.hibernate.orm.jdbc.bind: trace
 
+
+# 분산 추적. micrometer-tracing-bridge-otel이 traceId/spanId를 만들고 서비스 간에
+# 전파한다.
+#
+# 왜 필요한가: X-Request-Id를 MDC에 넣는 RequestIdMdcFilter는 서블릿 필터이고 MDC는
+# ThreadLocal이라 **api-gateway(WebFlux)의 리액터 스레드 전환을 넘지 못한다.**
+# 게이트웨이 로그에 상관관계 ID를 남길 방법이 그것 말고 없었다. Micrometer Tracing은
+# Reactor Context 전파를 지원하므로 그 빈틈을 메운다.
+#
+# 그리고 requestId와 달리 traceId는 **구간(span)을 나눈다.** 어느 서비스에서 몇 ms가
+# 걸렸는지 알 수 있다. requestId는 "같은 요청의 로그를 묶는" 것까지가 전부였다.
+#
+# ⚠️ 여기서는 exporter endpoint를 설정하지 않는다. 그러면 span이 **어디로도 전송되지
+# 않고** traceId 전파와 로그 기록만 동작한다. 추적 백엔드(Tempo)가 준비되면
+# management.otlp.tracing.endpoint를 켠다. 백엔드 없이 endpoint를 켜면 전송 실패
+# 로그가 계속 쌓인다.
 management:
+  tracing:
+    sampling:
+      probability: 1.0
   endpoints:
     web:
       exposure:

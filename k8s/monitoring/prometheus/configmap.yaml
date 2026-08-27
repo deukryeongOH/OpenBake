@@ -461,6 +461,8 @@ data:
               or absent(openbake_payment_execution_failed_total)
               or absent(openbake_payment_idempotency_conflict_total)
               or absent(openbake_payment_reconcile_last_success_timestamp_seconds)
+              or absent(openbake_ai_embedding_expired_lease)
+              or absent(openbake_ai_embedding_oldest_pending_age_seconds)
             for: 30m
             labels:
               severity: warning
@@ -698,6 +700,39 @@ data:
             annotations:
               summary: "멱등 경합 분당 {{ $value | printf \"%.1f\" }}건"
               description: "같은 요청이 동시에 두 번 들어오는 빈도가 높다. 클라이언트 재시도 설정이나 멱등키 생성 규칙을 확인한다."
+
+      # AI 임베딩 worker. E8 시나리오 O6(worker 중단)이 이 신호를 요구한다.
+      - name: ai-worker
+        rules:
+          # worker가 죽으면 잡고 있던 작업을 놓지 못한다. 그런데 PROCESSING 건수는
+          # 그대로라 **정상과 구별되지 않는다.** lease는 시간이 지나면 만료되므로
+          # "만료됐는데 아직 PROCESSING"인 것이 곧 "잡은 채로 사라진 작업"이다.
+          #
+          # 정상값은 0에 가깝다 — 회수 배치가 곧 가져간다. 계속 0이 아니면
+          # 회수 배치까지 멈췄다는 뜻이라 임계값 추정이 필요 없다.
+          - alert: AiWorkerLeaseExpired
+            expr: max(openbake_ai_embedding_expired_lease) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "AI 임베딩 lease 만료 {{ $value | printf \"%.0f\" }}건"
+              description: "worker가 작업을 잡은 채 사라졌고 회수도 되지 않았다. 10분간 지속되면 회수 배치까지 멈춘 것이다. 상품 검색 색인이 갱신되지 않는다."
+          # 건수만으로는 "많지만 빨리 도는 중"과 "적지만 영영 안 풀리는 중"을
+          # 구별할 수 없다. 후자가 사고다.
+          #
+          # 30분은 가설이다. 임베딩 1건이 평균 0.34초(2026-08-27
+          # openbake_ai_embedding_duration_seconds 기준)이므로 정상이라면 대기가
+          # 이만큼 자랄 수 없다.
+          - alert: AiEmbeddingBacklogStale
+            expr: max(openbake_ai_embedding_oldest_pending_age_seconds) > 1800
+            for: 10m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "AI 임베딩 대기가 {{ $value | humanizeDuration }}째 풀리지 않는다"
+              description: "가장 오래 대기 중인 작업의 나이다. 건수가 적어도 특정 작업이 영영 처리되지 않으면 그 상품은 검색에서 낡은 상태로 남는다."
 
       - name: placement
         rules:

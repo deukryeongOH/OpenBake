@@ -55,4 +55,14 @@ public class ProductEmbeddingTaskRepositoryAdapter implements ProductEmbeddingTa
     public long countByStatus(EmbeddingTaskStatus status) {
         return jpaRepository.countByStatus(status);
     }
+
+    @Override
+    public long countExpiredLease(Instant now) {
+        return jpaRepository.countExpiredLease(now);
+    }
+
+    @Override
+    public Optional<Instant> findOldestPendingCreatedAt() {
+        return jpaRepository.findOldestPendingCreatedAt();
+    }
 }

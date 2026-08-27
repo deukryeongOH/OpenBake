@@ -581,6 +581,10 @@ tests:
         values: '0x50'
       - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
         values: '1000x50'
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x50'
+      - series: 'openbake_ai_embedding_oldest_pending_age_seconds'
+        values: '60x50'
     alert_rule_test:
       - eval_time: 40m
         alertname: AlertInputMetricMissing
@@ -613,6 +617,10 @@ tests:
         values: '0x50'
       - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
         values: '1000x50'
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x50'
+      - series: 'openbake_ai_embedding_oldest_pending_age_seconds'
+        values: '60x50'
     alert_rule_test:
       - eval_time: 40m
         alertname: AlertInputMetricMissing
@@ -688,4 +696,40 @@ tests:
     alert_rule_test:
       - eval_time: 40m
         alertname: PaymentIdempotencyConflictSpike
+        exp_alerts: []
+
+  # ── AI worker 중단 (E8 O6) ────────────────────────────────────────────
+  # 정상: lease 만료 0건이면 침묵해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AiWorkerLeaseExpired
+        exp_alerts: []
+
+  # worker가 죽어 lease가 만료되고 회수도 안 되면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x10 3x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AiWorkerLeaseExpired
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "AI 임베딩 lease 만료 3건"
+              description: "worker가 작업을 잡은 채 사라졌고 회수도 되지 않았다. 10분간 지속되면 회수 배치까지 멈춘 것이다. 상품 검색 색인이 갱신되지 않는다."
+
+  # 대기 나이가 짧으면 침묵해야 한다. 건수가 많아도 빨리 돌면 정상이다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_ai_embedding_oldest_pending_age_seconds'
+        values: '120x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AiEmbeddingBacklogStale
         exp_alerts: []

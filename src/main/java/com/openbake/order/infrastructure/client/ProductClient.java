@@ -36,6 +36,7 @@ public class ProductClient implements ProductPort {
     @Override
     public Optional<ProductInfo> findProduct(Long productId) {
         return productRepository.findById(productId)
+                .filter(product -> product.getStatus() != ProductStatus.DELETED)
                 .map(product -> new ProductInfo(
                         product.getId(),
                         product.getSellerId(),

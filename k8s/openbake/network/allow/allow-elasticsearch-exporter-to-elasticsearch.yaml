@@ -1,0 +1,33 @@
+# elasticsearch-exporter(monitoring) → elasticsearch(openbake) 9200.
+#
+# ⚠️ 안전 확인: openbake 네임스페이스에는 이미 default-deny-ingress가 있고
+# elasticsearch Pod는 allow-backend-to-elasticsearch에 선택되어 **이미 격리 상태**다.
+# 따라서 이 파일은 "차단을 시작"하지 않고 허용만 더한다. 같은 Pod를 선택하는 여러
+# NetworkPolicy는 합집합으로 동작한다.
+#
+# 이 확인이 필요한 이유: 2026-08-25에 NetworkPolicy가 하나도 없던 kube-system에
+# Traefik 대상 정책을 넣었다가 Traefik이 격리 대상이 되어 외부 80/443이 전부
+# 차단됐다. 정책이 없는 대상에 첫 정책을 넣는 것은 "허용 추가"가 아니라
+# "차단 시작"이다. 자세한 경위는 docs/observability/rollout-log.md 참고.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-elasticsearch-exporter-to-elasticsearch
+  namespace: openbake
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: elasticsearch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: elasticsearch-exporter
+      ports:
+        - protocol: TCP
+          port: 9200

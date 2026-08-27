@@ -12,6 +12,9 @@ resources:
   - allow-api-gateway-to-payment-service.yaml
   - allow-backend-to-payment-service.yaml
   - allow-prometheus-to-payment-service.yaml
+  - allow-api-gateway-to-ai-service.yaml
+  - allow-backend-to-ai-service.yaml
+  - allow-ai-service-to-backend.yaml
   - allow-prometheus-to-ai-service.yaml
   - allow-backend-to-core-postgres.yaml
   - allow-member-service-to-member-postgres.yaml
@@ -21,4 +24,26 @@ resources:
   - allow-backend-to-elasticsearch.yaml
   - allow-to-kafka.yaml
   - allow-grafana-to-prometheus.yaml
+  - allow-prometheus-to-node-exporter.yaml
+  - allow-prometheus-to-kube-state-metrics.yaml
+  - allow-prometheus-to-redis-exporter.yaml
+  - allow-prometheus-to-kafka-exporter.yaml
+  - allow-prometheus-to-alertmanager.yaml
+  - allow-prometheus-to-blackbox-exporter.yaml
+  - allow-prometheus-to-elasticsearch-exporter.yaml
+  # exporter는 monitoring, 대상 ES는 openbake다. 두 파일이 짝이다.
+  - allow-elasticsearch-exporter-to-elasticsearch.yaml
+  # postgres-exporter 4대는 자격증명 Secret 때문에 openbake에 있다.
+  - allow-prometheus-to-postgres-exporter.yaml
+  - allow-postgres-exporter-to-postgres.yaml
+  # Traefik(kube-system)에는 의도적으로 NetworkPolicy를 두지 않는다.
+  #
+  # kube-system에는 default-deny가 없어 Traefik은 격리되지 않은 상태이고, Prometheus는
+  # 정책 없이도 9100에 접근할 수 있다. 여기에 "prometheus 허용" 정책을 하나 추가하면
+  # 그 순간 Traefik이 인그레스 격리 대상이 되어 명시하지 않은 트래픽이 전부 차단된다.
+  # 즉 80/443 외부 트래픽까지 막혀 사이트 전체가 죽는다.
+  #
+  # 2026-08-25 실제로 이 정책을 추가해 외부 접속이 전면 중단됐다. 증상이 방화벽 차단과
+  # 똑같아(SYN이 조용히 버려져 타임아웃) AWS 보안 그룹을 먼저 의심했으나, 원인은
+  # FORWARD 체인 앞단의 kube-router netpol이었다. 정책을 지우자 즉시 복구됐다.
   - allow-to-loki.yaml

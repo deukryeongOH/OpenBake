@@ -54,6 +54,11 @@ openbake:
       popular-purchase-window: P30D
       popular-cart-window: P7D
       core-timeout: PT3S
+      # raw cosine 단위. Elasticsearch _score 0.65와 같다. 0이면 하한선을 비활성화한다.
+      min-cosine: 0.30
+      cold-start-threshold: 3
+      cold-start-category-weight: 0.60
+      established-category-weight: 0.30
       weights:
         view: 1
         cart-add: 3
@@ -62,6 +67,12 @@ openbake:
         view: P5D
         cart-add: P14D
         purchase: P45D
+    semantic-search:
+      default-size: 50
+      max-size: 100
+      max-query-length: 200
+      # raw cosine 단위. Elasticsearch _score 0.65와 같다. 0이면 하한선을 비활성화한다.
+      min-cosine: 0.30
     embedding:
       model: text-embedding-3-small
       dimensions: 1536
@@ -102,3 +113,11 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+logging:
+  # 요청 하나가 서비스를 가로지른 경로를 로그로 따라가려면 X-Request-Id가 로그에
+  # 있어야 한다. 게이트웨이의 RequestIdFilter는 헤더 전달만 하고, 각 서비스가
+  # common의 RequestIdMdcFilter로 MDC에 넣어야 %X{requestId}가 채워진다.
+  # 값이 없는 로그(기동·배치)는 대괄호 안이 비어 보인다.
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"

@@ -121,4 +121,19 @@ public class OrderRepositoryAdapter implements OrderRepository {
     public List<Order> findLeakedActiveSlots() {
         return orderJpaRepository.findLeakedActiveSlots();
     }
+
+    @Override
+    public long countExpiredPending(LocalDateTime now) {
+        return orderJpaRepository.countExpiredPending(now);
+    }
+
+    @Override
+    public Optional<LocalDateTime> findOldestExpiredPendingAt(LocalDateTime now) {
+        return orderJpaRepository.findOldestExpiredPendingAt(now);
+    }
+
+    @Override
+    public long countLeakedActiveSlots() {
+        return orderJpaRepository.countLeakedActiveSlots();
+    }
 }

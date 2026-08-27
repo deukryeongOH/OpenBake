@@ -55,7 +55,7 @@ class ProductSearchServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-08-20T00:00:00Z"), ZoneOffset.UTC);
         SearchProperties properties = new SearchProperties(
-                new SearchProperties.Semantic(true, Duration.ofMillis(500), 2, 200),
+                new SearchProperties.Semantic(true, Duration.ofMillis(500), 2, 200, 10),
                 new SearchProperties.Rrf(60));
         service = new ProductSearchService(
                 productSearchPort, productRepository, productInventoryRepository,
@@ -76,7 +76,7 @@ class ProductSearchServiceTest {
         given(productSearchPort.searchIds(eq(null), eq(null), any(Pageable.class)))
                 .willReturn(List.of(1L));
         given(productSearchPort.countBySearch(null, null)).willReturn(1L);
-        Product product = product(1L, LocalDate.parse("2026-08-25"));
+        Product product = product(1L, futurePickupDate());
         given(productRepository.findById(1L)).willReturn(java.util.Optional.of(product));
         given(productInventoryRepository.findByProductId(1L)).willReturn(inventory(1L, 3, 5));
 
@@ -98,7 +98,7 @@ class ProductSearchServiceTest {
                         new SemanticCandidate(3L, 1, 0.9),
                         new SemanticCandidate(1L, 2, 0.5)));
 
-        LocalDate future = LocalDate.parse("2026-08-25");
+        LocalDate future = futurePickupDate();
         given(productRepository.findAllByIdWithPickupDates(any()))
                 .willReturn(List.of(product(1L, future), product(2L, future), product(3L, future)));
         given(productInventoryRepository.findAllByProductIds(any()))
@@ -121,12 +121,12 @@ class ProductSearchServiceTest {
         given(productSearchPort.countBySearch("bread", null)).willReturn(3L);
         given(semanticSearchPort.findNearest(eq("bread"), eq(null), anyInt())).willReturn(List.of());
 
-        Product soldOut = product(1L, LocalDate.parse("2026-08-25"));
+        Product soldOut = product(1L, futurePickupDate());
         soldOut.markSoldOut();
-        Product pickupExpired = product(2L, LocalDate.parse("2026-08-25"));
+        Product pickupExpired = product(2L, futurePickupDate());
         pickupExpired.getPickUpAvailableDates().clear();
         pickupExpired.getPickUpAvailableDates().add(LocalDate.parse("2026-08-01"));
-        Product sellable = product(3L, LocalDate.parse("2026-08-25"));
+        Product sellable = product(3L, futurePickupDate());
 
         given(productRepository.findAllByIdWithPickupDates(any()))
                 .willReturn(List.of(soldOut, pickupExpired, sellable));
@@ -141,7 +141,7 @@ class ProductSearchServiceTest {
     @Test
     void semanticSearchDisabledSkipsCallAndBehavesLikeLexicalOnly() {
         SearchProperties disabled = new SearchProperties(
-                new SearchProperties.Semantic(false, Duration.ofMillis(500), 2, 200),
+                new SearchProperties.Semantic(false, Duration.ofMillis(500), 2, 200, 10),
                 new SearchProperties.Rrf(60));
         service = new ProductSearchService(
                 productSearchPort, productRepository, productInventoryRepository,
@@ -153,7 +153,7 @@ class ProductSearchServiceTest {
                 .willReturn(List.of(1L));
         given(productSearchPort.countBySearch("bread", null)).willReturn(1L);
         given(productRepository.findAllByIdWithPickupDates(any()))
-                .willReturn(List.of(product(1L, LocalDate.parse("2026-08-25"))));
+                .willReturn(List.of(product(1L, futurePickupDate())));
         given(productInventoryRepository.findAllByProductIds(any()))
                 .willReturn(List.of(inventory(1L, 3, 5)));
 
@@ -171,12 +171,12 @@ class ProductSearchServiceTest {
         given(productSearchPort.searchIds(eq("bread"), eq(null), any(Pageable.class)))
                 .willReturn(List.of());
         given(productSearchPort.countBySearch("bread", null)).willReturn(0L);
-        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(200))).willReturn(List.of());
+        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(10))).willReturn(List.of());
 
         service.search("bread", null, deepPage);
 
         verify(productSearchPort).searchIds(eq("bread"), eq(null), eq(PageRequest.of(0, 200)));
-        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(200));
+        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(10));
     }
 
     @Test
@@ -186,12 +186,34 @@ class ProductSearchServiceTest {
         given(productSearchPort.searchIds(eq("bread"), eq(null), any(Pageable.class)))
                 .willReturn(List.of());
         given(productSearchPort.countBySearch("bread", null)).willReturn(0L);
-        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(20))).willReturn(List.of());
+        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(10))).willReturn(List.of());
 
         service.search("bread", null, firstPage);
 
         verify(productSearchPort).searchIds(eq("bread"), eq(null), eq(PageRequest.of(0, 20)));
-        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(20));
+        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(10));
+    }
+
+    @Test
+    void restoringSemanticLimitToCandidateMaxRestoresOriginalPoolSize() {
+        SearchProperties rollback = new SearchProperties(
+                new SearchProperties.Semantic(true, Duration.ofMillis(500), 2, 200, 200),
+                new SearchProperties.Rrf(60));
+        service = new ProductSearchService(
+                productSearchPort, productRepository, productInventoryRepository,
+                semanticSearchPort, rollback,
+                Clock.fixed(Instant.parse("2026-08-20T00:00:00Z"), ZoneOffset.UTC),
+                Runnable::run);
+        Pageable deepPage = PageRequest.of(5, 20);
+        given(productSearchPort.searchIds(eq("bread"), eq(null), any(Pageable.class)))
+                .willReturn(List.of());
+        given(productSearchPort.countBySearch("bread", null)).willReturn(0L);
+        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(200))).willReturn(List.of());
+
+        service.search("bread", null, deepPage);
+
+        verify(productSearchPort).searchIds(eq("bread"), eq(null), eq(PageRequest.of(0, 200)));
+        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(200));
     }
 
     @Test
@@ -201,7 +223,7 @@ class ProductSearchServiceTest {
         given(productSearchPort.countBySearch("bread", null)).willReturn(4L);
         given(semanticSearchPort.findNearest(eq("bread"), eq(null), anyInt())).willReturn(List.of());
 
-        LocalDate future = LocalDate.parse("2026-08-25");
+        LocalDate future = futurePickupDate();
         given(productRepository.findAllByIdWithPickupDates(any())).willReturn(List.of(
                 product(1L, future), product(2L, future), product(3L, future), product(4L, future)));
         given(productInventoryRepository.findAllByProductIds(any())).willReturn(List.of(
@@ -211,6 +233,21 @@ class ProductSearchServiceTest {
 
         assertThat(secondPage.getContent()).extracting(ProductInfoResult::productId)
                 .containsExactly(3L, 4L);
+    }
+
+    /**
+     * 판매 가능한 픽업일.
+     *
+     * 날짜를 고정하면 그날이 지나는 순간 테스트가 깨진다. 실제로 2026-08-25로 고정돼
+     * 있다가 하루 뒤부터 6건이 실패했다. 서비스에는 고정 Clock을 주입하지만
+     * {@code Product} 생성자의 픽업일 검증은 주입된 Clock이 아니라 {@link LocalDate#now()}를
+     * 보기 때문에, 고정 Clock으로는 이 검증을 통제할 수 없다.
+     *
+     * 실제 오늘을 기준으로 잡으면 검증도 통과하고, 고정 Clock(2026-08-20)보다도
+     * 항상 미래라 "아직 픽업 가능한 상품"이라는 의도도 유지된다.
+     */
+    private static LocalDate futurePickupDate() {
+        return LocalDate.now().plusDays(5);
     }
 
     private Product product(Long id, LocalDate pickupDate) {
@@ -256,7 +293,7 @@ class ProductSearchServiceTest {
                     productSearchPort, productRepository, productInventoryRepository,
                     semanticSearchPort,
                     new SearchProperties(
-                            new SearchProperties.Semantic(true, Duration.ofSeconds(5), 2, 200),
+                            new SearchProperties.Semantic(true, Duration.ofSeconds(5), 2, 200, 10),
                             new SearchProperties.Rrf(60)),
                     Clock.fixed(Instant.parse("2026-08-20T00:00:00Z"), ZoneOffset.UTC),
                     pool);

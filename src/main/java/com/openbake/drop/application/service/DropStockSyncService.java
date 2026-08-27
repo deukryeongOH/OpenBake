@@ -4,6 +4,7 @@ import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.application.port.StockReservationPort;
 import com.openbake.drop.domain.repository.DropEntryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class DropStockSyncService {
     private final StockReservationPort stockReservationPort;
     private final DropEntryRepository dropEntryRepository;
     private final ProductPort productPort;
+    private final MeterRegistry meterRegistry;
 
     /**
      * 드롭 시작 시 재고 카운터를 워밍업한다.
@@ -131,6 +133,9 @@ public class DropStockSyncService {
         int expected = calculateRemain(drop);
 
         if (expected != redisRemain) {
+            // dropId는 계속 늘어나는 값이라 metric label로 쓰지 않는다. 발생 빈도만 집계하고
+            // 어느 드롭인지는 로그에서 찾는다.
+            meterRegistry.counter("openbake.drop.stock.drift").increment();
             log.warn("재고 카운터와 drop_entry 합계가 다릅니다. dropId={}, redis={}, drop_entry기준={}",
                     drop.dropId(), redisRemain, expected);
         }

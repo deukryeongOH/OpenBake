@@ -16,6 +16,16 @@ data:
       scrape_interval: 15s
       evaluation_interval: 15s
 
+    # 같은 ConfigMap의 alerts.yml 키가 statefulset의 config 볼륨을 통해 이 경로에 붙는다.
+    rule_files:
+      - /etc/prometheus/alerts.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager.monitoring.svc.cluster.local:9093
+
     scrape_configs:
       - job_name: "openbake-apps"
         metrics_path: "/actuator/prometheus"
@@ -66,3 +76,626 @@ data:
             regex: "api-gateway"
             target_label: job
             replacement: "openbake-gateway"
+
+      # 09번 문서 5장의 root EBS 사용률 기준(70/80/90%)을 평가할 유일한 데이터 소스다.
+      # DaemonSet이므로 Node A·B 모두에서 target이 하나씩 잡힌다.
+      - job_name: "node-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "node-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9100"
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      # 컨테이너별 실제 CPU·메모리 사용량. Node 전체(node-exporter)도, 객체 상태
+      # (kube-state-metrics)도 이 값을 주지 못한다. kubelet에 직접 붙는 대신 API server
+      # proxy를 거치므로 Node IP나 10250 포트 접근 규칙이 따로 필요하지 않다.
+      - job_name: "kubelet-cadvisor"
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+        metric_relabel_configs:
+          # cAdvisor는 컨테이너마다 수백 개 시계열을 낸다. Prometheus PVC가 3Gi·보존
+          # 상한 1GB라 전부 담으면 보존 기간이 3일 아래로 떨어진다. 자원 포화 판단에
+          # 실제로 쓰는 것만 남긴다.
+          - source_labels: [__name__]
+            regex: "container_(cpu_usage_seconds_total|memory_working_set_bytes|cpu_cfs_throttled_seconds_total)"
+            action: keep
+          # POD(일시정지 컨테이너)와 컨테이너 이름이 빈 집계 행은 중복이라 뺀다.
+          # 네트워크 지표는 Pod 단위라 container 라벨이 비어 있어 이 규칙에 걸린다.
+          # 지금 쓰는 패널이 없으므로 keep 목록에도 넣지 않았다 — 필요해지면 이 drop보다
+          # 앞에서 따로 살려야 한다.
+          - source_labels: [container]
+            regex: "(POD|)"
+            action: drop
+
+      # Traefik은 모든 외부 트래픽의 TLS 종단이고, 부하 테스트에서 지연의 42%를
+      # 차지했다(LOAD-TEST-REPORT.md §7). kube-system에 있어 별도 job으로 둔다.
+      - job_name: "traefik"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - kube-system
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "traefik"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9100"
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      # 밖에서 실제 사용자 경로를 찔러본다. Pod가 Running이고 target이 전부 up이어도
+      # Traefik·TLS·게이트웨이·CORS가 깨지면 사용자는 못 쓴다. 2026-08-26 CORS 장애가
+      # 정확히 그 경우였다 — 내부 지표는 모두 정상이었고 사용자만 403을 받았다.
+      - job_name: "blackbox-http"
+        metrics_path: /probe
+        params:
+          module: [http_2xx]
+        static_configs:
+          - targets:
+              # 공개 엔드포인트. 인증 없이 200과 데이터가 나와야 한다.
+              - https://3.38.24.67.sslip.io/api/v1/products/product-list
+              - https://3.38.24.67.sslip.io/api/v1/drops/upcoming
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter.monitoring.svc.cluster.local:9115
+
+      # 운영 프론트엔드 Origin으로 확인한다. 헤더가 아니라 상태 코드를 본다.
+      - job_name: "blackbox-http-cors"
+        metrics_path: /probe
+        params:
+          module: [http_2xx_cors]
+        static_configs:
+          - targets:
+              - https://3.38.24.67.sslip.io/api/v1/products/product-list
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter.monitoring.svc.cluster.local:9115
+
+      # Redis는 maxmemory 128mb + noeviction이라 한계에 닿으면 오래된 키를 지우는 것이
+      # 아니라 쓰기가 실패한다. 그러면 드롭 재고 선점과 인증이 동시에 깨진다.
+      # 사용량을 미리 보기 위한 유일한 경로다.
+      - job_name: "redis-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "redis-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9121"
+
+      # 브로커 측 consumer group lag. 애플리케이션이 내보내는 클라이언트 측 lag은
+      # 컨슈머가 죽으면 지표 자체가 사라져서 "밀리는 중"과 "죽어서 안 먹는 중"을
+      # 구분하지 못한다. exporter는 openbake 네임스페이스에 있다(advertised listener 제약).
+      - job_name: "kafka-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - openbake
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "kafka-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9308"
+
+      # Elasticsearch 내부. 회로 차단기는 "ES가 이상하다"까지만 알려준다.
+      # cluster health가 yellow인지 red인지, 힙이 찼는지, thread pool이 요청을
+      # 거부하는지를 구분해야 조치를 정할 수 있다.
+      - job_name: "elasticsearch-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "elasticsearch-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9114"
+
+      # PostgreSQL 4대. HikariCP로 "앱이 커넥션을 기다린다"까지는 보였지만
+      # DB가 왜 느린지는 볼 수 없었다. 락 대기·서버 측 커넥션·긴 트랜잭션이 드러난다.
+      #
+      # exporter가 openbake에 있는 이유는 자격증명 Secret이 거기 있기 때문이다.
+      # 4대를 openbake.io/exporter=postgres 라벨 하나로 잡고, 어느 DB인지는 exporter가
+      # 붙이는 datastore 라벨(PG_EXPORTER_CONSTANT_LABELS)로 구분한다.
+      - job_name: "postgres-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - openbake
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_openbake_io_exporter]
+            regex: "postgres"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9187"
+
+      # Pod 재시작·OOMKilled·HPA replica 변화는 애플리케이션 /actuator/prometheus에
+      # 나오지 않는다. kube-state-metrics가 API server 상태를 metric으로 바꿔준다.
+      - job_name: "kube-state-metrics"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "kube-state-metrics"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          # telemetry(8081)까지 잡히지 않도록 metrics 포트를 직접 지정한다.
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:8080"
+          # kube-state-metrics가 내보내는 metric은 이미 관측 대상의 pod/node/namespace
+          # label을 갖는다. 여기서 같은 이름의 target label을 붙이면 Prometheus가
+          # 원본을 exported_pod 등으로 밀어내므로 추가하지 않는다.
+
+  alerts.yml: |
+    groups:
+      # ── Symptom 경보 ────────────────────────────────────────────────
+      # 나머지 경보는 대부분 Cause(원인)다. 여기 있는 것만 "사용자가 지금 서비스를
+      # 못 쓴다"를 직접 말한다. 강의자료의 원칙: 사용자 영향으로 깨우고 원인은
+      # 대시보드에서 본다.
+      #
+      # 2026-08-26 CORS 장애 때 모든 Pod가 Running이고 target이 10/10 up이며
+      # 발화 경보가 0건인데 사용자는 403을 받고 있었다. 아래 규칙이 그 상황을 잡는다.
+      - name: user-facing
+        rules:
+          - alert: ExternalEndpointDown
+            expr: probe_success{job="blackbox-http"} == 0
+            for: 3m
+            labels:
+              severity: critical
+            annotations:
+              summary: "외부에서 {{ $labels.instance }} 접근 실패"
+              description: "Pod가 살아 있어도 Traefik·TLS·게이트웨이 경로가 깨지면 사용자는 못 쓴다. 내부 지표가 모두 정상이어도 이 경보는 사용자 영향을 뜻한다."
+              runbook: "docs/observability/roadmap.md"
+          # 운영 프론트엔드 Origin이 거부되는 경우. 헤더가 아니라 상태 코드로 판정한다.
+          - alert: FrontendOriginRejected
+            expr: probe_success{job="blackbox-http-cors"} == 0
+            for: 3m
+            labels:
+              severity: critical
+            annotations:
+              summary: "운영 프론트엔드 Origin이 거부되고 있다"
+              description: "Vercel Origin으로 보낸 요청이 200을 받지 못한다. CORS 설정(OPENBAKE_SECURITY_CORS_ALLOWED_ORIGINS)이나 게이트웨이 경로를 확인한다."
+              runbook: "docs/observability/rollout-log.md"
+          - alert: TLSCertExpiringSoon
+            expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 14
+            for: 1h
+            labels:
+              severity: warning
+            annotations:
+              summary: "TLS 인증서 만료까지 {{ $value | printf \"%.0f\" }}일"
+              description: "{{ $labels.instance }}. 만료되면 모든 외부 요청이 실패한다."
+
+      # 09번 문서 3장은 Job 실행만으로 성공을 판단하지 말라고 한다. 실패는 물론
+      # "예정대로 돌지 않은 것"과 "최근 성공이 없는 것"도 따로 봐야 한다.
+      # 2026-08-26: member·payment 백업이 31시간째 실패 중이었는데 아무도 몰랐다.
+      # kube_job_status_failed는 그때도 값을 내고 있었고 경보만 없었다.
+      - name: backup
+        rules:
+          - alert: BackupJobFailed
+            expr: kube_job_status_failed{namespace="openbake", job_name=~"postgres-backup-.*"} > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.job_name }} 백업 실패"
+              description: "DB 백업 Job이 실패했다. 실패가 반복되면 복구 지점이 사라진다."
+              runbook: "docs/infra/k3s/09-storage-backup-disaster-recovery-design.md"
+          # 성공 자체가 오래 없으면 실패 경보가 없어도 문제다. CronJob이 아예
+          # 스케줄되지 않는 경우(suspend, 노드 문제)를 여기서 잡는다.
+          - alert: BackupNotSucceededRecently
+            expr: |
+              time() - max by (cronjob) (
+                kube_cronjob_status_last_schedule_time{namespace="openbake", cronjob=~"postgres-backup-.*"}
+              ) > 93600
+            for: 30m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.cronjob }} 26시간 이상 실행되지 않음"
+              description: "마지막 스케줄 이후 {{ $value | printf \"%.0f\" }}초 경과. 일 1회 주기이므로 26시간을 넘으면 한 번 걸렀다는 뜻이다."
+              runbook: "docs/infra/k3s/09-storage-backup-disaster-recovery-design.md"
+
+      # 수집이 멈춰도 지금은 아무 신호가 없다. 관측 시스템이 눈이 먼 것을
+      # 탐지하는 유일한 경로다. up은 target이 살아 있을 때만 존재하므로,
+      # target 자체가 사라지는 경우를 위해 absent()를 함께 둔다.
+      - name: scrape-health
+        rules:
+          - alert: TargetDown
+            expr: up == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.job }} 수집 실패"
+              description: "instance={{ $labels.instance }}. 이 대상의 지표가 더 이상 들어오지 않는다. 관련 경보도 함께 침묵하므로 다른 신호를 신뢰할 수 없다."
+          # 아래 job들은 항상 존재해야 한다. 사라지면 up 자체가 없어져
+          # TargetDown이 발화하지 못하므로 absent로 따로 잡는다.
+          - alert: ScrapeJobAbsent
+            expr: |
+              absent(up{job="openbake-core"}) or absent(up{job="openbake-gateway"})
+              or absent(up{job="node-exporter"}) or absent(up{job="kube-state-metrics"})
+              or absent(up{job="redis-exporter"}) or absent(up{job="kafka-exporter"})
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              # absent()는 셀렉터의 라벨을 그대로 결과에 남긴다. 어느 job이
+              # 사라졌는지 여기서 드러난다.
+              summary: "{{ $labels.job }} scrape job이 사라졌다"
+              description: "Pod discovery에서 대상이 빠졌거나 Prometheus 설정이 잘못됐다. up 지표 자체가 없어 TargetDown으로는 잡히지 않는다."
+
+      # 09번 문서 5장이 확정한 root EBS 사용률 기준을 그대로 옮긴 것이다.
+      # 두 Node의 PVC가 물리적으로 같은 디스크를 쓰므로 한 워크로드의 폭증이
+      # 같은 Node의 DB·kubelet까지 함께 무너뜨린다(09번 문서 1장).
+      - name: node-disk
+        rules:
+          - alert: NodeDiskUsageWarning
+            expr: |
+              100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) >= 70
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.node }} root 디스크 사용률 70% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. 큰 directory·image·log·TSDB 증가 원인을 확인한다."
+          - alert: NodeDiskUsageCritical
+            expr: |
+              100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) >= 80
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.node }} root 디스크 사용률 80% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. retention 축소·불필요 image 정리, 신규 배포 중지를 검토한다."
+          - alert: NodeDiskUsageEmergency
+            expr: |
+              100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) >= 90
+            for: 2m
+            labels:
+              severity: emergency
+            annotations:
+              summary: "{{ $labels.node }} root 디스크 사용률 90% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. 쓰기 폭증을 차단하고 즉시 용량을 회수한다."
+
+      # 관측 문서의 자원 관점 표가 요구하는 Pod 재시작 신호. 애플리케이션
+      # /actuator/prometheus에는 없고 kube-state-metrics에서만 나온다.
+      - name: pod-stability
+        rules:
+          - alert: PodRestartingRepeatedly
+            expr: increase(kube_pod_container_status_restarts_total{namespace=~"openbake|monitoring"}[15m]) > 2
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.namespace }}/{{ $labels.pod }} 반복 재시작"
+              description: "15분간 약 {{ $value | printf \"%.0f\" }}회 재시작. 프로세스가 살아나도 Outbox·DLT·PENDING 적체는 별도 확인이 필요하다."
+          - alert: PodOOMKilled
+            expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.namespace }}/{{ $labels.pod }} OOMKilled"
+              description: "container={{ $labels.container }}. memory limit과 누수 여부를 확인한다."
+
+      # 임계값 300초는 가설이다. 관측 문서가 명시했듯 실측 기준선과 E8 훈련 전에는
+      # 확정할 수 없으므로, E8 결과가 나오면 이 값을 먼저 교정한다.
+      - name: async-backlog
+        rules:
+          - alert: OutboxPendingAgeHigh
+            expr: openbake_outbox_oldest_age_seconds > 300
+            for: 5m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.job }} Outbox 미발행 이벤트 정체"
+              description: "가장 오래된 PENDING 이벤트가 {{ $value }}초. 발행기·브로커·DB 락을 확인한다. count가 적어도 age가 크면 특정 데이터가 계속 낡는다."
+
+          # 종료 상태인데 슬롯이 남았다는 것은 그 자체로 전이 경로에 구멍이 있다는 뜻이다.
+          # 정상값이 0이므로 임계값을 추정할 필요가 없다.
+          - alert: OrderActiveSlotLeaked
+            expr: max(openbake_order_active_slot_leaked) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "주문 슬롯 누수 {{ $value }}건"
+              description: "종료된 주문이 진행 중 슬롯을 반납하지 않았다. 해당 회원은 새 주문을 만들 수 없다."
+
+      # 브로커가 1대라 죽으면 전체 이벤트 흐름이 멈춘다. 클라이언트 측 지표로는
+      # 이 상태를 볼 수 없어서(컨슈머도 함께 죽으면 지표가 사라진다) 브로커 측이 필요하다.
+      - name: kafka
+        rules:
+          - alert: KafkaBrokerDown
+            expr: kafka_brokers < 1
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Kafka 브로커에 접근할 수 없다"
+              description: "브로커가 1대뿐이라 이벤트 발행·소비가 모두 멈춘다. Outbox는 PENDING으로 쌓이므로 복구 후 소진 여부를 확인한다."
+          # 임계값 1000은 가설이다. 정상 부하의 lag 기준선을 확보한 뒤 교정한다.
+          - alert: KafkaConsumerGroupLagHigh
+            expr: max by (consumergroup, topic) (kafka_consumergroup_lag) > 1000
+            for: 10m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.consumergroup }} / {{ $labels.topic }} 소비 지연"
+              description: "lag {{ $value | printf \"%.0f\" }}건이 10분간 지속. 컨슈머 처리량이 생산 속도를 못 따라간다."
+          # 컨슈머가 죽으면 클라이언트 측 지표는 사라지지만 브로커 측 lag은 계속 늘어난다.
+          # 이 규칙이 그 상태를 잡는 유일한 경로다.
+          - alert: KafkaConsumerGroupStalled
+            expr: |
+              max by (consumergroup, topic) (kafka_consumergroup_lag) > 0
+              and max by (consumergroup, topic) (delta(kafka_consumergroup_current_offset[15m])) == 0
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.consumergroup }} / {{ $labels.topic }} 소비 정지"
+              description: "밀린 이벤트가 있는데 15분간 offset이 전혀 움직이지 않았다. 컨슈머가 죽었거나 특정 메시지에서 막혀 있다."
+
+      # Redis는 noeviction이라 한계 도달이 "느려짐"이 아니라 "쓰기 실패"다. 도달한
+      # 뒤에는 이미 늦으므로 여유가 있을 때 경고해야 한다. 09번 문서 6장이 정한
+      # maxmemory 128mb가 분모다.
+      - name: redis
+        rules:
+          - alert: RedisMemoryHigh
+            expr: 100 * (redis_memory_used_bytes / redis_memory_max_bytes) >= 70
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Redis 메모리 사용률 70% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. noeviction 정책이라 한계에 닿으면 키를 지우지 않고 쓰기가 실패한다. 드롭 재고 선점과 Refresh Token이 동시에 영향을 받는다."
+          - alert: RedisMemoryCritical
+            expr: 100 * (redis_memory_used_bytes / redis_memory_max_bytes) >= 85
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis 메모리 사용률 85% 초과"
+              description: "현재 {{ $value | printf \"%.1f\" }}%. 쓰기 실패가 임박했다. 만료 정책과 키 증가 원인을 즉시 확인한다."
+          # 실제로 거부가 시작되면 이미 사용자 영향이 발생한 뒤다. 0보다 크면 사건이다.
+          - alert: RedisRejectedConnections
+            expr: increase(redis_rejected_connections_total[5m]) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis 연결 거부 발생"
+              description: "5분간 {{ $value | printf \"%.0f\" }}건. maxclients 한계이거나 자원 고갈이다."
+          - alert: RedisDown
+            expr: redis_up == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis에 접근할 수 없다"
+              description: "exporter가 Redis에 연결하지 못한다. 재고 선점은 fail-closed라 판매가 중단되고, 인증도 함께 막힌다."
+
+      # 회로가 열린 것 자체는 설계대로 격리가 동작한 것이다. 문제는 오래 열려 있는
+      # 경우이므로 지속 시간으로 판단한다. 임계값이 아니라 상태라서 추정이 필요 없다.
+      # 재시도 후에도 실패해 DLT로 격리된 이벤트. 사람이 봐야 하는 대상이다.
+      - name: kafka-dlt
+        rules:
+          # 왜 "누적 개수 > 0"이 아니라 "1시간 증가분"인가.
+          #
+          # current_offset은 high water mark라 한 번 올라가면 내려오지 않는다.
+          # `> 0`으로 걸면 과거에 한 번이라도 실패한 순간부터 영원히 발화한다.
+          # 그런 경보는 며칠 안에 무시당하고, 그러면 진짜 새 실패도 함께 묻힌다.
+          #
+          # 2026-08-27 실측: product.changed.v1.dlt 5건, product.viewed.v1.dlt 7건이
+          # 이미 쌓여 있다(합 12건). 이 12건은 **경보 대상이 아니라 일회성 정리
+          # 대상**이다. 사람이 원인을 보고 재처리하거나 폐기해야 한다.
+          # 이 규칙이 잡는 것은 그 이후에 **새로 생기는** 실패다.
+          - alert: KafkaDltMessagesAppearing
+            expr: sum by (topic) (increase(kafka_topic_partition_current_offset{topic=~".+\\.dlt"}[1h])) > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.topic }}에 새 DLT 메시지"
+              description: "최근 1시간 동안 {{ $value | printf \"%.0f\" }}건이 DLT로 격리됐다. 재시도로도 처리되지 않은 이벤트이므로 원인을 확인하고 재처리 여부를 정한다."
+
+      # Pod가 설계와 다른 노드에 떠도 Running이고 지표도 정상이라 아무 신호가 없다.
+      # DB 접근이 노드를 넘어 지연만 조용히 늘어난다.
+      - name: placement
+        rules:
+          # backend는 일부러 제외한다. HPA가 replica 2개째를 Node B에 띄우는 것이
+          # 정상 동작이라(03번 문서) 여기 넣으면 확장할 때마다 오탐이 된다.
+          #
+          # 잡는 것은 둘이다.
+          #   ① service 풀 워크로드가 core 노드에 뜬 경우
+          #      Node A는 CPU 예약 여유가 200m뿐이라 이쪽이 실제로 해롭다.
+          #   ② api-gateway(단일 replica)가 core를 벗어난 경우
+          #
+          # for를 30분으로 길게 둔 이유: 롤링 배포 중에는 잠깐 다른 노드에 뜰 수 있다.
+          # 그 전환 구간까지 깨우면 배포할 때마다 울린다.
+          - alert: PodOnWrongNodePool
+            expr: |
+              (
+                kube_pod_info{namespace="openbake", pod=~"member-service-.+|payment-service-.+|ai-service-.+"}
+                and on (node) kube_node_labels{label_openbake_io_node_pool="core"}
+              )
+              or
+              (
+                kube_pod_info{namespace="openbake", pod=~"api-gateway-.+"}
+                and on (node) kube_node_labels{label_openbake_io_node_pool!="core"}
+              )
+            for: 30m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.pod }}가 설계와 다른 노드에 있다"
+              description: "{{ $labels.node }}에 떠 있다. nodeAffinity가 preferred라 배치가 어긋나도 Running이다. DB가 다른 노드면 접근마다 노드를 넘는다."
+
+      - name: elasticsearch
+        rules:
+          # ⚠️ yellow에는 경보를 걸지 않는다.
+          #
+          # 단일 노드(discovery.type=single-node)인데 인덱스 복제본이 1이라
+          # 복제 샤드를 배정할 노드가 없다. 그래서 **정상 상태가 영구히 yellow**다.
+          # 2026-08-27 실측: status=yellow, active_shards=2, unassigned_shards=2.
+          # 여기에 경보를 걸면 24시간 울리고, 그러면 red도 함께 무시당한다.
+          #
+          # red는 다르다. **주 샤드가 배정되지 않았다**는 뜻이라 그 인덱스는 검색도
+          # 색인도 되지 않는다. 회로 차단기가 열리기 전에 알아야 한다.
+          - alert: ElasticsearchClusterRed
+            expr: elasticsearch_cluster_health_status{color="red"} == 1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Elasticsearch 클러스터 red"
+              description: "주 샤드가 배정되지 않았다. 해당 인덱스는 검색·색인이 되지 않는다. 상품 검색이 폴백으로 떨어진다."
+          - alert: ElasticsearchDown
+            expr: elasticsearch_cluster_health_up == 0
+            for: 3m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Elasticsearch 응답 없음"
+              description: "exporter가 클러스터에 접근하지 못한다. 상품 검색이 폴백 경로로 처리된다."
+          # ES_JAVA_OPTS가 -Xmx512m으로 고정이라 힙이 늘어날 여지가 없다.
+          # 임계값은 가설이며 실측으로 교체한다.
+          - alert: ElasticsearchHeapHigh
+            expr: |
+              elasticsearch_jvm_memory_used_bytes{area="heap"}
+              / elasticsearch_jvm_memory_max_bytes{area="heap"} > 0.85
+            for: 15m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "Elasticsearch 힙 {{ $value | humanizePercentage }}"
+              description: "힙이 512m 고정이다. 계속 높으면 GC가 길어지고 검색 지연이 늘어난다."
+
+      - name: postgres
+        rules:
+          - alert: PostgresDown
+            expr: pg_up == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.datastore }} PostgreSQL 응답 없음"
+              description: "exporter가 접속하지 못한다. 해당 서비스의 모든 쓰기·읽기가 실패한다."
+          # 서버 측 커넥션이 상한에 가까워지면 새 연결이 거부된다. HikariCP 지표로는
+          # "앱이 기다린다"까지만 보이고 서버 쪽 한계는 보이지 않았다.
+          # 임계값 0.8은 가설이다.
+          - alert: PostgresConnectionsHigh
+            expr: |
+              sum by (datastore) (pg_stat_database_numbackends)
+              / max by (datastore) (pg_settings_max_connections) > 0.8
+            for: 10m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.datastore }} PostgreSQL 커넥션 {{ $value | humanizePercentage }}"
+              description: "상한에 닿으면 새 연결이 거부된다. 커넥션 누수나 긴 트랜잭션을 의심한다."
+          # 데드락은 정상값이 0이라 임계값 추정이 필요 없다. 발생 자체가 신호다.
+          - alert: PostgresDeadlocks
+            expr: sum by (datastore) (increase(pg_stat_database_deadlocks[15m])) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.datastore }} PostgreSQL 데드락 발생"
+              description: "15분간 {{ $value | printf \"%.0f\" }}건. 락 순서가 어긋나는 경로가 있다는 뜻이다."
+
+      - name: circuit-breaker
+        rules:
+          - alert: CircuitBreakerOpen
+            expr: max by (name) (resilience4j_circuitbreaker_state{state="open"}) == 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.name }} 회로 차단기가 5분 이상 OPEN"
+              description: "해당 의존성 호출이 차단되고 폴백으로 처리 중이다. elasticsearch는 RDB 폴백, ai-semantic-search는 BM25 검색으로 내려간다. 의존성 자체를 확인한다."

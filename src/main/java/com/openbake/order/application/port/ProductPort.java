@@ -16,7 +16,7 @@ import java.util.Optional;
  */
 public interface ProductPort {
 
-    //상품이 삭제됐으면 빈 값. 하드 삭제라 행이 사라진다.
+    //상품이 삭제됐으면 빈 값. 소프트 삭제 상태는 구현체가 걸러낸다.
     Optional<ProductInfo> findProduct(Long productId);
 
     /**

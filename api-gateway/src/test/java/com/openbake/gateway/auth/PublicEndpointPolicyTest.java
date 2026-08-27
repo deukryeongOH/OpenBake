@@ -179,7 +179,7 @@ class PublicEndpointPolicyTest {
     }
 
     @Test
-    void recognizesOnlyDetailGetsAsOptionallyAuthenticated() {
+    void recognizesDetailGetsAsOptionallyAuthenticated() {
         assertTrue(policy.isOptionallyAuthenticated(request(
                 HttpMethod.GET, "/api/v1/products/1")));
         assertTrue(policy.isOptionallyAuthenticated(request(
@@ -191,6 +191,27 @@ class PublicEndpointPolicyTest {
                 HttpMethod.POST, "/api/v1/products/1")));
         assertFalse(policy.isOptionallyAuthenticated(request(
                 HttpMethod.GET, "/api/v1/drops/12")));
+    }
+
+    @Test
+    void recognizesHomeListingGetsAsOptionallyAuthenticated() {
+        assertTrue(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/products/product-list")));
+        assertTrue(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/products/autocomplete")));
+        assertTrue(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/drops/upcoming")));
+
+        assertFalse(policy.isOptionallyAuthenticated(request(
+                HttpMethod.POST, "/api/v1/products/product-list")));
+        assertFalse(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/products/product-list/extra")));
+        assertFalse(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/drops/upcoming/extra")));
+
+        // 추천(recommendations)은 개인화가 본질이라 optional-auth 대상이 아니다 — 로그인 필요 유지.
+        assertFalse(policy.isOptionallyAuthenticated(request(
+                HttpMethod.GET, "/api/v1/recommendations")));
     }
 
     private MockServerHttpRequest request(

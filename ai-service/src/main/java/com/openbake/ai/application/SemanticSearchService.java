@@ -32,6 +32,12 @@ public class SemanticSearchService {
         List<SemanticSearchResult.Item> items = new ArrayList<>();
         int rank = 1;
         for (ProductEmbeddingSnapshot snapshot : nearest) {
+            // Elasticsearch cosine _score는 (1 + raw cosine) / 2다.
+            // 설정과 비교할 때만 raw cosine으로 되돌린다. 0은 롤백용 비활성 값이다.
+            double rawCosine = 2.0 * snapshot.similarity() - 1.0;
+            if (properties.minCosine() > 0.0 && rawCosine < properties.minCosine()) {
+                continue;
+            }
             items.add(new SemanticSearchResult.Item(snapshot.productId(), rank, snapshot.similarity()));
             rank++;
         }

@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-state-metrics
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      serviceAccountName: kube-state-metrics
+      # 03번 문서 7장: Node A가 죽어도 관측이 살아 있어야 한다. Prometheus와 같은 Node B에 둔다.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: kube-state-metrics
+          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0
+          args:
+            # rbac.yaml이 부여한 자원만 수집한다. 기본값은 전체 자원이라 권한 없는 객체마다
+            # 오류를 반복 기록한다.
+            - --resources=pods,nodes,namespaces,persistentvolumeclaims,deployments,statefulsets,daemonsets,horizontalpodautoscalers,cronjobs,jobs
+            # 노드의 워크로드 풀 라벨을 지표에 붙인다.
+            #
+            # nodeAffinity가 preferred라 Pod가 설계와 다른 노드에 떠도 Running이고
+            # 지표도 정상이라 아무 신호가 없다. DB 접근이 노드를 넘어 지연만 조용히
+            # 늘어난다. 이 라벨이 있어야 "core 풀에 있어야 할 Pod가 service 풀에 있다"를
+            # 질의로 판정할 수 있다.
+            #
+            # allowlist는 기본이 전부 비허용이라 명시한 라벨만 노출된다. 라벨을 통째로
+            # 열면 카디널리티가 크게 늘어난다.
+            - --metric-labels-allowlist=nodes=[openbake.io/node-pool]
+          ports:
+            - containerPort: 8080
+              name: metrics
+            - containerPort: 8081
+              name: telemetry
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3

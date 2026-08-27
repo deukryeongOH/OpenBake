@@ -5,11 +5,13 @@ import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.application.port.StockReservationPort;
 import com.openbake.drop.application.service.DropStockSyncService;
 import com.openbake.drop.domain.repository.DropEntryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -39,8 +41,16 @@ class DropStockSyncServiceTest {
     @Mock
     private ProductPort productPort;
 
-    @InjectMocks
+    // 드리프트 카운터 증가를 실제로 확인하려면 mock이 아닌 동작하는 registry가 필요하다.
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     private DropStockSyncService dropStockSyncService;
+
+    @BeforeEach
+    void setUp() {
+        dropStockSyncService = new DropStockSyncService(
+                stockReservationPort, dropEntryRepository, productPort, meterRegistry);
+    }
 
     private final Long dropId = 1L;
     private final Long productId = 100L;
@@ -192,6 +202,32 @@ class DropStockSyncServiceTest {
         // then
         verify(productPort, never()).syncRemainQuantity(any(), anyInt());
         verify(stockReservationPort, never()).clear(any());
+    }
+
+    @Test
+    @DisplayName("불일치를 발견하면 드리프트 카운터가 올라간다")
+    void checkDrift_OnMismatch_IncrementsCounter() {
+        CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
+        given(stockReservationPort.peek(dropId)).willReturn(42L);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(50);
+
+        dropStockSyncService.checkDrift(cached);
+
+        assertThat(meterRegistry.counter("openbake.drop.stock.drift").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("일치하면 드리프트 카운터가 오르지 않는다")
+    void checkDrift_OnMatch_DoesNotIncrementCounter() {
+        CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
+        given(stockReservationPort.peek(dropId)).willReturn(50L);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(50);
+
+        dropStockSyncService.checkDrift(cached);
+
+        assertThat(meterRegistry.counter("openbake.drop.stock.drift").count()).isZero();
     }
 
     @Test

@@ -1,0 +1,36 @@
+# postgres-exporter 4대 → 각 PostgreSQL 5432.
+#
+# ⚠️ 안전 확인: 4개 postgres Pod는 이미 allow-{backend,member-service,
+# payment-service,ai-service}-to-*-postgres에 선택되어 **격리 상태**다.
+# 이 파일은 허용만 더한다. 근거는 allow-elasticsearch-exporter-to-elasticsearch.yaml
+# 상단 주석 참고.
+#
+# 대상을 이름 하나하나로 나열하지 않고 In 연산자로 묶는다. 4개 정책 파일로 나누면
+# 같은 내용이 네 번 반복되고, 하나를 고칠 때 나머지를 빠뜨리기 쉽다.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-exporter-to-postgres
+  namespace: openbake
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - core-postgres
+          - member-postgres
+          - payment-postgres
+          - ai-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # exporter는 같은 openbake 네임스페이스에 있다(자격증명 Secret이 여기 있다).
+        # openbake.io/exporter 라벨 하나로 4대를 모두 잡는다.
+        - podSelector:
+            matchLabels:
+              openbake.io/exporter: postgres
+      ports:
+        - protocol: TCP
+          port: 5432

@@ -20,6 +20,10 @@ fi
 : "${EXTERNAL_BASE_URL:=}"
 : "${SMOKE_TEST_MEMBER_EMAIL:=}"
 : "${SMOKE_TEST_MEMBER_PASSWORD:=}"
+# 공개 조회 확인에 쓸 실제 id. 게이트웨이의 공개 GET 패턴이 숫자 id만 허용한다
+# (PublicEndpointPolicy.java) — 존재하는 id여야 200이 나온다.
+: "${SMOKE_TEST_PRODUCT_ID:=11}"
+: "${SMOKE_TEST_DROP_ID:=1}"
 
 confirm() {
     local prompt="$1"
@@ -74,6 +78,8 @@ echo
 if [[ "$MODE" == "external" ]]; then
     echo "=== 노출 차단 확인 — 외부에서 절대 200이 나오면 안 되는 경로 ==="
     check "actuator/prometheus 외부 차단" GET "/actuator/prometheus" 404
+    check "actuator/env 외부 차단"        GET "/actuator/env" 404
+    check "actuator/metrics 외부 차단"    GET "/actuator/metrics" 404
     check "internal 경로 외부 차단"      GET "/internal/v1/products/reindex" 404
 else
     echo "=== 노출 차단 확인은 --external 모드에서만 의미가 있다 (Traefik/Ingress 레벨 차단이라 port-forward로는 검증 안 됨) — 건너뜀 ==="
@@ -81,8 +87,18 @@ fi
 
 echo
 echo "=== 공개 조회 API ==="
-check "상품 목록 조회"  GET "/api/v1/products/product-list?page=0&size=1" 200
-check "다가오는 drop 조회" GET "/api/v1/drops/upcoming" 200
+# 게이트웨이가 인증 없이 통과시키는 GET은 아래 두 패턴뿐이다
+# (PublicEndpointPolicy.java): ^/api/v1/products/[1-9][0-9]*$
+#                              ^/api/v1/drops/[1-9][0-9]*/info$
+check "상품 상세 조회" GET "/api/v1/products/$SMOKE_TEST_PRODUCT_ID" 200
+check "drop 정보 조회" GET "/api/v1/drops/$SMOKE_TEST_DROP_ID/info" 200
+
+echo
+echo "=== 비공개 확인 — 목록성 조회는 인증이 필요하다 ==="
+# 2026-08-24: 이전 버전은 아래 둘을 공개 API로 기대해 항상 FAIL이었다.
+# 401이 설계대로의 동작이므로 그렇게 검증한다.
+check "상품 목록은 비공개"   GET "/api/v1/products/product-list?page=0&size=1" 401
+check "다가오는 drop 비공개" GET "/api/v1/drops/upcoming" 401
 
 echo
 echo "=== 인증 흐름 ==="

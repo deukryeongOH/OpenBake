@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-exporter
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: redis-exporter
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis-exporter
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      # Redis Pod의 사이드카로 넣지 않는 이유: 사이드카는 Redis Pod 재시작을 요구하는데,
+      # 지금 보호하려는 대상이 바로 그 Redis다(드롭 재고 카운터와 인증 상태를 들고 있다).
+      # 별도 Deployment로 두면 Redis를 건드리지 않고 붙일 수 있다.
+      #
+      # Node A는 CPU 요청 합계가 allocatable과 같아 여유가 0이라 Node B에 둔다.
+      # 15초마다 INFO를 한 번 호출하는 수준이라 노드를 넘는 비용은 무시할 만하다.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - service
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 59000
+        runAsGroup: 59000
+      containers:
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            # Redis Service는 headless라 Pod IP로 직접 해석된다. 인증은 설정되어 있지 않다.
+            - name: REDIS_ADDR
+              value: "redis://redis.openbake.svc.cluster.local:6379"
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 48Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9121
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9121
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3

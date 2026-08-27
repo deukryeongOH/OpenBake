@@ -9,6 +9,9 @@ metadata:
     app.kubernetes.io/part-of: openbake
     app.kubernetes.io/instance: production
 data:
+  # backend-config.yaml과 같은 이유. 세 서비스가 같은 키를 읽고 기본값이
+  # http://localhost:3000 하나뿐이라, 값이 없으면 운영 프론트엔드 요청을 거부한다.
+  OPENBAKE_SECURITY_CORS_ALLOWED_ORIGINS: "https://bakery-site6-fe.vercel.app,http://localhost:3000,http://localhost:5173"
   MEMBER_DB_URL: "jdbc:postgresql://member-postgres:5432/openbake_member"
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"

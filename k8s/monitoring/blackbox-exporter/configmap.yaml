@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blackbox-exporter-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  blackbox.yml: |
+    modules:
+      # 공개 엔드포인트가 200과 본문을 돌려주는지 본다.
+      # Pod가 Running이어도 Traefik·TLS·게이트웨이 경로가 깨지면 여기서 드러난다.
+      http_2xx:
+        prober: http
+        timeout: 10s
+        http:
+          valid_status_codes: [200]
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          method: GET
+          preferred_ip_protocol: ip4
+          # sslip.io 인증서를 검증한다. 만료되면 probe가 실패해 경보가 뜬다.
+          tls_config:
+            insecure_skip_verify: false
+
+      # 운영 프론트엔드 Origin을 붙여 확인한다. 2026-08-26에 백엔드가 이 Origin을
+      # "Invalid CORS request" 403으로 거부했는데, 게이트웨이가 CORS 헤더를
+      # 붙여줘서 헤더만 보면 정상으로 보였다. 상태 코드를 봐야 드러난다.
+      http_2xx_cors:
+        prober: http
+        timeout: 10s
+        http:
+          valid_status_codes: [200]
+          method: GET
+          preferred_ip_protocol: ip4
+          headers:
+            Origin: "https://bakery-site6-fe.vercel.app"
+          tls_config:
+            insecure_skip_verify: false

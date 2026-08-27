@@ -1,0 +1,127 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: ./drop-confirm-entry-concurrency.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 300 max VUs, 5m30s max duration (incl. graceful stop):
+              * concurrent_confirm_entry: 1 iterations for each of 300 VUs (maxDuration: 5m0s, gracefulStop: 30s)
+
+
+running (0m01.0s), 300/300 VUs, 0 complete and 0 interrupted iterations
+concurrent_confirm_entry   [   0% ] 300 VUs  0m01.0s/5m0s  000/300 iters, 1 per VU
+
+running (0m02.0s), 300/300 VUs, 0 complete and 0 interrupted iterations
+concurrent_confirm_entry   [   0% ] 300 VUs  0m02.0s/5m0s  000/300 iters, 1 per VU
+
+running (0m03.0s), 266/300 VUs, 34 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  11% ] 300 VUs  0m03.0s/5m0s  034/300 iters, 1 per VU
+
+running (0m04.0s), 236/300 VUs, 64 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  21% ] 300 VUs  0m04.0s/5m0s  064/300 iters, 1 per VU
+
+running (0m05.0s), 222/300 VUs, 78 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  26% ] 300 VUs  0m05.0s/5m0s  078/300 iters, 1 per VU
+
+running (0m06.0s), 215/300 VUs, 85 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  28% ] 300 VUs  0m06.0s/5m0s  085/300 iters, 1 per VU
+
+running (0m07.0s), 206/300 VUs, 94 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  31% ] 300 VUs  0m07.0s/5m0s  094/300 iters, 1 per VU
+
+running (0m08.0s), 198/300 VUs, 102 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  34% ] 300 VUs  0m08.0s/5m0s  102/300 iters, 1 per VU
+
+running (0m09.0s), 189/300 VUs, 111 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  37% ] 300 VUs  0m09.0s/5m0s  111/300 iters, 1 per VU
+
+running (0m10.0s), 182/300 VUs, 118 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  39% ] 300 VUs  0m10.0s/5m0s  118/300 iters, 1 per VU
+
+running (0m11.0s), 177/300 VUs, 123 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  41% ] 300 VUs  0m11.0s/5m0s  123/300 iters, 1 per VU
+
+running (0m12.0s), 150/300 VUs, 150 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  50% ] 300 VUs  0m12.0s/5m0s  150/300 iters, 1 per VU
+
+running (0m13.0s), 097/300 VUs, 203 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  68% ] 300 VUs  0m13.0s/5m0s  203/300 iters, 1 per VU
+
+running (0m14.0s), 065/300 VUs, 235 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  78% ] 300 VUs  0m14.0s/5m0s  235/300 iters, 1 per VU
+
+running (0m15.0s), 050/300 VUs, 250 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  83% ] 300 VUs  0m15.0s/5m0s  250/300 iters, 1 per VU
+
+running (0m16.0s), 028/300 VUs, 272 complete and 0 interrupted iterations
+concurrent_confirm_entry   [  91% ] 300 VUs  0m16.0s/5m0s  272/300 iters, 1 per VU
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1' rate=100.00%
+
+    confirm_entry_business_duration
+    ✗ 'p(95)<1000' p(95)=2.99s
+    ✗ 'p(99)<2000' p(99)=6.06s
+
+    confirm_entry_drop_not_found
+    ✓ 'count==0' count=0
+
+    confirm_entry_success
+    ✓ 'count==300' count=300
+
+    confirm_entry_unauthorized
+    ✓ 'count==0' count=0
+
+    confirm_entry_unexpected
+    ✓ 'count==0' count=0
+
+    http_req_failed
+    ✓ 'rate==0' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 600     36.489907/s
+    checks_succeeded...: 100.00% 600 out of 600
+    checks_failed......: 0.00%   0 out of 600
+
+    ✓ 입장 확정 요청이 성공한다
+    ✓ 응답 JSON의 success가 true이다
+
+    CUSTOM
+    confirm_entry_business_duration...: avg=1.46s  min=200.59ms med=1.29s  max=6.12s  p(90)=2.76s  p(95)=2.99s 
+    confirm_entry_drop_not_found......: 0      0/s
+    confirm_entry_success.............: 300    18.244953/s
+    confirm_entry_unauthorized........: 0      0/s
+    confirm_entry_unexpected..........: 0      0/s
+
+    HTTP
+    http_req_duration.................: avg=1.46s  min=200.59ms med=1.29s  max=6.12s  p(90)=2.76s  p(95)=2.99s 
+      { expected_response:true }......: avg=1.46s  min=200.59ms med=1.29s  max=6.12s  p(90)=2.76s  p(95)=2.99s 
+    http_req_failed...................: 0.00%  0 out of 300
+    http_reqs.........................: 300    18.244953/s
+
+    EXECUTION
+    iteration_duration................: avg=10.08s min=2.2s     med=12.04s max=16.43s p(90)=15.89s p(95)=16.14s
+    iterations........................: 300    18.244953/s
+    vus...............................: 28     min=28       max=300
+    vus_max...........................: 300    min=300      max=300
+
+    NETWORK
+    data_received.....................: 2.1 MB 126 kB/s
+    data_sent.........................: 594 kB 36 kB/s
+
+
+
+
+running (0m16.4s), 000/300 VUs, 300 complete and 0 interrupted iterations
+concurrent_confirm_entry ✓ [ 100% ] 300 VUs  0m16.4s/5m0s  300/300 iters, 1 per VU

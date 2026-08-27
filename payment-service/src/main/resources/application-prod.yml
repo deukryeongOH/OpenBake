@@ -54,15 +54,23 @@ management:
       probability: ${TRACING_SAMPLING:0.1}
   # span을 Tempo로 보낸다.
   #
-  # ⚠️ 이 설정이 없으면 traceId는 로그에 찍히지만 **span은 어디에도 저장되지 않는다.**
-  # 그러면 "어느 구간이 몇 ms 걸렸는가"를 볼 수 없다. 로그 상관관계까지가 전부다.
+  # ⚠️ 전송 방식과 포트가 짝이 맞아야 한다. 이걸 틀리면 **조용히 실패한다.**
+  #   OTLP HTTP  -> 4318, 경로 /v1/traces 까지 필요
+  #   OTLP gRPC  -> 4317, 경로 없음
   #
-  # OTLP exporter는 전송에 실패해도 애플리케이션을 멈추지 않는다. 재시도하다 버린다.
-  # 즉 주소가 틀리거나 NetworkPolicy에 막히면 **조용히 사라진다.** 배포 후
-  # tempo_distributor_spans_received_total이 증가하는지 반드시 확인한다.
+  # 2026-08-27 실측: transport 기본값이 http인데 endpoint를 4317(gRPC 포트)로 줬다가
+  # span이 한 건도 도착하지 않았다. OTLP exporter는 전송에 실패해도 애플리케이션을
+  # 멈추지 않고 재시도하다 버리므로 **앱 로그에 아무 흔적이 없었다.**
+  # Tempo의 tempo_distributor_spans_received_total이 생성되지 않는 것으로 알았다.
   #
-  # 기본 프로필에는 넣지 않는다. 로컬 개발에서 Tempo가 없는 것이 정상이고,
-  # 없는 주소로 계속 재시도하면 로그가 지저분해진다.
-  otlp:
+  # 여기서는 HTTP를 쓴다. 기본 전송 방식이고, 4318이 실제로 응답하는 것을
+  # 확인했다(빈 본문에 415 unsupported media type = 요청이 파싱까지 갔다는 뜻).
+  #
+  # 기본 프로필에는 넣지 않는다. 로컬에 Tempo가 없는 것이 정상이고, 없는 주소로
+  # 계속 재시도하면 로그가 지저분해진다.
+  opentelemetry:
     tracing:
-      endpoint: ${OTLP_TRACING_ENDPOINT:http://tempo.monitoring.svc.cluster.local:4317}
+      export:
+        otlp:
+          endpoint: ${OTLP_TRACING_ENDPOINT:http://tempo.monitoring.svc.cluster.local:4318/v1/traces}
+          transport: http

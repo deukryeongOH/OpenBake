@@ -36,4 +36,10 @@ public interface DropRepository {
 
     // 품절(COMPLETED)된 드롭만 ACTIVE로 되살린다
     int reviveFromSoldOut(Long dropId);
+
+    // 재고 확정 유예 시간이 지났는데 아직 확정 안 된 드롭 목록
+    List<Drop> findStockFinalizationCandidates(LocalDateTime cutoff);
+
+    // 재고 확정 표식. 조건부 UPDATE라 실제로 확정했으면 1, 이미 확정돼 있었으면 0을 반환한다.
+    int markStockFinalized(Long dropId, LocalDateTime now);
 }

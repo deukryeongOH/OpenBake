@@ -76,4 +76,14 @@ public class DropRepositoryAdapter implements DropRepository {
     public int reviveFromSoldOut(Long dropId) {
         return dropJpaRepository.reviveFromSoldOut(dropId);
     }
+
+    @Override
+    public List<Drop> findStockFinalizationCandidates(LocalDateTime cutoff) {
+        return dropJpaRepository.findStockFinalizationCandidates(cutoff);
+    }
+
+    @Override
+    public int markStockFinalized(Long dropId, LocalDateTime now) {
+        return dropJpaRepository.markStockFinalized(dropId, now);
+    }
 }

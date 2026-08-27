@@ -45,4 +45,14 @@ public interface DropJpaRepository extends JpaRepository<Drop, Long> {
     @Modifying(clearAutomatically = true)
     @Query("Update Drop d Set d.dropStatus = 'ACTIVE' WHERE d.id = :dropId AND d.dropStatus = 'COMPLETED'")
     int reviveFromSoldOut(@Param("dropId") Long dropId);
+
+    // 재고 확정 후보: 확정 유예 시간이 지났는데 아직 확정 안 된 드롭.
+    // TodayDropCache가 아니라 DB를 기준으로 돈다 — 자정을 넘겨 끝난 드롭은 캐시에서 이미 빠졌을 수 있다.
+    @Query("select d from Drop d where d.stockFinalizedAt is null and d.dropEnd < :cutoff")
+    List<Drop> findStockFinalizationCandidates(@Param("cutoff") LocalDateTime cutoff);
+
+    // 재고 확정 표식: 드롭당 정확히 1회만 확정되도록 조건부로 막는다(activeStatus/completeStatus와 같은 패턴).
+    @Modifying(clearAutomatically = true)
+    @Query("Update Drop d Set d.stockFinalizedAt = :now WHERE d.id = :dropId AND d.stockFinalizedAt IS NULL")
+    int markStockFinalized(@Param("dropId") Long dropId, @Param("now") LocalDateTime now);
 }

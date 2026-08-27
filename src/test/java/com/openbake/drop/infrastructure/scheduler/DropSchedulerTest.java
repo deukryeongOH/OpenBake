@@ -1,25 +1,38 @@
 package com.openbake.drop.infrastructure.scheduler;
 
+import com.openbake.common.exception.BusinessException;
+import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.service.DropEnterService;
+import com.openbake.drop.application.service.DropLockService;
 import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.application.service.DropStockSyncService;
 import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.cache.TodayDropCache;
+import com.openbake.drop.domain.DropStatus;
+import com.openbake.drop.domain.EntryStatus;
+import com.openbake.drop.domain.entity.Drop;
+import com.openbake.drop.domain.entity.DropEntry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Set;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -38,12 +51,46 @@ class DropSchedulerTest {
     @Mock
     private DropStockSyncService dropStockSyncService;
 
+    @Mock
+    private DropLockService dropLockService;
+
     @InjectMocks
     private DropScheduler dropScheduler;
 
     private final Long dropId = 1L;
     private static final Long PRODUCT_ID = 100L;
     private static final int LIMIT_QUANTITY = 5;
+    private static final Long MEMBER_ID = 10L;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(dropScheduler, "stockFinalizeDelay", Duration.ofMinutes(30));
+        ReflectionTestUtils.setField(dropScheduler, "reservationTtl", Duration.ofMinutes(15));
+    }
+
+    private static DropEntry reservedEntry(Long dropId, Long memberId) {
+        DropEntry entry = DropEntry.builder()
+                .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.RESERVED).build();
+        return entry;
+    }
+
+    // Drop 생성자는 "미래 시각 + 고정 슬롯"만 허용한다. 과거 종료 시각을 가진 드롭을 만들어야 하므로
+    // 일단 유효한 값(내일 09:00~10:00)으로 만든 뒤 리플렉션으로 원하는 시각으로 덮어쓴다.
+    private static Drop drop(Long dropId, Long productId, LocalDateTime start, LocalDateTime end) {
+        LocalDateTime validStart = LocalDate.now().plusDays(1).atTime(9, 0);
+        LocalDateTime validEnd = LocalDate.now().plusDays(1).atTime(10, 0);
+        Drop drop = Drop.builder()
+                .dropStatus(DropStatus.COMPLETED)
+                .productId(productId)
+                .limitQuantity(LIMIT_QUANTITY)
+                .dropStart(validStart)
+                .dropEnd(validEnd)
+                .build();
+        ReflectionTestUtils.setField(drop, "id", dropId);
+        ReflectionTestUtils.setField(drop, "dropStart", start);
+        ReflectionTestUtils.setField(drop, "dropEnd", end);
+        return drop;
+    }
 
     // started/ended가 이미 마킹된 상태로 만들고 싶으면 alreadyStarted/alreadyEnded를 true로 넘긴다
     // (tryMarkStarted/tryMarkEnded가 compareAndSet(false, true)라 이미 true면 항상 false를 반환한다)
@@ -202,9 +249,14 @@ class DropSchedulerTest {
         verify(dropStockSyncService, never()).warmUp(any());
     }
 
+    /**
+     * 재고 확정(finalizeStock)은 더 이상 processDropLifecycle에서 곧바로 일어나지 않는다.
+     * 진행 중이던 주문의 만료 처리가 끝날 유예 시간을 준 뒤 finalizeStockAfterGracePeriod가
+     * 대신 확정한다 — DropStockSyncService.finalizeStock, DropStockFinalizeThenRollbackBugTest 참고.
+     */
     @Test
-    @DisplayName("마감 첫 tick에는 재고를 최종 확정한다")
-    void processDropLifecycle_AfterDropEnd_FinalizesStockOnce() {
+    @DisplayName("마감 첫 tick은 상태 전환·잔여 정리만 하고 재고 확정은 하지 않는다")
+    void processDropLifecycle_AfterDropEnd_DoesNotFinalizeStockImmediately() {
         // given
         LocalDateTime now = LocalDateTime.now();
         CachedDrop drop = cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1), true, false);
@@ -214,23 +266,73 @@ class DropSchedulerTest {
         dropScheduler.processDropLifecycle();
 
         // then
-        verify(dropStockSyncService).finalizeStock(drop);
+        verify(dropService).changeDropStatusCompleted(dropId);
+        verify(dropEnterService).expireRemainingEntries(dropId);
+        verify(dropStockSyncService, never()).finalizeStock(any());
     }
 
     @Test
-    @DisplayName("이미 마감 처리된 드롭은 재고 확정을 반복하지 않는다")
-    void processDropLifecycle_AlreadyEnded_DoesNotFinalizeAgain() {
+    @DisplayName("확정 유예 시간이 지난 후보가 있으면 재고를 확정한다")
+    void finalizeStockAfterGracePeriod_FinalizesCandidates() {
         // given
-        LocalDateTime now = LocalDateTime.now();
-        given(todayDropCache.get()).willReturn(List.of(
-                cachedDrop(dropId, now.minusHours(2), now.minusMinutes(1), true, true)
-        ));
+        Drop candidate = drop(dropId, PRODUCT_ID,
+                LocalDateTime.now().minusHours(2), LocalDateTime.now().minusHours(1));
+        given(dropService.findStockFinalizationCandidates(any())).willReturn(List.of(candidate));
 
         // when
-        dropScheduler.processDropLifecycle();
+        dropScheduler.finalizeStockAfterGracePeriod();
+
+        // then
+        verify(dropStockSyncService).finalizeStock(candidate);
+    }
+
+    @Test
+    @DisplayName("확정 유예 조회는 마감 시각 기준으로 (지금 - 유예시간)보다 이전인 드롭만 대상으로 한다")
+    void finalizeStockAfterGracePeriod_QueriesWithCutoffBeforeDelay() {
+        // given
+        ReflectionTestUtils.setField(dropScheduler, "stockFinalizeDelay", Duration.ofMinutes(30));
+        given(dropService.findStockFinalizationCandidates(any())).willReturn(List.of());
+
+        // when
+        LocalDateTime before = LocalDateTime.now();
+        dropScheduler.finalizeStockAfterGracePeriod();
+        LocalDateTime after = LocalDateTime.now();
+
+        // then: cutoff = 호출 시점의 now - 30분
+        ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(dropService).findStockFinalizationCandidates(cutoffCaptor.capture());
+        assertThat(cutoffCaptor.getValue())
+                .isAfterOrEqualTo(before.minusMinutes(30))
+                .isBeforeOrEqualTo(after.minusMinutes(30));
+    }
+
+    @Test
+    @DisplayName("후보가 없으면 아무 것도 하지 않는다")
+    void finalizeStockAfterGracePeriod_NoCandidates_DoesNothing() {
+        // given
+        given(dropService.findStockFinalizationCandidates(any())).willReturn(List.of());
+
+        // when
+        dropScheduler.finalizeStockAfterGracePeriod();
 
         // then
         verify(dropStockSyncService, never()).finalizeStock(any());
+    }
+
+    @Test
+    @DisplayName("한 드롭의 확정이 실패해도 나머지 드롭은 계속 확정한다")
+    void finalizeStockAfterGracePeriod_OneFailureDoesNotStopTheRest() {
+        // given
+        Drop failing = drop(1L, PRODUCT_ID, LocalDateTime.now().minusHours(2), LocalDateTime.now().minusHours(1));
+        Drop succeeding = drop(2L, PRODUCT_ID, LocalDateTime.now().minusHours(2), LocalDateTime.now().minusHours(1));
+        given(dropService.findStockFinalizationCandidates(any())).willReturn(List.of(failing, succeeding));
+        doThrow(new RuntimeException("일시적 오류")).when(dropStockSyncService).finalizeStock(failing);
+
+        // when
+        dropScheduler.finalizeStockAfterGracePeriod();
+
+        // then
+        verify(dropStockSyncService).finalizeStock(succeeding);
     }
 
     @Test
@@ -305,5 +407,80 @@ class DropSchedulerTest {
 
         // then
         verify(todayDropCache).refresh();
+    }
+
+    @Test
+    @DisplayName("방치된 선점 후보가 있으면 회수한다")
+    void sweepAbandonedReservations_RollsBackCandidates() {
+        // given
+        DropEntry entry = reservedEntry(dropId, MEMBER_ID);
+        given(dropLockService.findExpiredReservations(any())).willReturn(List.of(entry));
+
+        // when
+        dropScheduler.sweepAbandonedReservations();
+
+        // then
+        verify(dropLockService).rollbackStock(dropId, MEMBER_ID);
+    }
+
+    @Test
+    @DisplayName("후보가 없으면 아무 것도 하지 않는다")
+    void sweepAbandonedReservations_NoCandidates_DoesNothing() {
+        // given
+        given(dropLockService.findExpiredReservations(any())).willReturn(List.of());
+
+        // when
+        dropScheduler.sweepAbandonedReservations();
+
+        // then
+        verify(dropLockService, never()).rollbackStock(any(), any());
+    }
+
+    @Test
+    @DisplayName("조회 시점 이후 경합으로 이미 처리된 항목은(NOT_RESERVED_STATUS) 조용히 넘어간다")
+    void sweepAbandonedReservations_AlreadyHandled_SkipsQuietly() {
+        // given: 조회와 회수 사이에 결제가 완료됐거나 다른 인스턴스가 먼저 회수한 경우
+        DropEntry entry = reservedEntry(dropId, MEMBER_ID);
+        given(dropLockService.findExpiredReservations(any())).willReturn(List.of(entry));
+        doThrow(new BusinessException(ErrorCode.NOT_RESERVED_STATUS))
+                .when(dropLockService).rollbackStock(dropId, MEMBER_ID);
+
+        // when & then (예외가 스케줄러 밖으로 전파되지 않는다)
+        dropScheduler.sweepAbandonedReservations();
+    }
+
+    @Test
+    @DisplayName("한 건 회수가 실패해도 나머지 후보는 계속 처리한다")
+    void sweepAbandonedReservations_OneFailureDoesNotStopTheRest() {
+        // given
+        DropEntry failing = reservedEntry(1L, MEMBER_ID);
+        DropEntry succeeding = reservedEntry(2L, MEMBER_ID);
+        given(dropLockService.findExpiredReservations(any())).willReturn(List.of(failing, succeeding));
+        doThrow(new RuntimeException("일시적 오류")).when(dropLockService).rollbackStock(1L, MEMBER_ID);
+
+        // when
+        dropScheduler.sweepAbandonedReservations();
+
+        // then
+        verify(dropLockService).rollbackStock(2L, MEMBER_ID);
+    }
+
+    @Test
+    @DisplayName("확정 유예 조회는 (지금 - reservationTtl)보다 이전에 선점된 것만 대상으로 한다")
+    void sweepAbandonedReservations_QueriesWithCutoffBeforeTtl() {
+        // given
+        given(dropLockService.findExpiredReservations(any())).willReturn(List.of());
+
+        // when
+        LocalDateTime before = LocalDateTime.now();
+        dropScheduler.sweepAbandonedReservations();
+        LocalDateTime after = LocalDateTime.now();
+
+        // then: cutoff = 호출 시점의 now - 15분
+        ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(dropLockService).findExpiredReservations(cutoffCaptor.capture());
+        assertThat(cutoffCaptor.getValue())
+                .isAfterOrEqualTo(before.minusMinutes(15))
+                .isBeforeOrEqualTo(after.minusMinutes(15));
     }
 }

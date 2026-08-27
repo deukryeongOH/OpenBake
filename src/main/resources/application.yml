@@ -148,6 +148,20 @@ openbake:
     auto-confirm-days: 1
     auto-confirm-delay: PT1H
 
+  drop:
+    # 드롭 종료 후 재고를 확정(Redis 키 정리)하기까지의 유예. order.reservation-ttl(15분) +
+    # order.expiration-delay(최대 5분) 가 이론상 하한이고, 스케줄러 지연 여유를 더해 30분으로 둔다.
+    # 너무 짧으면 뒤늦은 주문 만료(rollbackStock)가 이미 정리된 키를 보고 실패한다.
+    stock-finalize-delay: PT30M
+    # 확정 후보를 조회하는 주기. order.expiration-delay 와 같은 자릿수로 맞췄다.
+    stock-finalize-interval: PT5M
+    # 선점(lock-start) 후 결제 완료까지 허용할 시간. order.reservation-ttl과 값을 맞췄다 —
+    # 주문서 자체의 유효시간과 다르게 둘 이유가 없다(docs/10 3.2절). order 설정 키를
+    # 직접 참조하지는 않는다 — drop이 order 설정에 종속되면 안 된다.
+    reservation-ttl: 15m
+    # 방치된 선점 후보를 조회하는 주기.
+    reservation-sweep-interval: PT5M
+
 logging:
   level:
     org.hibernate.orm.jdbc.bind: trace

@@ -76,7 +76,7 @@ class ProductSearchServiceTest {
         given(productSearchPort.searchIds(eq(null), eq(null), any(Pageable.class)))
                 .willReturn(List.of(1L));
         given(productSearchPort.countBySearch(null, null)).willReturn(1L);
-        Product product = product(1L, LocalDate.parse("2026-08-25"));
+        Product product = product(1L, LocalDate.now().plusDays(5));
         given(productRepository.findById(1L)).willReturn(java.util.Optional.of(product));
         given(productInventoryRepository.findByProductId(1L)).willReturn(inventory(1L, 3, 5));
 
@@ -98,7 +98,7 @@ class ProductSearchServiceTest {
                         new SemanticCandidate(3L, 1, 0.9),
                         new SemanticCandidate(1L, 2, 0.5)));
 
-        LocalDate future = LocalDate.parse("2026-08-25");
+        LocalDate future = LocalDate.now().plusDays(5);
         given(productRepository.findAllByIdWithPickupDates(any()))
                 .willReturn(List.of(product(1L, future), product(2L, future), product(3L, future)));
         given(productInventoryRepository.findAllByProductIds(any()))
@@ -121,12 +121,12 @@ class ProductSearchServiceTest {
         given(productSearchPort.countBySearch("bread", null)).willReturn(3L);
         given(semanticSearchPort.findNearest(eq("bread"), eq(null), anyInt())).willReturn(List.of());
 
-        Product soldOut = product(1L, LocalDate.parse("2026-08-25"));
+        Product soldOut = product(1L, LocalDate.now().plusDays(5));
         soldOut.markSoldOut();
-        Product pickupExpired = product(2L, LocalDate.parse("2026-08-25"));
+        Product pickupExpired = product(2L, LocalDate.now().plusDays(5));
         pickupExpired.getPickUpAvailableDates().clear();
-        pickupExpired.getPickUpAvailableDates().add(LocalDate.parse("2026-08-01"));
-        Product sellable = product(3L, LocalDate.parse("2026-08-25"));
+        pickupExpired.getPickUpAvailableDates().add(LocalDate.now().minusDays(10));
+        Product sellable = product(3L, LocalDate.now().plusDays(5));
 
         given(productRepository.findAllByIdWithPickupDates(any()))
                 .willReturn(List.of(soldOut, pickupExpired, sellable));
@@ -153,7 +153,7 @@ class ProductSearchServiceTest {
                 .willReturn(List.of(1L));
         given(productSearchPort.countBySearch("bread", null)).willReturn(1L);
         given(productRepository.findAllByIdWithPickupDates(any()))
-                .willReturn(List.of(product(1L, LocalDate.parse("2026-08-25"))));
+                .willReturn(List.of(product(1L, LocalDate.now().plusDays(5))));
         given(productInventoryRepository.findAllByProductIds(any()))
                 .willReturn(List.of(inventory(1L, 3, 5)));
 
@@ -201,7 +201,7 @@ class ProductSearchServiceTest {
         given(productSearchPort.countBySearch("bread", null)).willReturn(4L);
         given(semanticSearchPort.findNearest(eq("bread"), eq(null), anyInt())).willReturn(List.of());
 
-        LocalDate future = LocalDate.parse("2026-08-25");
+        LocalDate future = LocalDate.now().plusDays(5);
         given(productRepository.findAllByIdWithPickupDates(any())).willReturn(List.of(
                 product(1L, future), product(2L, future), product(3L, future), product(4L, future)));
         given(productInventoryRepository.findAllByProductIds(any())).willReturn(List.of(

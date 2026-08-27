@@ -17,8 +17,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.openbake.product.infrastructure.elasticsearch.ProductSearchRepository;
 
 /**
  * Outbox의 at-least-once 발행과 중복 claim 방지를 실제 DB(H2, 트랜잭션/락 포함)로 검증한다.
@@ -38,6 +40,14 @@ class OutboxEventProcessorIntegrationTest {
 
     @MockitoBean
     private KafkaOutboxSender kafkaOutboxSender;
+
+    // 이 테스트는 검색과 무관하지만 @SpringBootTest가 전체 컨텍스트를 올려 ES 빈까지 생성한다.
+    // SimpleElasticsearchRepository는 생성 시점에 실제 접속을 시도하므로 로컬에 ES 없이도 통과하도록 대체한다.
+    @MockitoBean
+    private ProductSearchRepository productSearchRepository;
+
+    @MockitoBean
+    private ElasticsearchOperations elasticsearchOperations;
 
     @AfterEach
     void cleanUp() {

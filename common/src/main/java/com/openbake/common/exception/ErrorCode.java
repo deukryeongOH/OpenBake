@@ -9,6 +9,10 @@ public enum ErrorCode {
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "C001", "잘못된 요청입니다."),
     INVALID_STATE(HttpStatus.CONFLICT, "C002", "처리할 수 없는 상태입니다."),
     ENTITY_NOT_FOUND(HttpStatus.NOT_FOUND, "C003", "대상을 찾을 수 없습니다."),
+    // 어느 도메인에서든 발생할 수 있는 DB 무결성 제약 충돌(동시 요청 경합)·낙관적 락 충돌의
+    // 공용 코드. 도메인별로 원인을 특정할 수 있으면(예: OrderRepositoryAdapter의 슬롯 충돌
+    // 판별) 그 도메인 코드를 우선 쓰고, 이건 특정하지 못한 나머지의 최후 폴백이다.
+    RESOURCE_CONFLICT(HttpStatus.CONFLICT, "C004", "다른 요청과 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "C500", "서버 오류가 발생했습니다."),
 
     // 결제 — 충전
@@ -66,7 +70,7 @@ public enum ErrorCode {
     INVALID_USER_SELECT_QUANTITY(HttpStatus.BAD_REQUEST, "DR018", "사용자가 선택한 수량이 남은 수량보다 많을 수 없습니다."),
     TIMESLOT_NOT_CONTAINS(HttpStatus.BAD_REQUEST, "DR019", "선택한 시간은 타임 슬롯에 없는 시간입니다."),
     NOT_RESERVED_STATUS(HttpStatus.BAD_REQUEST, "DR020", "재고를 선점한 상태가 아닙니다."),
-    OPTIMISTIC_LOCK_CONFLICT(HttpStatus.CONFLICT, "DR021", "다른 요청과 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
+    // DR021(OPTIMISTIC_LOCK_CONFLICT)은 공용 RESOURCE_CONFLICT(C004)로 통합되며 삭제됨 — 번호는 비워둔다.
     STOCK_NOT_INITIALIZED(HttpStatus.SERVICE_UNAVAILABLE, "DR022", "재고가 준비되지 않았습니다. 잠시 후 다시 시도해주세요."),
     DUPLICATE_DROP_REQUEST(HttpStatus.CONFLICT, "DR023", "동시에 처리되어 실패했습니다. 잠시 후 다시 시도해주세요."),
 
@@ -77,6 +81,7 @@ public enum ErrorCode {
     PRODUCT_INVENTORY_NOT_FOUND(HttpStatus.NOT_FOUND, "PR004", "인벤토리가 없습니다."),
     INVALID_PRODUCT_TYPE(HttpStatus.BAD_REQUEST, "PR005", "상품 타입 불일치"),
     IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "PR006", "상품 이미지를 업로드 해주세요."),
+    PRODUCT_REINDEX_ALREADY_RUNNING(HttpStatus.CONFLICT, "PR007", "재색인이 이미 진행 중입니다. 잠시 후 다시 시도해주세요."),
 
     //cart - CA
     CART_ALREADY_EXISTS(HttpStatus.CONFLICT, "CA001", "이미 장바구니에 담긴 상품이 있습니다."),

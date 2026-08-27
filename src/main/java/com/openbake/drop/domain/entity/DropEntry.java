@@ -50,7 +50,14 @@ public class DropEntry {
 
     @CreatedDate // JPA (엔티티 저장 시점에 JPA가 자동으로 시간 주입)
     @Column(nullable = false, updatable = false)
-    private LocalDateTime entryTime; // 진입 시간 (선착순 판정의 기준)
+    private LocalDateTime entryTime; // 진입 시간
+
+    // 재고 선점(RESERVED 전환) 시각. reserve() UPDATE에서 DB 시각(CURRENT_TIMESTAMP)으로
+    // 채워진다. entryTime은 updatable=false라 재사용할 수 없어 별도로 둔다.
+    // 방치된 선점을 회수하는 만료 스위퍼(DropScheduler.sweepAbandonedReservations)의
+    // 기준값이다(docs/10 3.2절).
+    @Column
+    private LocalDateTime reservedAt;
 
     @Builder
     public DropEntry(Long dropId, Long memberId, EntryStatus entryStatus) {

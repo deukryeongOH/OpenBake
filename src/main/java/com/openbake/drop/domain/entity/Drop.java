@@ -36,6 +36,12 @@ public class Drop {
     @Column(nullable = false)
     private LocalDateTime dropEnd; // 드롭 마감 시간
 
+    // NULL이면 재고 확정 전. 조건부 UPDATE(markStockFinalized)로만 채워지며,
+    // 드롭 종료 후에도 진행 중인 주문 만료 처리가 끝날 때까지 일부러 유예를 두고 채운다
+    // (docs/11 관련 논의 — 너무 일찍 확정하면 뒤늦은 rollbackStock이 STOCK_NOT_INITIALIZED로 실패한다).
+    @Column(name = "stock_finalized_at")
+    private LocalDateTime stockFinalizedAt;
+
     @Builder
     public Drop(DropStatus dropStatus, Long productId, int limitQuantity, LocalDateTime dropStart, LocalDateTime dropEnd) {
         validateDropPeriod(dropStart, dropEnd);

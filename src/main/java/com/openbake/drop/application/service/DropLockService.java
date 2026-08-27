@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -54,7 +55,7 @@ public class DropLockService {
      *
      * product_inventory 단일 row UPDATE 가 이 경로에서 완전히 빠지는 것이 이 변경의 핵심이다.
      */
-//    @Transactional 지금은 불필요 나중 분산락 적용해 DropLockFacade에서 호출 시 적용
+    // reserveStock의 @Transactional 안에서만 호출되므로 여기 별도로 걸 필요는 없다.
     public void decreaseQuantity(Long dropId, Long memberId, int selectQuantity) {
         // 회원별 row 라 경합이 없다. 중복 선점은 WHERE entryStatus = 'ENTERED' 조건이 막는다.
         if(dropEntryRepository.reserve(dropId, memberId, selectQuantity) == 0){
@@ -101,6 +102,32 @@ public class DropLockService {
         reviveIfSoldOutCompleted(dropId, remainQuantity);
     }
 
+    /**
+     * 결제 성공 시 선점을 확정한다(RESERVED -> COMPLETED). docs/10 3.1절 1단계.
+     *
+     * order 쪽 결제 성공 트랜잭션(OrderPayTransactions.decreaseStockAndMarkPaid) 안에서
+     * 호출된다. 그래서 <b>여기서는 예외를 던지지 않는다</b> — 예외가 나가면 이미 끝난
+     * 결제(markPaid)까지 롤백된다. 0건이면 경합으로 이미 확정됐거나(같은 결제 결과 재전송)
+     * 이미 롤백된 드문 경우로 보고 로그만 남긴다.
+     */
+    @Transactional
+    public void completeReservation(Long dropId, Long memberId) {
+        if (dropEntryRepository.complete(dropId, memberId) == 0) {
+            log.warn("선점 확정 대상이 없습니다(이미 확정됐거나 RESERVED 상태가 아님). dropId={}, memberId={}",
+                    dropId, memberId);
+        }
+    }
+
+    /**
+     * 방치된 선점 후보 조회. DropScheduler.sweepAbandonedReservations가 호출한다(docs/10 3.2절).
+     * 실제 회수는 이 목록을 순회하며 rollbackStock을 호출하는 스케줄러 쪽 책임이다 —
+     * rollbackStock이 이미 "조건부 UPDATE 후 성공한 것만 Redis 롤백"을 하고 있어 재사용한다.
+     */
+    @Transactional(readOnly = true)
+    public List<DropEntry> findExpiredReservations(LocalDateTime cutoff) {
+        return dropEntryRepository.findExpiredReservations(cutoff);
+    }
+
     @Transactional(readOnly = true) // 주문 쪽에서 사용자가 선택한 수량을 재검증 시 필요한 메서드
     public SelectQuantityInfoResult getSelectQuantity(Long dropId, Long memberId){
         DropEntry dropEntry = dropEntryRepository.findByDropIdAndMemberId(dropId, memberId)
@@ -145,19 +172,30 @@ public class DropLockService {
 
 
     /**
-     * 재고 선점의 hot path라 DB를 타지 않는다.
+     * 재고 선점의 hot path라 정상 상황에서는 캐시만 읽는다.
      *
-     * limitQuantity는 드롭 시작 후 불변이므로 캐시 값이 항상 정확하다.
-     * 캐시에 없다는 건 오늘 진행되는 드롭이 아니라는 뜻이고, 재고 선점은 진행 중인 드롭에서만 유효하므로
-     * DB로 되묻지 않고 거부한다(fail-closed). 재고 경로가 이미 택한 정책과 같은 방향이다.
+     * limitQuantity는 드롭 시작 후 불변이므로 캐시 값이 항상 정확하다. 다만 캐시 미스가
+     * "오늘 드롭이 아님"만을 뜻하지는 않는다 — 당일 등록/수정 무효화 신호가 아직 이 Pod에
+     * 전파되지 않은 경우도 캐시 미스로 나타난다(docs/11-drop-cache-invalidation-propagation.md).
+     * 후자를 fail-closed로 거부하면 재고가 있는데도 거부당하므로, resolveProductId와 같은
+     * 패턴으로 DB에 한 번 더 물어보고 있으면 그 자리에서 캐시를 재갱신한다.
      */
     public void checkLimitQuantityPerPerson(Long dropId, int quantity){
-        CachedDrop drop = todayDropCache.find(dropId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_ACTIVE));
+        int limitQuantity = todayDropCache.find(dropId)
+                .map(CachedDrop::limitQuantity)
+                .orElseGet(() -> resolveLimitQuantityAndRefresh(dropId));
 
-        if (drop.limitQuantity() < quantity) {
+        if (limitQuantity < quantity) {
             throw new BusinessException(ErrorCode.INVALID_QUANTITY_LIMIT_PER_PERSON);
         }
+    }
+
+    private int resolveLimitQuantityAndRefresh(Long dropId) {
+        int limitQuantity = findDrop(dropId).getLimitQuantity();
+        // 존재하는 드롭이면 이 Pod의 캐시가 뒤처져 있었다는 뜻이므로 즉시 재갱신해
+        // 다음 요청부터는 다시 캐시로 처리되게 한다.
+        todayDropCache.refresh();
+        return limitQuantity;
     }
 
 

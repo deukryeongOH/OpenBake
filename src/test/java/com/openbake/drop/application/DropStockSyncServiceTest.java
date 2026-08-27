@@ -3,7 +3,10 @@ package com.openbake.drop.application;
 import com.openbake.drop.application.cache.CachedDrop;
 import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.application.port.StockReservationPort;
+import com.openbake.drop.application.service.DropService;
 import com.openbake.drop.application.service.DropStockSyncService;
+import com.openbake.drop.domain.DropStatus;
+import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.repository.DropEntryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -39,6 +43,9 @@ class DropStockSyncServiceTest {
     @Mock
     private ProductPort productPort;
 
+    @Mock
+    private DropService dropService;
+
     @InjectMocks
     private DropStockSyncService dropStockSyncService;
 
@@ -50,6 +57,20 @@ class DropStockSyncServiceTest {
         return new CachedDrop(LocalDate.now(), dropId, productId,
                 LocalDateTime.now().minusMinutes(10), end, new AtomicBoolean(true), new AtomicBoolean(false), LIMIT_QUANTITY,
                 "두쫀쿠", "설명", "image.jpg", 8000, Set.of(LocalDate.now().plusDays(7)));
+    }
+
+    // Drop 생성자는 "미래 시각 + 고정 슬롯"만 허용하므로, 유효한 값으로 만든 뒤 리플렉션으로
+    // dropId/productId만 맞춰 둔다. finalizeStock은 dropStart/dropEnd를 쓰지 않는다.
+    private Drop dropEntity() {
+        Drop entity = Drop.builder()
+                .dropStatus(DropStatus.COMPLETED)
+                .productId(productId)
+                .limitQuantity(LIMIT_QUANTITY)
+                .dropStart(LocalDate.now().plusDays(1).atTime(9, 0))
+                .dropEnd(LocalDate.now().plusDays(1).atTime(10, 0))
+                .build();
+        ReflectionTestUtils.setField(entity, "id", dropId);
+        return entity;
     }
 
     @Test
@@ -209,49 +230,78 @@ class DropStockSyncServiceTest {
         verify(productPort, never()).getTotalQuantity(any());
     }
 
+    /**
+     * finalizeStock이 dropEnd + 유예 시간 뒤로 미뤄졌으므로(문서 12번), sync가 불리는
+     * [dropStart, dropEnd] 구간 안에서 카운터가 없다는 건 "아직 초기화 전"이거나 "진행 중
+     * Redis 유실" 둘 중 하나일 수밖에 없다. 두 경우 모두 재워밍업으로 복구돼야 한다.
+     */
     @Test
-    @DisplayName("카운터가 아직 없으면 동기화하지 않는다")
-    void sync_NoCounter_DoesNothing() {
+    @DisplayName("카운터가 없으면(진행 중 Redis 유실 포함) 재워밍업을 시도한다")
+    void sync_NoCounter_ReWarmsUp() {
         // given
         CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
         given(stockReservationPort.peek(dropId)).willReturn(null);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(30);
 
         // when
         dropStockSyncService.sync(cached);
 
-        // then
+        // then: drop_entry 합계(100-30=70)로 재워밍업하고, 이번 tick에는 DB 동기화를 하지 않는다
+        // (재워밍업으로 값이 채워지면 다음 tick의 sync가 그 값을 DB에 반영한다)
+        verify(stockReservationPort).initIfAbsent(eq(dropId), eq(70), any(Duration.class));
         verify(productPort, never()).syncRemainQuantity(any(), anyInt());
     }
 
     @Test
-    @DisplayName("종료 시 최종값을 확정하고 카운터를 정리한다")
-    void finalizeStock_SyncsAndClears() {
-        // given
-        CachedDrop cached = drop(LocalDateTime.now().minusMinutes(1));
-        given(stockReservationPort.peek(dropId)).willReturn(7L);
+    @DisplayName("재워밍업 시도 중 카운터가 이미 있으면(경합) 덮어쓰지 않는다")
+    void sync_NoCounter_ReWarmUp_IsConditional() {
+        // given: peek은 null이었지만 그 사이 다른 스레드/틱이 먼저 초기화를 마쳤다
+        CachedDrop cached = drop(LocalDateTime.now().plusMinutes(30));
+        given(stockReservationPort.peek(dropId)).willReturn(null);
+        given(productPort.getTotalQuantity(productId)).willReturn(100);
+        given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(30);
+        given(stockReservationPort.initIfAbsent(any(), anyInt(), any())).willReturn(false);
 
         // when
-        dropStockSyncService.finalizeStock(cached);
+        dropStockSyncService.sync(cached);
 
-        // then
-        verify(productPort).syncRemainQuantity(productId, 7);
-        verify(stockReservationPort).clear(dropId);
+        // then: 조건부 API(initIfAbsent)만 쓰고, 덮어쓰는 경로는 타지 않는다
+        verify(stockReservationPort).initIfAbsent(eq(dropId), eq(70), any(Duration.class));
+        verify(stockReservationPort, never()).clear(any());
     }
 
     @Test
-    @DisplayName("종료 시 카운터가 이미 사라졌으면 drop_entry 합계로 확정한다")
-    void finalizeStock_CounterMissing_FallsBackToDropEntry() {
+    @DisplayName("확정 게이트를 통과하면 drop_entry 합계로 최종값을 확정하고 카운터를 정리한다")
+    void finalizeStock_GatePasses_SyncsFromDropEntryAndClears() {
         // given
-        CachedDrop cached = drop(LocalDateTime.now().minusMinutes(1));
-        given(stockReservationPort.peek(dropId)).willReturn(null);
+        Drop entity = dropEntity();
+        given(dropService.markStockFinalized(dropId)).willReturn(true);
         given(productPort.getTotalQuantity(productId)).willReturn(100);
         given(dropEntryRepository.sumReservedQuantity(dropId)).willReturn(95);
 
         // when
-        dropStockSyncService.finalizeStock(cached);
+        dropStockSyncService.finalizeStock(entity);
 
-        // then
+        // then: Redis peek()이 아니라 drop_entry 기준(100-95=5)이다 — 여러 인스턴스가
+        // 각자 다른 Redis 스냅샷을 최종값으로 덮어쓰는 경합을 없애기 위함(문서 참고)
         verify(productPort).syncRemainQuantity(productId, 5);
         verify(stockReservationPort).clear(dropId);
+        verify(stockReservationPort, never()).peek(any());
+    }
+
+    @Test
+    @DisplayName("이미 확정된 드롭이면(게이트 실패) 아무 것도 하지 않는다 — 여러 인스턴스의 중복 실행 방지")
+    void finalizeStock_AlreadyFinalized_DoesNothing() {
+        // given
+        Drop entity = dropEntity();
+        given(dropService.markStockFinalized(dropId)).willReturn(false);
+
+        // when
+        dropStockSyncService.finalizeStock(entity);
+
+        // then
+        verify(productPort, never()).syncRemainQuantity(any(), anyInt());
+        verify(stockReservationPort, never()).clear(any());
     }
 }

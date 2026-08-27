@@ -273,6 +273,33 @@ class DropLockServiceTest {
     }
 
     @Test
+    @DisplayName("선점 확정 성공 - 결제 성공 시 RESERVED가 COMPLETED로 전환된다")
+    void completeReservation_Success() {
+        // given
+        given(dropEntryRepository.complete(dropId, memberId)).willReturn(1);
+
+        // when & then (예외 없이 통과)
+        dropLockService.completeReservation(dropId, memberId);
+
+        verify(dropEntryRepository).complete(dropId, memberId);
+    }
+
+    /**
+     * order 쪽 결제 성공 트랜잭션 안에서 호출되므로, 확정 대상이 없어도(경합으로 이미
+     * 확정됐거나 이미 롤백된 드문 경우) 예외를 던지면 안 된다 — 예외가 나가면 이미 끝난
+     * 결제(markPaid)까지 롤백된다.
+     */
+    @Test
+    @DisplayName("확정 대상이 없어도 예외를 던지지 않는다 - 결제 성공 트랜잭션을 깨면 안 된다")
+    void completeReservation_NoTarget_DoesNotThrow() {
+        // given
+        given(dropEntryRepository.complete(dropId, memberId)).willReturn(0);
+
+        // when & then (예외 없이 통과)
+        dropLockService.completeReservation(dropId, memberId);
+    }
+
+    @Test
     @DisplayName("이미 롤백됐거나 RESERVED 상태가 아니면 재고를 건드리지 않고 예외를 던진다")
     void rollbackStock_Fail_NotReservedStatus_DoesNotTouchStock() {
         // given
@@ -378,17 +405,31 @@ class DropLockServiceTest {
     }
 
     @Test
-    @DisplayName("오늘 진행되는 드롭이 아니면(캐시 미스) 재고 선점을 DB 조회 없이 거부한다(fail-closed)")
-    void checkLimitQuantityPerPerson_CacheMiss_RejectsWithoutDbLookup() {
+    @DisplayName("캐시 미스라도 DB에 드롭이 있으면 통과하고, 뒤처진 캐시를 그 자리에서 재갱신한다")
+    void checkLimitQuantityPerPerson_CacheMiss_FallsBackToDbAndRefreshesCache() {
+        // given: 무효화 신호가 아직 이 Pod에 전파되지 않은 상황(docs/11번 문서)
+        given(todayDropCache.find(dropId)).willReturn(Optional.empty());
+        given(dropRepository.findById(dropId)).willReturn(Optional.of(drop)); // limitQuantity == 5
+
+        // when & then (예외 없이 통과)
+        dropLockService.checkLimitQuantityPerPerson(dropId, 3);
+
+        verify(todayDropCache).refresh();
+    }
+
+    @Test
+    @DisplayName("캐시 미스이고 DB에도 없으면 거부한다")
+    void checkLimitQuantityPerPerson_CacheMissAndDropNotFound_Rejects() {
         // given
         given(todayDropCache.find(dropId)).willReturn(Optional.empty());
+        given(dropRepository.findById(dropId)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> dropLockService.checkLimitQuantityPerPerson(dropId, 3))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DROP_NOT_ACTIVE);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DROP_NOT_FOUND);
 
-        verifyNoInteractions(dropRepository);
+        verify(todayDropCache, never()).refresh();
     }
 
     @Test
@@ -411,5 +452,21 @@ class DropLockServiceTest {
         verify(stockReservationPort).rollback(dropId, 5, 100);
         // 캐시 미스 = 진행 창 밖이므로 되살리지 않는다
         verify(dropService, never()).reviveFromSoldOut(any());
+    }
+
+    @Test
+    @DisplayName("방치된 선점 후보 조회는 리포지토리 결과를 그대로 전달한다")
+    void findExpiredReservations_DelegatesToRepository() {
+        // given
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+        DropEntry expired = DropEntry.builder()
+                .dropId(dropId).memberId(memberId).entryStatus(EntryStatus.RESERVED).build();
+        given(dropEntryRepository.findExpiredReservations(cutoff)).willReturn(List.of(expired));
+
+        // when
+        List<DropEntry> result = dropLockService.findExpiredReservations(cutoff);
+
+        // then
+        assertThat(result).containsExactly(expired);
     }
 }

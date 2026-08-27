@@ -13,14 +13,14 @@ public record DropInfoResult(
         String name, String description, String imageUrl,
         Set<LocalDate> pickUpAvailableDates,
         int price, int totalQuantity, int remainQuantity,
-        Long sellerId, Long productId) {
+        Long sellerId, Long productId, Long dropId) {
     public static DropInfoResult of(
                              LocalDateTime dropStart, LocalDateTime dropEnd,
                              int limitQuantity, DropStatus dropStatus, String name, String description, String imageUrl,
                              Set<LocalDate> pickUpAvailableDates,
                              int price, int totalQuantity, int remainQuantity,
-                             Long sellerId, Long productId){
+                             Long sellerId, Long productId, Long dropId){
         return new DropInfoResult(dropStart, dropEnd, limitQuantity, dropStatus, name,description, imageUrl,
-                new HashSet<>(pickUpAvailableDates), price, totalQuantity, remainQuantity, sellerId, productId);
+                new HashSet<>(pickUpAvailableDates), price, totalQuantity, remainQuantity, sellerId, productId, dropId);
     }
 }

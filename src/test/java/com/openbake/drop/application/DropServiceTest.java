@@ -105,7 +105,7 @@ class DropServiceTest {
         DropInfoResult productResult = DropInfoResult.of(
                 command.dropStart(), command.dropEnd(), command.limitQuantity(), UPCOMING,
                 command.name(), command.description(), command.image(), command.pickupDates(),
-                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId
+                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId, null
         );
         given(productPort.registerProduct(command)).willReturn(productResult);
 
@@ -113,7 +113,9 @@ class DropServiceTest {
         DropInfoResult response = dropService.registerDrop(command);
 
         // then
-        assertThat(response).isEqualTo(productResult);
+        // save()가 목업이라 IDENTITY로 실제 발급되는 id는 여기선 재현되지 않는다(null로 남음) —
+        // dropId를 제외한 나머지 필드가 productResult와 동일한지만 확인한다.
+        assertThat(response).usingRecursiveComparison().ignoringFields("dropId").isEqualTo(productResult);
         verify(dropRepository).save(any(Drop.class));
         verify(todayDropCache).refresh();
     }

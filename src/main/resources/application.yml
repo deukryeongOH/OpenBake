@@ -5,6 +5,10 @@ server:
       # Tomcat 스레드 풀 지표(tomcat_threads_busy_threads / config_max_threads)는
       # JMX MBean 등록에 의존하는데 Spring Boot 기본값이 false다.
       # 끄면 부하 테스트에서 스레드 풀 포화 여부를 아예 관측할 수 없다.
+
+      # Spring Boot 3에서 tomcat.threads.* 메트릭은 MBean registry가 켜져 있어야
+      # actuator에 노출된다. 스레드 풀 포화가 부하 테스트 진단의 핵심 항목인데
+      # 이 값이 없으면 "측정값 없음"으로 나온다(2026-08-24 실측).
       enabled: true
 
 spring:
@@ -14,13 +18,33 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 25s
 
+  task:
+    scheduling:
+      # 기본값은 스레드 1개다. core에는 @Scheduled가 9개 있고 그중 드롭 재고 동기화는
+      # 200ms 주기라, 한 스레드를 공유하면 느린 작업 하나가 그 루프를 통째로 밀어낸다.
+      # ScheduledThreadPoolExecutor는 같은 작업의 겹친 실행을 막으므로, 풀을 키워도
+      # 개별 작업이 자기 자신과 동시에 도는 일은 없다.
+      pool:
+        size: 4
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
       connection-init-sql: SET SESSION lock_timeout = '10s'
-      maximum-pool-size: 10
+      # 2026-08-25 실측(300 동시, drop lock-start):
+      #   커넥션 점유 avg 135ms / 대기 avg 1,123ms — 대기가 점유의 8배다.
+      #   풀 10 ÷ 점유 135ms = 이론 74 req/s 가 처리량 상한을 만들고 있었다.
+      #   Tomcat 스레드 144/200 이 도는 동안 pending 이 98까지 갔다.
+      #
+      # core-postgres 의 max_connections 는 100이다. replica 3까지 늘려도
+      # 20 × 3 = 60 이라 예약분(3)과 백업 Job 을 빼도 여유가 있다.
+      #
+      # 점유 135ms 자체가 과하다 — @Transactional 안에서 Redis Lua 응답을
+      # 기다리는 동안 커넥션을 놓지 않기 때문이다. 그 범위를 줄이는 것이
+      # 근본 해결이며 별도 과제로 둔다. 풀 상향은 그전까지의 완화책이다.
+      maximum-pool-size: 20
 
   data:
     redis:
@@ -163,6 +187,12 @@ openbake:
     reservation-sweep-interval: PT5M
 
 logging:
+  # 요청 하나가 서비스를 가로지른 경로를 로그로 따라가려면 X-Request-Id가 로그에
+  # 있어야 한다. 게이트웨이의 RequestIdFilter는 헤더 전달만 하고, 각 서비스가
+  # common의 RequestIdMdcFilter로 MDC에 넣어야 %X{requestId}가 채워진다.
+  # 값이 없는 로그(기동·배치)는 대괄호 안이 비어 보인다.
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
   level:
     org.hibernate.orm.jdbc.bind: trace
 

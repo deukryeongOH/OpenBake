@@ -16,7 +16,11 @@ data:
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
   BLACKLIST_TIMEOUT: "2000ms"
-  # 08번 문서 예시값(300ms)이 아니라 docker-compose.yaml의 현재 운영 기본값을 그대로 옮김
+  # 코드 기본값(application.yml)은 1000ms인데 여기서 2000ms로 늘려 잡는다.
+  # 2026-08-25 실측(300 동시)에서 이 확인이 2초를 넘긴 요청이 13% 나왔다. 원인이
+  # 게이트웨이 CPU인지 Redis 단일 스레드 큐(backend의 재고 차감 Lua와 경합)인지
+  # 아직 못 가렸다. 원인을 잡기 전에 값을 조이면 503이 늘기만 하므로 관대하게 둔다.
+  # 원인 해소 후 1000ms로 내려 코드 기본값과 맞추는 것이 목표다.
   GATEWAY_JWT_ENABLED: "true"
   # gateway-jwt-enabled은 matchIfMissing이 없어, 이 값이 없거나 "true"가 아니면
   # 인증 필터가 등록되지 않고 모든 API가 인증 없이 통과한다 (이슈 1 이관 항목).

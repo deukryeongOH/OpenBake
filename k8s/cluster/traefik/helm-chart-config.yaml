@@ -19,6 +19,47 @@ spec:
     nodeSelector:
       openbake.io/node-pool: core
 
+    # 자원을 지정하지 않으면 QoS가 BestEffort가 되어 node-a의 CPU 경쟁에서 가장 먼저
+    # 밀린다. Traefik은 모든 외부 트래픽의 TLS 종단을 혼자 처리하므로 여기서 밀리면
+    # 뒤쪽 서비스가 아무리 한가해도 처리량이 오르지 않는다.
+    #
+    # 2026-08-24 실측: 300 동시 요청에서 Traefik 경유 18 req/s vs 게이트웨이 직접
+    # 34 req/s. backend는 Tomcat 스레드 6/200으로 놀고 있었다.
+    resources:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 256Mi
+
+    # Prometheus 지표를 켠다. 2026-08-26 부하 테스트에서 지연의 42%가
+    # Traefik+TLS 구간이었는데(LOAD-TEST-REPORT.md §7) 정작 이 구간에 지표가 없어
+    # 관측 대상 밖이었다. backend·member·payment의 서블릿 처리 시간만 보고 있었다.
+    #
+    # metrics 엔트리포인트를 따로 두어 9100 포트로만 노출한다. web/websecure에
+    # 얹으면 외부에서 /metrics가 열린다.
+    metrics:
+      prometheus:
+        entryPoint: metrics
+        addEntryPointsLabels: true
+        addServicesLabels: true
+        # 히스토그램 버킷. 이게 있어야 진입점 p95를 계산할 수 있다.
+        #
+        # ⚠️ YAML 리스트로 쓰면 안 된다. 차트가 이 값을 그대로 CLI 플래그로 넘기는데
+        # Traefik이 "[0.1 0.3 ...]" 문자열을 받아 ParseFloat에 실패하고 기동하지 못한다
+        # (2026-08-26 실측: failed to decode configuration from flags).
+        # 쉼표로 이어진 한 줄 문자열이어야 한다.
+        buckets: "0.1,0.3,0.5,1.0,2.0,5.0"
+
+    ports:
+      metrics:
+        port: 9100
+        expose:
+          default: false
+        exposedPort: 9100
+        protocol: TCP
+
     persistence:
       enabled: true
       name: traefik-acme
@@ -32,6 +73,25 @@ spec:
       - "--certificatesresolvers.letsencrypt.acme.email=hhh3915@gmail.com"
       - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # 인증서 키를 ECDSA P-256으로. Traefik ACME 기본값은 RSA4096이다.
+      #
+      # 2026-08-26 실측(node-a, openssl speed): TLS 1.3에서 핸드셰이크마다 서버가
+      # 개인키 서명을 한 번 한다. 그 연산이
+      #     RSA 4096      초당    186회   <- 기본값
+      #     RSA 2048      초당  1,141회
+      #     ECDSA P-256   초당 28,201회
+      # 이다. 드롭 오픈은 300명이 동시에 새 연결을 맺으므로 RSA4096이면 그 서명에만
+      # 1.61 CPU-초가 필요하고, Traefik의 limit은 1코어다. 실제로 신규 연결 측정에서
+      # 요청이 게이트웨이에 닿기까지 2.18초가 걸렸다(연결을 미리 세우면 0.30초).
+      #
+      # 클라이언트 검증은 RSA 10,843회/s 대 ECDSA 8,778회/s로 차이가 미미하다.
+      # 보안 강도는 P-256이 RSA 3072 상당이라 4096보다 낮지만 현실적 공격 임계보다
+      # 한참 위이고, 주요 CDN의 기본 선택이다.
+      #
+      # keytype만 바꾸면 acme.json에 저장된 기존 인증서를 만료 30일 전까지 계속 쓴다.
+      # 전환하려면 저장된 인증서를 지워 재발급을 유도해야 하며, 그 사이 10~60초 동안
+      # 자체 서명 인증서로 응답한다.
+      - "--certificatesresolvers.letsencrypt.acme.keytype=EC256"
       # HTTP → HTTPS 리다이렉트. chart의 `ports.web.redirections` 키는 이 버전에서
       # args를 만들지 않아(2026-08-23 실측) 직접 넣는다. ACME HTTP-01 챌린지 라우터가
       # 이 리다이렉트보다 우선하므로 인증서 갱신에는 영향이 없다.

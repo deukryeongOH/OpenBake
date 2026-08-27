@@ -61,7 +61,17 @@ spec:
                 name: gateway-config
           resources:
             requests:
-              cpu: 100m
+              # 2026-08-26 실측으로 올림. 게이트웨이는 모든 요청이 지나는 단일 관문이고
+              # 요청마다 JWT 검증과 Redis 블랙리스트 확인을 한다. request 100m 이면
+              # 경합 시 backend(500m)와 1:5 로 밀린다.
+              #
+              # 300 동시 버스트에서 게이트웨이의 cpu.pressure 가 full 57% 였다 —
+              # 쿼터(limit 500m)의 1/3만 쓰면서 전체 시간의 절반 이상 모든 스레드가
+              # CPU 를 못 받고 멈춰 있었다. throttled_usec 은 0이라 cgroup 의 스로틀
+              # 지표만 보면 정상으로 보이는 구간이다(PSI 로만 보인다).
+              #
+              # 자리는 ai-service(250m->100m)와 elasticsearch(300m->150m)에서 만들었다.
+              cpu: 300m
               memory: 384Mi
             limits:
               cpu: 500m
@@ -74,7 +84,11 @@ spec:
             timeoutSeconds: 2
             # 실측 기동 45.5초. 기존 12회(60초)는 여유가 15초뿐이라
             # 부하·재배포 시 startup probe 실패로 재시작 루프에 빠질 수 있다.
-            failureThreshold: 18
+            # 2026-08-26 상향. 기존 18 x 5s = 90초였는데 한가한 상태의 JVM 기동이
+            # 82초다(backend 실측). 여유가 8초뿐이라 노드가 조금만 붐벼도 실패한다.
+            # 실제로 배포 한 번에 4개 서비스가 동시에 기동하다 startup probe 를 넘기지
+            # 못하고 7~8회씩 재시작했다. backend 와 같은 240초로 맞춘다.
+            failureThreshold: 48
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness

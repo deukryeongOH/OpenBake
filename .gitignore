@@ -67,7 +67,9 @@ performance-test/member-map.json
 performance-test/.env.k6.local
 performance-test/.env.k6.server
 # k6 실행 결과
-performance-test/results/*.txt
+performance-test/results/
+performance-test/results-backup.tar.gz
+docker-compose.perf.yaml
 # Generated from prometheus.yml.template
 prometheus/prometheus.yml
 # Local temporary files

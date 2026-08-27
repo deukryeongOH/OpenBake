@@ -16,6 +16,8 @@ import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.entity.DropEntry;
 import com.openbake.drop.domain.repository.DropEntryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -89,7 +91,8 @@ class DropStockFinalizeThenRollbackBugTest {
 
     @BeforeEach
     void setUp() {
-        dropStockSyncService = new DropStockSyncService(stockReservationPort, dropEntryRepository, productPort, dropService);
+        MeterRegistry meterRegistry = new SimpleMeterRegistry();
+        dropStockSyncService = new DropStockSyncService(stockReservationPort, dropEntryRepository, productPort, dropService, meterRegistry);
         dropLockService = new DropLockService(dropRepository, dropService, dropEntryRepository, productPort,
                 currentMemberPort, stockReservationPort, todayDropCache);
     }

@@ -41,7 +41,15 @@ spec:
                   - key: openbake.io/node-pool
                     operator: In
                     values:
-                      - core
+                      # 2026-08-26 core -> service. node-a 는 옮길 수 없는 것들만으로
+                      # 1800m/2000m 이라 ai-service 100m 이 들어갈 자리가 없다.
+                      # (PV 로 고정된 stateful 5개 + 드롭 경로 3개 + 시스템)
+                      #
+                      # ai-postgres 는 local-path PV 라 node-a 에 남으므로 DB 왕복이
+                      # 노드를 건넌다. 실측 왕복 비용은 0.69ms 이고 요청당 5회 안팎이라
+                      # 약 5ms 인데, 이 서비스의 지연은 OpenAI 임베딩 호출(200~500ms)이
+                      # 지배하므로 1~2% 다.
+                      - service
       containers:
         - name: ai-service
           image: ghcr.io/prgrms-be-adv-devcourse/beadv7_7_bakerysite6_be-ai-service:sha-placeholder
@@ -83,7 +91,15 @@ spec:
                 name: ai-config
           resources:
             requests:
-              cpu: 250m
+              # 2026-08-26 자원 재배분. node-a 는 CPU request 가 100%(2000m/2000m)라
+              # api-gateway 의 request 를 올릴 자리가 없었다. 게이트웨이는 모든 요청이
+              # 지나는 단일 관문인데 request 100m 으로 backend(500m)와 1:5 로 밀렸고,
+              # 300 동시 버스트에서 PSI 가 full 57% 였다 — 쿼터(500m)의 1/3만 쓰면서
+              # 전체 시간의 절반 이상 모든 스레드가 CPU 를 못 받고 멈춰 있었다는 뜻이다.
+              #
+              # 이 서비스는 드롭 경로에 없고 유휴 실사용이 7m 다. 예약을 줄여 그 자리를
+              # 게이트웨이로 옮긴다.
+              cpu: 100m
               memory: 512Mi
             limits:
               cpu: 750m
@@ -97,7 +113,7 @@ spec:
               port: 8083
             periodSeconds: 5
             timeoutSeconds: 2
-            failureThreshold: 20
+            failureThreshold: 48
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness

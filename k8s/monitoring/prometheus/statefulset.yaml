@@ -35,7 +35,10 @@ spec:
                       - service
       containers:
         - name: prometheus
-          image: prom/prometheus:latest
+          # latest는 재시작마다 새 버전을 받는다. Prometheus는 메이저 버전에서
+          # 설정 문법과 동작이 바뀌므로 수집이 통째로 멈출 수 있다.
+          # 2026-08-26 실측 버전으로 고정한다.
+          image: prom/prometheus:v3.14.0
           args:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus

@@ -1,5 +1,7 @@
 package com.openbake.common.security.gateway;
 
+import com.openbake.common.security.service.AiServicePaths;
+import com.openbake.common.security.service.CoreServicePaths;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -172,6 +174,30 @@ class HeaderAuthenticationFilterTest {
     }
 
     @Test
+    void skipsServiceAuthenticatedInternalEndpoints() throws Exception {
+        assertSkipped(new MockHttpServletRequest(
+                "POST",
+                AiServicePaths.RECOMMENDATION_CANDIDATES
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "GET",
+                AiServicePaths.LATEST_RECOMMENDATION_CANDIDATES
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "GET",
+                AiServicePaths.PRODUCT_INDEX_SOURCES
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "POST",
+                "/internal/v1/ai/embedding-tasks"
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "POST",
+                CoreServicePaths.SEMANTIC_SEARCH
+        ));
+    }
+
+    @Test
     void authenticatesInternalEndpointWithAdminRole() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest(
                 "POST",
@@ -215,6 +241,49 @@ class HeaderAuthenticationFilterTest {
                 "GET",
                 "/api/v1/sellers/1"
         ));
+    }
+
+    @Test
+    void skipsHomeListingEndpointsWhenAnonymous() throws Exception {
+        assertSkipped(new MockHttpServletRequest(
+                "GET",
+                "/api/v1/products/product-list"
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "GET",
+                "/api/v1/products/autocomplete"
+        ));
+        assertSkipped(new MockHttpServletRequest(
+                "GET",
+                "/api/v1/drops/upcoming"
+        ));
+    }
+
+    @Test
+    void authenticatesHomeListingEndpointsWhenHeadersPresent() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "GET",
+                "/api/v1/products/product-list"
+        );
+        request.addHeader(GatewayIdentityHeaders.MEMBER_ID, "1");
+        request.addHeader(GatewayIdentityHeaders.MEMBER_ROLE, "CUSTOMER");
+        request.addHeader(
+                GatewayIdentityHeaders.AUTH_SOURCE,
+                GatewayIdentityHeaders.EXPECTED_AUTH_SOURCE
+        );
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(authentication).isNotNull();
+        assertThat(authentication.getPrincipal()).isEqualTo(1L);
+        assertThat(chain.getRequest()).isSameAs(request);
     }
 
     @Test

@@ -8,7 +8,18 @@ jwt:
 openbake:
   security:
     gateway-jwt-enabled: ${GATEWAY_JWT_ENABLED:false}
-    blacklist-timeout: ${BLACKLIST_TIMEOUT:300ms}
+    # 모든 요청이 게이트웨이에서 Redis 블랙리스트를 한 번 확인하고, 이 시간을 넘기면
+    # 503 AUTHENTICATION_SERVICE_UNAVAILABLE 로 잘린다(fail-closed). 값이 작으면
+    # Redis 가 살아 있는데도 잠깐 밀린 요청까지 죽인다.
+    #
+    # 2026-08-25 실측(300 동시, k3s): 노드 CPU 포화 구간에서 이 확인이 2초를 넘긴
+    # 요청이 13% 나왔다. 서버 작업 자체는 EXISTS 한 번이라 마이크로초 단위이므로,
+    # 넘긴 원인은 Redis 가 아니라 큐 지연이다. 300ms 는 그 지연을 감당하지 못한다.
+    #
+    # 운영 클러스터는 ConfigMap(gateway-config.yaml)에서 2000ms 로 덮어쓰고 있다.
+    # 여기 기본값은 ConfigMap 이 없는 환경(로컬·신규 환경)에 적용되므로, 그쪽이
+    # 300ms 로 남지 않도록 1000ms 로 둔다. NFR(p95 1500ms) 안에 들어가는 값이다.
+    blacklist-timeout: ${BLACKLIST_TIMEOUT:1000ms}
 
 spring:
   application:
@@ -39,6 +50,13 @@ spring:
                   - OPTIONS
                 allowedHeaders:
                   - "*"
+          # root/member/payment도 각자 CORS 헤더를 추가하도록 설정돼 있어(HeaderAuthenticationFilter와
+          # 무관하게 각 서비스 SecurityConfig의 CorsConfigurationSource), 게이트웨이가 응답을 프록시하며
+          # globalcors가 한 번 더 얹으면 Access-Control-Allow-Origin/-Credentials가 중복돼 브라우저가
+          # preflight/실응답을 CORS 실패로 처리한다. 모든 라우트에 공통 적용되도록 default-filters로
+          # 첫 번째 값만 남긴다(각 서비스 CORS 설정 자체는 그대로 둠).
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials RETAIN_FIRST
           routes:
             - id: member-auth
               uri: ${MEMBER_SERVICE_URL:http://localhost:8081}
@@ -99,3 +117,33 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+    # 게이트웨이는 모든 외부 요청이 지나는 지점이라 여기 지연 분포가 사용자
+    # 체감에 가장 가깝다. bucket이 없으면 histogram_quantile로 p95를 계산할 수
+    # 없어 "사용자가 느린가"를 판단할 근거가 사라진다(2026-08-26 확인:
+    # http_server_requests_seconds_bucket이 gateway에만 없었다).
+    # 버킷 경계는 core/member/payment와 같게 두어 서비스 간 비교가 되게 한다.
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+
+      slo:
+        "[http.server.requests]":
+          - 100ms
+          - 300ms
+          - 500ms
+          - 1s
+          - 2s
+
+logging:
+  # 뒤쪽 서비스와 같은 형식으로 맞춰 로그를 나란히 읽을 수 있게 한다.
+  #
+  # ⚠️ 게이트웨이는 WebFlux라 이 자리는 현재 항상 비어 있다. common의
+  # RequestIdMdcFilter는 서블릿 필터(OncePerRequestFilter)이고, MDC는
+  # ThreadLocal이라 리액터의 스레드 전환을 넘지 못한다. 게이트웨이 로그에 ID를
+  # 남기려면 Reactor Context 전파(ContextRegistry/Hooks)를 따로 붙여야 한다.
+  #
+  # 그래도 자리를 비워 두는 이유: RequestIdFilter가 헤더는 정확히 넣어 보내므로
+  # 뒤쪽 서비스 로그에는 값이 찍힌다. 형식이 같아야 두 로그를 같은 눈으로 본다.
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"

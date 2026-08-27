@@ -62,4 +62,11 @@ public interface OrderRepository {
      * 0건이 아니면 그 자체가 전이 경로에 구멍이 있다는 알람이다.
      */
     List<Order> findLeakedActiveSlots();
+
+    //아래 셋은 관측 전용이다. 엔티티를 적재하지 않도록 집계 쿼리로 분리한다.
+    long countExpiredPending(LocalDateTime now);
+
+    Optional<LocalDateTime> findOldestExpiredPendingAt(LocalDateTime now);
+
+    long countLeakedActiveSlots();
 }

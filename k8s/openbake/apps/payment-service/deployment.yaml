@@ -87,7 +87,11 @@ spec:
               port: 8082
             periodSeconds: 5
             timeoutSeconds: 2
-            failureThreshold: 18
+            # 2026-08-26 상향. 기존 18 x 5s = 90초였는데 한가한 상태의 JVM 기동이
+            # 82초다(backend 실측). 여유가 8초뿐이라 노드가 조금만 붐벼도 실패한다.
+            # 실제로 배포 한 번에 4개 서비스가 동시에 기동하다 startup probe 를 넘기지
+            # 못하고 7~8회씩 재시작했다. backend 와 같은 240초로 맞춘다.
+            failureThreshold: 48
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness

@@ -82,4 +82,23 @@ public interface OrderJpaRepository extends JpaRepository<Order, Long> {
             + "where o.activeMemberId is not null "
             + "and o.orderState <> com.openbake.order.domain.OrderState.PENDING")
     List<Order> findLeakedActiveSlots();
+
+    @Query("select count(o) from Order o "
+            + "where o.orderState = com.openbake.order.domain.OrderState.PENDING "
+            + "and o.reservationExpiresAt < :now")
+    long countExpiredPending(@Param("now") LocalDateTime now);
+
+    /**
+     * 가장 오래 방치된 만료 PENDING의 예약 만료 시각. 건수만으로는 심각도를 알 수 없어
+     * 나이를 함께 본다 — 한 건이라도 오래 남아 있으면 그 사용자의 돈이 계속 묶인다.
+     */
+    @Query("select min(o.reservationExpiresAt) from Order o "
+            + "where o.orderState = com.openbake.order.domain.OrderState.PENDING "
+            + "and o.reservationExpiresAt < :now")
+    Optional<LocalDateTime> findOldestExpiredPendingAt(@Param("now") LocalDateTime now);
+
+    @Query("select count(o) from Order o "
+            + "where o.activeMemberId is not null "
+            + "and o.orderState <> com.openbake.order.domain.OrderState.PENDING")
+    long countLeakedActiveSlots();
 }

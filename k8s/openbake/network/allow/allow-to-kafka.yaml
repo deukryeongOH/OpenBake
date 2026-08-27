@@ -29,6 +29,12 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kafka-topics-init
+        # 관측 전용. 일반 Kafka 클라이언트로 접속해 consumer group offset과 topic
+        # 메타데이터만 조회한다. 브로커 측 lag이 있어야 "컨슈머가 죽어서 소비하지
+        # 않는 상태"를 탐지할 수 있다(클라이언트 측 지표는 컨슈머가 죽으면 사라진다).
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka-exporter
       ports:
         - protocol: TCP
           port: 29092

@@ -1,0 +1,425 @@
+# configmap.yaml의 alerts.yml 키에 대한 promtool 단위 테스트.
+# kustomization.yaml의 resource가 아니므로 클러스터에 배포되지 않는다.
+#
+# 실행: configmap에서 alerts.yml 키를 꺼내 이 파일과 같은 디렉터리에 둔 뒤
+#   promtool test rules alerts_test.yml
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # 사용률 75%: warning만 발화하고 critical/emergency는 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",fstype="ext4",node="node-a"}'
+        values: '25x20'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",fstype="ext4",node="node-a"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NodeDiskUsageWarning
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              mountpoint: "/"
+              fstype: ext4
+              node: node-a
+            exp_annotations:
+              summary: "node-a root 디스크 사용률 70% 초과"
+              description: "현재 75.0%. 큰 directory·image·log·TSDB 증가 원인을 확인한다."
+      - eval_time: 15m
+        alertname: NodeDiskUsageCritical
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: NodeDiskUsageEmergency
+        exp_alerts: []
+
+  # 사용률 95%: 세 단계가 모두 발화해야 한다(단계별 for가 짧을수록 먼저 뜬다).
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",fstype="ext4",node="node-b"}'
+        values: '5x20'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",fstype="ext4",node="node-b"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NodeDiskUsageEmergency
+        exp_alerts:
+          - exp_labels:
+              severity: emergency
+              mountpoint: "/"
+              fstype: ext4
+              node: node-b
+            exp_annotations:
+              summary: "node-b root 디스크 사용률 90% 초과"
+              description: "현재 95.0%. 쓰기 폭증을 차단하고 즉시 용량을 회수한다."
+
+  # tmpfs/overlay는 root EBS가 아니므로 제외되어야 한다. 100% 차 있어도 발화하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",fstype="tmpfs",node="node-a"}'
+        values: '0x20'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",fstype="tmpfs",node="node-a"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NodeDiskUsageWarning
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_last_terminated_reason{reason="OOMKilled",namespace="openbake",pod="backend-0",container="backend"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PodOOMKilled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              reason: OOMKilled
+              namespace: openbake
+              pod: backend-0
+              container: backend
+            exp_annotations:
+              summary: "openbake/backend-0 OOMKilled"
+              description: "container=backend. memory limit과 누수 여부를 확인한다."
+
+  # 15분간 4회 재시작하는 Pod. increase() > 2 조건을 넘겨야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="openbake",pod="ai-service-0",container="ai-service"}'
+        values: '0 0 0 1 1 2 2 3 3 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PodRestartingRepeatedly
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: openbake
+              pod: ai-service-0
+              container: ai-service
+            exp_annotations:
+              summary: "openbake/ai-service-0 반복 재시작"
+              description: "15분간 약 4회 재시작. 프로세스가 살아나도 Outbox·DLT·PENDING 적체는 별도 확인이 필요하다."
+      # 재시작이 멈춘 뒤에는 창이 지나가면서 스스로 해제되어야 한다.
+      - eval_time: 30m
+        alertname: PodRestartingRepeatedly
+        exp_alerts: []
+
+  # 회로가 잠깐 열렸다 닫히는 것은 정상 동작이라 발화하면 안 된다(for: 5m).
+  - interval: 1m
+    input_series:
+      - series: 'resilience4j_circuitbreaker_state{state="open",name="elasticsearch"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: CircuitBreakerOpen
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'resilience4j_circuitbreaker_state{state="open",name="ai-semantic-search"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CircuitBreakerOpen
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              name: ai-semantic-search
+            exp_annotations:
+              summary: "ai-semantic-search 회로 차단기가 5분 이상 OPEN"
+              description: "해당 의존성 호출이 차단되고 폴백으로 처리 중이다. elasticsearch는 RDB 폴백, ai-semantic-search는 BM25 검색으로 내려간다. 의존성 자체를 확인한다."
+
+  - interval: 1m
+    input_series:
+      - series: 'openbake_order_active_slot_leaked'
+        values: '2x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OrderActiveSlotLeaked
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "주문 슬롯 누수 2건"
+              description: "종료된 주문이 진행 중 슬롯을 반납하지 않았다. 해당 회원은 새 주문을 만들 수 없다."
+
+  # 누수가 0이면 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_order_active_slot_leaked'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OrderActiveSlotLeaked
+        exp_alerts: []
+
+  # 외부에서 접근이 안 되면 발화한다. 내부 지표가 정상이어도 사용자 영향이다.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",instance="https://3.38.24.67.sslip.io/api/v1/products/product-list"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ExternalEndpointDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox-http
+              instance: "https://3.38.24.67.sslip.io/api/v1/products/product-list"
+            exp_annotations:
+              summary: "외부에서 https://3.38.24.67.sslip.io/api/v1/products/product-list 접근 실패"
+              description: "Pod가 살아 있어도 Traefik·TLS·게이트웨이 경로가 깨지면 사용자는 못 쓴다. 내부 지표가 모두 정상이어도 이 경보는 사용자 영향을 뜻한다."
+              runbook: "docs/observability/roadmap.md"
+
+  # 정상이면 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http",instance="https://3.38.24.67.sslip.io/api/v1/drops/upcoming"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ExternalEndpointDown
+        exp_alerts: []
+
+  # CORS 거부 — 2026-08-26에 실제로 있었던 상황이다.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox-http-cors",instance="https://3.38.24.67.sslip.io/api/v1/products/product-list"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FrontendOriginRejected
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox-http-cors
+              instance: "https://3.38.24.67.sslip.io/api/v1/products/product-list"
+            exp_annotations:
+              summary: "운영 프론트엔드 Origin이 거부되고 있다"
+              description: "Vercel Origin으로 보낸 요청이 200을 받지 못한다. CORS 설정(OPENBAKE_SECURITY_CORS_ALLOWED_ORIGINS)이나 게이트웨이 경로를 확인한다."
+              runbook: "docs/observability/rollout-log.md"
+
+  # 백업 Job이 실패하면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_status_failed{namespace="openbake",job_name="postgres-backup-member-29794650"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BackupJobFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: openbake
+              job_name: postgres-backup-member-29794650
+            exp_annotations:
+              summary: "postgres-backup-member-29794650 백업 실패"
+              description: "DB 백업 Job이 실패했다. 실패가 반복되면 복구 지점이 사라진다."
+              runbook: "docs/infra/k3s/09-storage-backup-disaster-recovery-design.md"
+
+  # 성공한 Job(failed=0)은 발화하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_status_failed{namespace="openbake",job_name="postgres-backup-core-29794630"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BackupJobFailed
+        exp_alerts: []
+
+  # 필수 job이 하나라도 없으면 ScrapeJobAbsent가 발화한다.
+  # (redis-exporter만 빠뜨리고 나머지는 존재하게 둔다)
+  - interval: 1m
+    input_series:
+      - series: 'up{job="openbake-core"}'
+        values: '1x30'
+      - series: 'up{job="openbake-gateway"}'
+        values: '1x30'
+      - series: 'up{job="node-exporter"}'
+        values: '1x30'
+      - series: 'up{job="kube-state-metrics"}'
+        values: '1x30'
+      - series: 'up{job="kafka-exporter"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ScrapeJobAbsent
+        exp_alerts:
+          # absent()가 셀렉터 라벨을 남기므로 어느 job이 없는지 드러난다.
+          - exp_labels:
+              severity: critical
+              job: redis-exporter
+            exp_annotations:
+              summary: "redis-exporter scrape job이 사라졌다"
+              description: "Pod discovery에서 대상이 빠졌거나 Prometheus 설정이 잘못됐다. up 지표 자체가 없어 TargetDown으로는 잡히지 않는다."
+      # 전부 살아 있으면 TargetDown도 조용해야 한다.
+      - eval_time: 20m
+        alertname: TargetDown
+        exp_alerts: []
+
+  # up이 0이면 TargetDown이 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="openbake-payment",instance="10.42.1.5:8082"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: openbake-payment
+              instance: "10.42.1.5:8082"
+            exp_annotations:
+              summary: "openbake-payment 수집 실패"
+              description: "instance=10.42.1.5:8082. 이 대상의 지표가 더 이상 들어오지 않는다. 관련 경보도 함께 침묵하므로 다른 신호를 신뢰할 수 없다."
+
+  # 컨슈머가 죽어 offset이 멈췄고 lag은 남아 있다 → 정지로 판정해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{consumergroup="openbake-ai",topic="product.changed.v1"}'
+        values: '500x30'
+      - series: 'kafka_consumergroup_current_offset{consumergroup="openbake-ai",topic="product.changed.v1"}'
+        values: '1000x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KafkaConsumerGroupStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              consumergroup: openbake-ai
+              topic: product.changed.v1
+            exp_annotations:
+              summary: "openbake-ai / product.changed.v1 소비 정지"
+              description: "밀린 이벤트가 있는데 15분간 offset이 전혀 움직이지 않았다. 컨슈머가 죽었거나 특정 메시지에서 막혀 있다."
+
+  # lag이 있어도 offset이 움직이고 있으면 정지가 아니다 — 발화하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{consumergroup="openbake-ai",topic="product.viewed.v1"}'
+        values: '500+0x30'
+      - series: 'kafka_consumergroup_current_offset{consumergroup="openbake-ai",topic="product.viewed.v1"}'
+        values: '1000+50x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KafkaConsumerGroupStalled
+        exp_alerts: []
+
+  # lag이 0이면 offset이 멈춰 있어도 정상이다(처리할 게 없는 것).
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{consumergroup="openbake-ai",topic="member.withdrawn.v1"}'
+        values: '0x30'
+      - series: 'kafka_consumergroup_current_offset{consumergroup="openbake-ai",topic="member.withdrawn.v1"}'
+        values: '1000x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KafkaConsumerGroupStalled
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'kafka_brokers'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: KafkaBrokerDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Kafka 브로커에 접근할 수 없다"
+              description: "브로커가 1대뿐이라 이벤트 발행·소비가 모두 멈춘다. Outbox는 PENDING으로 쌓이므로 복구 후 소진 여부를 확인한다."
+
+  # Redis 75%: warning만 발화하고 critical은 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_memory_used_bytes'
+        values: '75x20'
+      - series: 'redis_memory_max_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RedisMemoryHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Redis 메모리 사용률 70% 초과"
+              description: "현재 75.0%. noeviction 정책이라 한계에 닿으면 키를 지우지 않고 쓰기가 실패한다. 드롭 재고 선점과 Refresh Token이 동시에 영향을 받는다."
+      - eval_time: 15m
+        alertname: RedisMemoryCritical
+        exp_alerts: []
+
+  # 90%면 둘 다 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_memory_used_bytes'
+        values: '90x20'
+      - series: 'redis_memory_max_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RedisMemoryCritical
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Redis 메모리 사용률 85% 초과"
+              description: "현재 90.0%. 쓰기 실패가 임박했다. 만료 정책과 키 증가 원인을 즉시 확인한다."
+
+  # 50%면 아무것도 울리지 않아야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_memory_used_bytes'
+        values: '50x20'
+      - series: 'redis_memory_max_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RedisMemoryHigh
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'redis_up'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RedisDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Redis에 접근할 수 없다"
+              description: "exporter가 Redis에 연결하지 못한다. 재고 선점은 fail-closed라 판매가 중단되고, 인증도 함께 막힌다."
+
+  # Redis가 살아 있으면 조용해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'redis_up'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RedisDown
+        exp_alerts: []
+
+  # Outbox 가장 오래된 PENDING이 600초. 임계값 300초를 넘겨야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_outbox_oldest_age_seconds{job="openbake-core"}'
+        values: '600x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OutboxPendingAgeHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              threshold_status: provisional
+              job: openbake-core
+            exp_annotations:
+              summary: "openbake-core Outbox 미발행 이벤트 정체"
+              description: "가장 오래된 PENDING 이벤트가 600초. 발행기·브로커·DB 락을 확인한다. count가 적어도 age가 크면 특정 데이터가 계속 낡는다."

@@ -1,0 +1,165 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: ./drop-lock-concurrency.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 300 max VUs, 5m30s max duration (incl. graceful stop):
+              * concurrent_stock_reservation: 1 iterations for each of 300 VUs (maxDuration: 5m0s, gracefulStop: 30s)
+
+
+running (0m01.0s), 300/300 VUs, 0 complete and 0 interrupted iterations
+concurrent_stock_reservation   [   0% ] 300 VUs  0m01.0s/5m0s  000/300 iters, 1 per VU
+
+running (0m02.0s), 300/300 VUs, 0 complete and 0 interrupted iterations
+concurrent_stock_reservation   [   0% ] 300 VUs  0m02.0s/5m0s  000/300 iters, 1 per VU
+
+running (0m03.0s), 300/300 VUs, 0 complete and 0 interrupted iterations
+concurrent_stock_reservation   [   0% ] 300 VUs  0m03.0s/5m0s  000/300 iters, 1 per VU
+
+running (0m04.0s), 300/300 VUs, 0 complete and 0 interrupted iterations
+concurrent_stock_reservation   [   0% ] 300 VUs  0m04.0s/5m0s  000/300 iters, 1 per VU
+
+running (0m05.0s), 258/300 VUs, 42 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  14% ] 300 VUs  0m05.0s/5m0s  042/300 iters, 1 per VU
+
+running (0m06.0s), 258/300 VUs, 42 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  14% ] 300 VUs  0m06.0s/5m0s  042/300 iters, 1 per VU
+
+running (0m07.0s), 258/300 VUs, 42 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  14% ] 300 VUs  0m07.0s/5m0s  042/300 iters, 1 per VU
+
+running (0m08.0s), 258/300 VUs, 42 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  14% ] 300 VUs  0m08.0s/5m0s  042/300 iters, 1 per VU
+
+running (0m09.0s), 257/300 VUs, 43 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  14% ] 300 VUs  0m09.0s/5m0s  043/300 iters, 1 per VU
+
+running (0m10.0s), 255/300 VUs, 45 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  15% ] 300 VUs  0m10.0s/5m0s  045/300 iters, 1 per VU
+
+running (0m11.0s), 248/300 VUs, 52 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  17% ] 300 VUs  0m11.0s/5m0s  052/300 iters, 1 per VU
+
+running (0m12.0s), 215/300 VUs, 85 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  28% ] 300 VUs  0m12.0s/5m0s  085/300 iters, 1 per VU
+
+running (0m13.0s), 210/300 VUs, 90 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  30% ] 300 VUs  0m13.0s/5m0s  090/300 iters, 1 per VU
+
+running (0m14.0s), 210/300 VUs, 90 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  30% ] 300 VUs  0m14.0s/5m0s  090/300 iters, 1 per VU
+
+running (0m15.0s), 210/300 VUs, 90 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  30% ] 300 VUs  0m15.0s/5m0s  090/300 iters, 1 per VU
+
+running (0m16.0s), 210/300 VUs, 90 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  30% ] 300 VUs  0m16.0s/5m0s  090/300 iters, 1 per VU
+
+running (0m17.0s), 210/300 VUs, 90 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  30% ] 300 VUs  0m17.0s/5m0s  090/300 iters, 1 per VU
+
+running (0m18.0s), 210/300 VUs, 90 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  30% ] 300 VUs  0m18.0s/5m0s  090/300 iters, 1 per VU
+
+running (0m19.0s), 210/300 VUs, 90 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  30% ] 300 VUs  0m19.0s/5m0s  090/300 iters, 1 per VU
+
+running (0m20.0s), 202/300 VUs, 98 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  33% ] 300 VUs  0m20.0s/5m0s  098/300 iters, 1 per VU
+
+running (0m21.0s), 192/300 VUs, 108 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  36% ] 300 VUs  0m21.0s/5m0s  108/300 iters, 1 per VU
+
+running (0m22.0s), 190/300 VUs, 110 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  37% ] 300 VUs  0m22.0s/5m0s  110/300 iters, 1 per VU
+
+running (0m23.0s), 181/300 VUs, 119 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  40% ] 300 VUs  0m23.0s/5m0s  119/300 iters, 1 per VU
+
+running (0m24.0s), 179/300 VUs, 121 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  40% ] 300 VUs  0m24.0s/5m0s  121/300 iters, 1 per VU
+
+running (0m25.0s), 172/300 VUs, 128 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  43% ] 300 VUs  0m25.0s/5m0s  128/300 iters, 1 per VU
+
+running (0m26.0s), 163/300 VUs, 137 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  46% ] 300 VUs  0m26.0s/5m0s  137/300 iters, 1 per VU
+
+running (0m27.0s), 162/300 VUs, 138 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  46% ] 300 VUs  0m27.0s/5m0s  138/300 iters, 1 per VU
+
+running (0m28.0s), 161/300 VUs, 139 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  46% ] 300 VUs  0m28.0s/5m0s  139/300 iters, 1 per VU
+
+running (0m29.0s), 154/300 VUs, 146 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  49% ] 300 VUs  0m29.0s/5m0s  146/300 iters, 1 per VU
+
+running (0m30.0s), 151/300 VUs, 149 complete and 0 interrupted iterations
+concurrent_stock_reservation   [  50% ] 300 VUs  0m30.0s/5m0s  149/300 iters, 1 per VU
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✗ 'rate==1' rate=49.00%
+
+    drop_lock_business_duration
+    ✗ 'p(95)<1500' p(95)=19.67s
+    ✗ 'p(99)<3000' p(99)=27.2s
+
+    drop_lock_invalid_state
+    ✓ 'count==0' count=0
+
+    drop_lock_success
+    ✗ 'count==300' count=147
+
+    drop_lock_unexpected
+    ✗ 'count==0' count=153
+
+    http_req_failed
+    ✗ 'rate==0' rate=51.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 300    9.996211/s
+    checks_succeeded...: 49.00% 147 out of 300
+    checks_failed......: 51.00% 153 out of 300
+
+    ✗ 재고 선점 성공 또는 정상 재고 부족이다
+      ↳  49% — ✓ 147 / ✗ 153
+
+    CUSTOM
+    drop_lock_business_duration....: avg=8.34s  min=0s    med=8.29s  max=27.3s  p(90)=15.71s p(95)=19.67s
+    drop_lock_invalid_state........: 0      0/s
+    drop_lock_success..............: 147    4.898143/s
+    drop_lock_unexpected...........: 153    5.098068/s
+
+    HTTP
+    http_req_duration..............: avg=8.34s  min=0s    med=8.29s  max=27.3s  p(90)=15.71s p(95)=19.67s
+      { expected_response:true }...: avg=10.05s min=2.12s med=10.19s max=24.33s p(90)=16.22s p(95)=17.86s
+    http_req_failed................: 51.00% 153 out of 300
+    http_reqs......................: 300    9.996211/s
+
+    EXECUTION
+    iteration_duration.............: avg=22.22s min=4.12s med=30s    max=30.01s p(90)=30s    p(95)=30s   
+    iterations.....................: 300    9.996211/s
+    vus............................: 151    min=151        max=300
+    vus_max........................: 300    min=300        max=300
+
+    NETWORK
+    data_received..................: 1.7 MB 56 kB/s
+    data_sent......................: 593 kB 20 kB/s
+
+
+
+
+running (0m30.0s), 000/300 VUs, 300 complete and 0 interrupted iterations
+concurrent_stock_reservation ✓ [ 100% ] 300 VUs  0m30.0s/5m0s  300/300 iters, 1 per VU

@@ -1,0 +1,37 @@
+# openbake 서비스 5개 → tempo(monitoring) 4317 OTLP gRPC.
+#
+# ⚠️ 안전 확인: monitoring 네임스페이스에는 default-deny-ingress가 있다. tempo는
+# 새로 만드는 Pod이므로 그 default-deny에 의해 **처음부터 격리 상태**다. 따라서
+# 이 파일이 없으면 span이 아예 도착하지 않는다. "차단을 시작"하는 것이 아니라
+# 이미 닫힌 문을 여는 것이다.
+#
+# 2026-08-25에 정책이 하나도 없던 kube-system에 첫 정책을 넣었다가 Traefik이
+# 격리되어 외부 접속이 전면 차단된 적이 있다. 그때와 상황이 다르다 —
+# 여기는 이미 default-deny가 걸린 네임스페이스다.
+#
+# ── span이 조용히 사라지는 실패에 대하여 ────────────────────────────────
+# OTLP exporter는 전송에 실패해도 애플리케이션을 멈추지 않는다. 재시도하다
+# 버린다. 즉 이 정책이 없으면 **로그에는 traceId가 찍히는데 Grafana에는 아무
+# trace도 안 보이는** 상태가 된다. 그 둘을 구별하기 어려우므로 배포 후 반드시
+# tempo_distributor_spans_received_total 이 증가하는지 확인한다.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-apps-to-tempo
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tempo
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openbake
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318

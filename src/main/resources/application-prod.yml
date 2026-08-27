@@ -52,3 +52,17 @@ management:
   tracing:
     sampling:
       probability: ${TRACING_SAMPLING:0.1}
+  # span을 Tempo로 보낸다.
+  #
+  # ⚠️ 이 설정이 없으면 traceId는 로그에 찍히지만 **span은 어디에도 저장되지 않는다.**
+  # 그러면 "어느 구간이 몇 ms 걸렸는가"를 볼 수 없다. 로그 상관관계까지가 전부다.
+  #
+  # OTLP exporter는 전송에 실패해도 애플리케이션을 멈추지 않는다. 재시도하다 버린다.
+  # 즉 주소가 틀리거나 NetworkPolicy에 막히면 **조용히 사라진다.** 배포 후
+  # tempo_distributor_spans_received_total이 증가하는지 반드시 확인한다.
+  #
+  # 기본 프로필에는 넣지 않는다. 로컬 개발에서 Tempo가 없는 것이 정상이고,
+  # 없는 주소로 계속 재시도하면 로그가 지저분해진다.
+  otlp:
+    tracing:
+      endpoint: ${OTLP_TRACING_ENDPOINT:http://tempo.monitoring.svc.cluster.local:4317}

@@ -392,6 +392,8 @@ data:
               absent(up{job="openbake-core"}) or absent(up{job="openbake-gateway"})
               or absent(up{job="node-exporter"}) or absent(up{job="kube-state-metrics"})
               or absent(up{job="redis-exporter"}) or absent(up{job="kafka-exporter"})
+              or absent(up{job="elasticsearch-exporter"}) or absent(up{job="postgres-exporter"})
+              or absent(up{job="traefik"}) or absent(up{job="blackbox-http"})
             for: 10m
             labels:
               severity: critical
@@ -400,6 +402,33 @@ data:
               # 사라졌는지 여기서 드러난다.
               summary: "{{ $labels.job }} scrape job이 사라졌다"
               description: "Pod discovery에서 대상이 빠졌거나 Prometheus 설정이 잘못됐다. up 지표 자체가 없어 TargetDown으로는 잡히지 않는다."
+          # 경보가 참조하는 지표 자체가 없는 경우를 잡는다.
+          #
+          # 2026-08-27에 ElasticsearchDown을 elasticsearch_cluster_health_up으로
+          # 썼는데 v1.7.0에 그 이름이 없었다. **이름이 틀린 경보는 오류를 내지 않고
+          # 조용히 죽는다.** 영원히 발화하지 않으므로 "정상이라 안 울리는 것"과
+          # 구별되지 않고, promtool 단위 테스트도 못 잡는다(합성 시계열은 규칙이
+          # 참조하는 이름을 그대로 쓰므로 항상 통과한다).
+          #
+          # exporter 판올림으로 지표 이름이 바뀌는 경우에도 이 규칙이 잡는다.
+          # for를 길게 둔 이유는 exporter 재시작 중 잠깐 비는 것을 넘기기 위해서다.
+          - alert: AlertInputMetricMissing
+            expr: |
+              absent(elasticsearch_cluster_health_status)
+              or absent(elasticsearch_node_stats_up)
+              or absent(elasticsearch_jvm_memory_used_bytes)
+              or absent(pg_up)
+              or absent(pg_stat_database_numbackends)
+              or absent(pg_settings_max_connections)
+              or absent(pg_stat_database_deadlocks)
+              or absent(kube_node_labels)
+              or absent(kafka_topic_partition_current_offset)
+            for: 30m
+            labels:
+              severity: warning
+            annotations:
+              summary: "경보가 참조하는 지표가 없다"
+              description: "해당 경보는 조용히 죽은 상태다. exporter 판올림으로 지표 이름이 바뀌었거나 처음부터 이름이 틀렸을 수 있다. 규칙의 expr과 실제 지표 이름을 대조한다."
 
       # 09번 문서 5장이 확정한 root EBS 사용률 기준을 그대로 옮긴 것이다.
       # 두 Node의 PVC가 물리적으로 같은 디스크를 쓰므로 한 워크로드의 폭증이
@@ -633,8 +662,16 @@ data:
             annotations:
               summary: "Elasticsearch 클러스터 red"
               description: "주 샤드가 배정되지 않았다. 해당 인덱스는 검색·색인이 되지 않는다. 상품 검색이 폴백으로 떨어진다."
+          # ⚠️ elasticsearch_cluster_health_up은 v1.7.0에 존재하지 않는다.
+          # 처음에 그 이름으로 썼다가 2026-08-27 배포 후 실측에서 빈 값임을 확인했다.
+          # 이름이 틀린 경보는 오류를 내지 않고 **조용히 죽는다** — 영원히 발화하지
+          # 않으므로 배포만 보고는 정상과 구별되지 않는다.
+          #
+          # node_stats_up은 exporter가 ES에서 노드 통계를 실제로 받아왔는지를 나타내
+          # "ES가 응답하는가"에 가장 가깝다. clusterinfo_up도 있으나 그쪽은 5분마다
+          # 갱신되는 클러스터 메타 조회라 반응이 느리다.
           - alert: ElasticsearchDown
-            expr: elasticsearch_cluster_health_up == 0
+            expr: elasticsearch_node_stats_up == 0
             for: 3m
             labels:
               severity: critical

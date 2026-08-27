@@ -23,6 +23,10 @@ jar {
 }
 
 dependencies {
+    // 로깅 마스킹은 웹 스택 중립 모듈에 있다. api로 노출해 common을 쓰는 서비스가
+    // 별도 선언 없이 그대로 쓰게 한다.
+    api project(':common-logging')
+
     api 'org.springframework.boot:spring-boot-starter-webmvc'
     api 'org.springframework.security:spring-security-core'
 

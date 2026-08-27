@@ -24,6 +24,10 @@ dependencyManagement {
 }
 
 dependencies {
+    // common이 아니라 common-logging이다. common은 starter-webmvc를 노출하므로
+    // 여기 넣으면 Netty 대신 Tomcat이 떠서 게이트웨이가 깨진다.
+    implementation project(':common-logging')
+
     implementation 'org.springframework.cloud:spring-cloud-starter-gateway-server-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'

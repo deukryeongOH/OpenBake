@@ -573,6 +573,14 @@ tests:
         values: '1x50'
       - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
         values: '12x50'
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_execution_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_idempotency_conflict_total{operation="pay"}'
+        values: '0x50'
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '1000x50'
     alert_rule_test:
       - eval_time: 40m
         alertname: AlertInputMetricMissing
@@ -597,6 +605,14 @@ tests:
         values: '1x50'
       - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
         values: '12x50'
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_execution_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_idempotency_conflict_total{operation="pay"}'
+        values: '0x50'
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '1000x50'
     alert_rule_test:
       - eval_time: 40m
         alertname: AlertInputMetricMissing
@@ -606,3 +622,70 @@ tests:
             exp_annotations:
               summary: "경보가 참조하는 지표가 없다"
               description: "해당 경보는 조용히 죽은 상태다. exporter 판올림으로 지표 이름이 바뀌었거나 처음부터 이름이 틀렸을 수 있다. 규칙의 expr과 실제 지표 이름을 대조한다."
+
+  # ── 결제 Saga ─────────────────────────────────────────────────────────
+  # 환불 실패는 정상값이 0이다. 0이면 침묵해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PaymentRefundFailed
+        exp_alerts: []
+
+  # 한 건이라도 생기면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x20 1x20'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PaymentRefundFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "환불 실패 1건"
+              description: "15분간 발생. 사용자 돈이 돌아가지 않은 상태다. payment_record의 실패 사유와 PG 콘솔을 대조한다."
+
+  # 정합성 배치: 5분 주기로 정상 갱신되면 침묵해야 한다.
+  # time()은 테스트에서 0부터 흐르므로, 시각을 따라 올라가는 값을 넣는다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '0+60x60'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: PaymentReconcileStalled
+        exp_alerts: []
+
+  # 배치가 멈추면(값이 고정) 15분을 넘긴 시점에 발화한다.
+  # 20분째에 마지막 성공이 멈췄다고 두면, 그 뒤 15분 + for 5분이 지나야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '0+60x20 1200x60'
+    alert_rule_test:
+      # 40분 시점: 마지막 성공이 1200초(=20분)이고 현재 2400초 -> 1200초 경과.
+      # 900초를 넘겼고 for 5분도 지났다.
+      - eval_time: 45m
+        alertname: PaymentReconcileStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            # humanizeDuration이 초를 사람이 읽는 형식으로 바꾸는지 함께 확인한다.
+            # 경보 문구에 25분이 "1500"으로 찍히면 새벽에 판단이 늦어진다.
+            exp_annotations:
+              summary: "결제 정합성 배치가 25m 0s째 돌지 않았다"
+              description: "미결 충전을 수렴시키는 마지막 방어선이다. 멈추면 사용자 돈이 묶인 채로 남는다. 스케줄러 스레드와 Pod 상태를 확인한다."
+
+  # 멱등 경합은 정상 동작이다. 낮은 빈도에서는 침묵해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_idempotency_conflict_total{operation="pay"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: PaymentIdempotencyConflictSpike
+        exp_alerts: []

@@ -75,10 +75,6 @@ spec:
                 secretKeyRef:
                   name: core-db-credentials
                   key: DB_PASSWORD
-            # 지표에 인스턴스를 구분할 라벨을 붙인다. 4대가 같은 지표 이름을 쓰므로
-            # 이것이 없으면 대시보드에서 어느 DB인지 알 수 없다.
-            - name: PG_EXPORTER_CONSTANT_LABELS
-              value: "datastore=core"
           ports:
             - containerPort: 9187
               name: metrics
@@ -164,8 +160,6 @@ spec:
                 secretKeyRef:
                   name: member-db-credentials
                   key: DB_PASSWORD
-            - name: PG_EXPORTER_CONSTANT_LABELS
-              value: "datastore=member"
           ports:
             - containerPort: 9187
               name: metrics
@@ -251,8 +245,6 @@ spec:
                 secretKeyRef:
                   name: payment-db-credentials
                   key: DB_PASSWORD
-            - name: PG_EXPORTER_CONSTANT_LABELS
-              value: "datastore=payment"
           ports:
             - containerPort: 9187
               name: metrics
@@ -338,8 +330,6 @@ spec:
                 secretKeyRef:
                   name: ai-db-credentials
                   key: DB_PASSWORD
-            - name: PG_EXPORTER_CONSTANT_LABELS
-              value: "datastore=ai"
           ports:
             - containerPort: 9187
               name: metrics

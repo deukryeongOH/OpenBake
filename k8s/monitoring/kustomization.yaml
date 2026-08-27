@@ -13,6 +13,9 @@ resources:
   - elasticsearch-exporter
   # 분산 추적 저장소. span을 저장해 구간별 소요 시간을 볼 수 있게 한다.
   - tempo
+  # 중앙 로그. Loki는 Node A(메모리 여유가 두 배), promtail은 모든 노드.
+  - loki
+  - promtail
   # kafka-exporter와 postgres-exporter는 openbake 네임스페이스다.
   # 전자는 advertised listener, 후자는 자격증명 Secret이 거기 있기 때문이다.
   # 이유는 각 매니페스트 주석 참고.

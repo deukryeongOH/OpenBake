@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: promtail
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  promtail.yaml: |
+    # 각 노드의 컨테이너 로그 파일을 읽어 Loki로 보낸다.
+    #
+    # DaemonSet이라 노드마다 하나씩 뜬다. 각자 자기 노드의 로그만 읽으므로
+    # Pod가 어디로 옮겨가든 로그는 끊기지 않는다.
+
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+      log_level: warn
+
+    positions:
+      # 어디까지 읽었는지 기록한다. 이게 없으면 재시작할 때마다 처음부터 다시
+      # 읽어 같은 로그가 중복으로 들어간다.
+      filename: /run/promtail/positions.yaml
+
+    clients:
+      - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        pipeline_stages:
+          # ── 구조화 로그(JSON)에서 traceId를 꺼낸다 ─────────────────────
+          #
+          # **이것이 이 설정의 핵심이다.** 우리 prod 로그는 ECS JSON이고 traceId가
+          # 필드로 들어 있다. 그것을 라벨로 꺼내면 Grafana에서 추적 화면의
+          # traceId를 눌러 그 요청의 로그로 바로 넘어갈 수 있다.
+          #
+          # 지표 -> 추적 -> 로그 흐름이 여기서 이어진다.
+          - cri: {}
+          - json:
+              expressions:
+                trace_id: traceId
+                span_id: spanId
+                level: log.level
+                logger: log.logger
+                svc: service.name
+              # JSON이 아닌 줄(로컬 형식, 시작 로그)은 그냥 통과시킨다.
+              drop_malformed: false
+          - labels:
+              # ⚠️ 라벨은 꼭 필요한 것만 붙인다. Loki는 라벨 조합마다 스트림을
+              # 따로 만들기 때문에, traceId처럼 값이 무한한 것을 라벨로 붙이면
+              # 스트림이 폭발해 메모리가 터진다.
+              #
+              # traceId는 **라벨이 아니라 본문 검색**으로 찾는다:
+              #   {namespace="openbake"} |= "c1b0f6cc..."
+              level:
+              svc:
+        relabel_configs:
+          # openbake와 monitoring 네임스페이스만 수집한다. kube-system까지 넣으면
+          # 양이 크게 늘고, 우리가 조사할 대상도 아니다.
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: "openbake|monitoring"
+            action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            target_label: app
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+          # 실제 로그 파일 경로. CRI(containerd)는 이 규칙으로 찾는다.
+          - source_labels:
+              - __meta_kubernetes_pod_uid
+              - __meta_kubernetes_pod_container_name
+            separator: "/"
+            target_label: __path__
+            replacement: /var/log/pods/*$1/*.log

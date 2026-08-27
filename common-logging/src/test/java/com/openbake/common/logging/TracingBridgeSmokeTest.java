@@ -77,14 +77,34 @@ class TracingBridgeSmokeTest {
     }
 
     @Test
-    @DisplayName("span 밖에서는 traceId 자리가 비어 있다 — 값이 새지 않는다")
+    @DisplayName("span 밖에서는 traceId가 남지 않는다 — 이전 요청 값이 새지 않는다")
     void logsOutsideSpanHaveNoTraceId(CapturedOutput output) {
+        // 먼저 span 안에서 한 번 찍어 traceId를 만든다. 스레드가 재사용되므로
+        // 그 값이 다음 로그에 남는지가 확인 대상이다.
+        Span span = tracer.nextSpan().name("leak-check");
+        String previousTraceId;
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span.start())) {
+            previousTraceId = span.context().traceId();
+            log.info("span 안 메시지");
+        } finally {
+            span.end();
+        }
+
         log.info("span 밖 메시지");
 
         String line = lineContaining(output, "span 밖 메시지");
         assertThat(line).isNotNull();
-        // 패턴이 [,] 형태로 남는다. 이전 요청의 traceId가 남아 있으면 안 된다.
-        assertThat(line).contains("[,]");
+
+        // 로그 형식(평문/JSON)에 의존하지 않는다. 검증할 것은 "이전 traceId가
+        // 남아 있지 않다"는 사실 하나다.
+        //
+        // 처음에는 평문 패턴의 "[,]" 문자열을 확인했는데, 같은 JVM에서 구조화
+        // 로그를 켜는 다른 테스트가 돌면 형식이 JSON으로 바뀌어 깨졌다
+        // (2026-08-27 CI 실패). 형식이 아니라 불변식을 검증한다.
+        assertThat(line)
+                .as("스레드 재사용으로 이전 요청의 traceId가 남으면 안 된다")
+                .doesNotContain(previousTraceId);
+        assertThat(line).doesNotContainPattern("\b[0-9a-f]{32}\b");
     }
 
     private static String lineContaining(CapturedOutput output, String needle) {

@@ -423,3 +423,121 @@ tests:
             exp_annotations:
               summary: "openbake-core Outbox 미발행 이벤트 정체"
               description: "가장 오래된 PENDING 이벤트가 600초. 발행기·브로커·DB 락을 확인한다. count가 적어도 age가 크면 특정 데이터가 계속 낡는다."
+
+  # ── DLT: 누적 오프셋 함정 ─────────────────────────────────────────────
+  # current_offset은 high water mark라 내려오지 않는다. "> 0"으로 걸면 과거에
+  # 한 번 실패한 순간부터 영원히 울린다. 새로 늘어난 경우에만 울려야 한다.
+  #
+  # 여기서는 오프셋이 12에서 **멈춰 있는** 상태를 넣는다. 이미 쌓인 12건이
+  # 그대로 있는 지금 상황이며, 이때 울리면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
+        values: '12x90'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: KafkaDltMessagesAppearing
+        exp_alerts: []
+
+  # 같은 토픽에 새 메시지가 들어오면 울려야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
+        values: '12x30 13+1x40'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: KafkaDltMessagesAppearing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              topic: "product.changed.v1.dlt"
+            # increase()는 구간 경계를 추정으로 보정해 42.x 같은 소수가 나온다.
+            # printf "%.0f"가 그것을 정수로 다듬는지 여기서 함께 확인한다.
+            # 2026-08-26에 "4.133333회"가 그대로 찍혀 나갔던 적이 있다.
+            exp_annotations:
+              summary: "product.changed.v1.dlt에 새 DLT 메시지"
+              description: "최근 1시간 동안 42건이 DLT로 격리됐다. 재시도로도 처리되지 않은 이벤트이므로 원인을 확인하고 재처리 여부를 정한다."
+
+  # ── Elasticsearch: yellow는 정상 상태다 ───────────────────────────────
+  # 단일 노드라 복제 샤드를 배정할 곳이 없어 영구히 yellow다.
+  # red 경보가 yellow에 반응하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_cluster_health_status{color="yellow"}'
+        values: '1x30'
+      - series: 'elasticsearch_cluster_health_status{color="red"}'
+        values: '0x30'
+      - series: 'elasticsearch_cluster_health_status{color="green"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ElasticsearchClusterRed
+        exp_alerts: []
+
+  # red면 울려야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_cluster_health_status{color="red"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ElasticsearchClusterRed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              color: red
+            exp_annotations:
+              summary: "Elasticsearch 클러스터 red"
+              description: "주 샤드가 배정되지 않았다. 해당 인덱스는 검색·색인이 되지 않는다. 상품 검색이 폴백으로 떨어진다."
+
+  # ── 배치 어긋남: 정상 배치에서는 조용해야 한다 ────────────────────────
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_info{namespace="openbake",pod="member-service-abc-1",node="node-b"}'
+        values: '1x60'
+      - series: 'kube_pod_info{namespace="openbake",pod="api-gateway-abc-1",node="node-a"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-a",label_openbake_io_node_pool="core"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-b",label_openbake_io_node_pool="service"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: PodOnWrongNodePool
+        exp_alerts: []
+
+  # service 풀 워크로드가 core 노드에 뜨면 울려야 한다.
+  # backend는 HPA로 Node B에 뜨는 것이 정상이라 함께 넣어도 울리면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_info{namespace="openbake",pod="member-service-abc-1",node="node-a"}'
+        values: '1x60'
+      - series: 'kube_pod_info{namespace="openbake",pod="backend-xyz-2",node="node-b"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-a",label_openbake_io_node_pool="core"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-b",label_openbake_io_node_pool="service"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: PodOnWrongNodePool
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              threshold_status: provisional
+              namespace: openbake
+              pod: "member-service-abc-1"
+              node: "node-a"
+            exp_annotations:
+              summary: "member-service-abc-1가 설계와 다른 노드에 있다"
+              description: "node-a에 떠 있다. nodeAffinity가 preferred라 배치가 어긋나도 Running이다. DB가 다른 노드면 접근마다 노드를 넘는다."
+
+  # ── PostgreSQL: 데드락은 발생 자체가 신호 ─────────────────────────────
+  - interval: 1m
+    input_series:
+      - series: 'pg_stat_database_deadlocks{datastore="core",datname="openbake"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PostgresDeadlocks
+        exp_alerts: []

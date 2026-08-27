@@ -1,0 +1,28 @@
+# prometheus(monitoring) → postgres-exporter 4대(openbake) 9187.
+#
+# exporter가 openbake에 있는 이유는 deployment.yaml 상단 주석 참고(Secret이
+# 네임스페이스를 넘지 못한다). openbake에는 default-deny-ingress가 podSelector {}로
+# 걸려 있어 **새로 만든 Pod도 자동으로 격리 상태**다. 이 허용이 없으면 스크레이프가
+# 조용히 실패하고 TargetDown이 울린다.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-to-postgres-exporter
+  namespace: openbake
+spec:
+  podSelector:
+    matchLabels:
+      openbake.io/exporter: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9187

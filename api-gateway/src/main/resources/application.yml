@@ -126,9 +126,28 @@ management:
     distribution:
       percentiles-histogram:
         "[http.server.requests]": true
+        # 게이트웨이에서 경로별 지연을 보려면 이쪽이 필요하다.
+        #
+        # http.server.requests의 uri 라벨은 프록시 트래픽에서 전부 UNKNOWN으로 찍힌다
+        # (2026-08-26 실측: 실제 URI가 붙는 것은 actuator 엔드포인트뿐이었다).
+        # WebFlux 프록시 경로는 핸들러 매칭을 거치지 않아 Micrometer가 URI를 특정할
+        # 수 없기 때문이다. 그래서 게이트웨이만은 이 지표로 경로를 나눌 수 없다.
+        #
+        # spring.cloud.gateway.requests는 routeId·routeUri 라벨을 붙여 나오므로
+        # "core-api 경로가 느린가"를 판정할 수 있다. 다만 기본이 Timer라
+        # _bucket이 없어 p95를 계산할 수 없었다. 히스토그램을 켠다.
+        "[spring.cloud.gateway.requests]": true
 
       slo:
         "[http.server.requests]":
+          - 100ms
+          - 300ms
+          - 500ms
+          - 1s
+          - 2s
+        # 뒤쪽 서비스와 같은 경계를 쓴다. 게이트웨이 값에서 뒤쪽 서비스 값을 빼면
+        # 게이트웨이 자체가 더한 시간이 나오는데, 경계가 다르면 그 비교가 성립하지 않는다.
+        "[spring.cloud.gateway.requests]":
           - 100ms
           - 300ms
           - 500ms

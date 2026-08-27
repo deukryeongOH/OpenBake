@@ -7,6 +7,7 @@ import com.openbake.drop.infrastructure.jpa.DropEntryJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,6 +37,11 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
     }
 
     @Override
+    public int complete(Long dropId, Long memberId) {
+        return dropEntryJpaRepository.complete(dropId, memberId);
+    }
+
+    @Override
     public int expireEnteredEntries(Long dropId) {
         return dropEntryJpaRepository.expireEnteredEntries(dropId);
     }
@@ -45,4 +51,8 @@ public class DropEntryRepositoryAdapter implements DropEntryRepository {
         return dropEntryJpaRepository.sumReservedQuantity(dropId);
     }
 
+    @Override
+    public List<DropEntry> findExpiredReservations(LocalDateTime cutoff) {
+        return dropEntryJpaRepository.findExpiredReservations(cutoff);
+    }
 }

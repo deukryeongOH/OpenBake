@@ -4,6 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.order.application.port.CartPort;
 import com.openbake.order.application.port.ProductPort;
+import com.openbake.order.application.port.ReservationPort;
 import com.openbake.order.application.port.dto.ProductInfo;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderFailReason;
@@ -39,6 +40,7 @@ public class OrderPayTransactions {
     private final ProductPort productPort;
     private final CartPort cartPort;
     private final OrderStockRestorer stockRestorer;
+    private final ReservationPort reservationPort;
 
     /**
      * T2 — 외부 결제 호출 <b>전에</b> 커밋되어야 하는 것들.
@@ -156,6 +158,15 @@ public class OrderPayTransactions {
                 log.warn("결제 성공 후 재고 차감 실패 — 환불로 되돌린다. orderId={}, productId={}",
                         orderId, line.productId());
                 throw new BusinessException(ErrorCode.OUT_OF_STOCK);
+            }
+        }
+
+        //드롭은 lock-start 에서 이미 깎여 있으므로 차감할 것은 없고, 선점을 확정만 한다
+        //(drop_entry RESERVED -> COMPLETED). docs/10 3.1절 — 이걸 해야 방치된 선점을
+        //회수하는 만료 스위퍼(2단계, 아직 미착수)가 결제 완료 건까지 회수하지 않는다.
+        if (order.isDrop()) {
+            for (OrderItem item : order.getItems()) {
+                reservationPort.complete(item.getDropId(), order.getMemberId());
             }
         }
 

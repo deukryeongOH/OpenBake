@@ -5,6 +5,7 @@ server:
       # Tomcat 스레드 풀 지표(tomcat_threads_busy_threads / config_max_threads)는
       # JMX MBean 등록에 의존하는데 Spring Boot 기본값이 false다.
       # 끄면 부하 테스트에서 스레드 풀 포화 여부를 아예 관측할 수 없다.
+
       # Spring Boot 3에서 tomcat.threads.* 메트릭은 MBean registry가 켜져 있어야
       # actuator에 노출된다. 스레드 풀 포화가 부하 테스트 진단의 핵심 항목인데
       # 이 값이 없으면 "측정값 없음"으로 나온다(2026-08-24 실측).
@@ -171,6 +172,20 @@ openbake:
     # 자동 구매확정 — 판매자가 확정을 누르지 않아도 정산이 누락되지 않게 하는 안전망.
     auto-confirm-days: 1
     auto-confirm-delay: PT1H
+
+  drop:
+    # 드롭 종료 후 재고를 확정(Redis 키 정리)하기까지의 유예. order.reservation-ttl(15분) +
+    # order.expiration-delay(최대 5분) 가 이론상 하한이고, 스케줄러 지연 여유를 더해 30분으로 둔다.
+    # 너무 짧으면 뒤늦은 주문 만료(rollbackStock)가 이미 정리된 키를 보고 실패한다.
+    stock-finalize-delay: PT30M
+    # 확정 후보를 조회하는 주기. order.expiration-delay 와 같은 자릿수로 맞췄다.
+    stock-finalize-interval: PT5M
+    # 선점(lock-start) 후 결제 완료까지 허용할 시간. order.reservation-ttl과 값을 맞췄다 —
+    # 주문서 자체의 유효시간과 다르게 둘 이유가 없다(docs/10 3.2절). order 설정 키를
+    # 직접 참조하지는 않는다 — drop이 order 설정에 종속되면 안 된다.
+    reservation-ttl: 15m
+    # 방치된 선점 후보를 조회하는 주기.
+    reservation-sweep-interval: PT5M
 
 logging:
   # 요청 하나가 서비스를 가로지른 경로를 로그로 따라가려면 X-Request-Id가 로그에

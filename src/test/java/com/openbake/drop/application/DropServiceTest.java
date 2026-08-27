@@ -4,6 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.drop.application.dto.DropInfoCommand;
 import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.application.dto.DropProductInfoResult;
+import com.openbake.drop.application.cache.DropCacheInvalidatedEvent;
 import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.application.port.CurrentSellerPort;
 import com.openbake.drop.application.port.ProductPort;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
@@ -52,6 +54,9 @@ class DropServiceTest {
 
     @Mock
     private ProductPort productPort;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private DropService dropService;
@@ -116,6 +121,7 @@ class DropServiceTest {
         assertThat(response).isEqualTo(productResult);
         verify(dropRepository).save(any(Drop.class));
         verify(todayDropCache).refresh();
+        verify(applicationEventPublisher).publishEvent(any(DropCacheInvalidatedEvent.class));
     }
 
     @Test
@@ -134,6 +140,7 @@ class DropServiceTest {
 
         verify(todayDropCache, never()).refresh();
         verifyNoInteractions(productPort);
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     @Test
@@ -168,6 +175,7 @@ class DropServiceTest {
         assertThat(response.totalQuantity()).isEqualTo(command.totalQuantity());
 
         verify(todayDropCache).refresh();
+        verify(applicationEventPublisher).publishEvent(any(DropCacheInvalidatedEvent.class));
     }
 
     @Test
@@ -191,6 +199,7 @@ class DropServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     @Test
@@ -215,6 +224,7 @@ class DropServiceTest {
         verify(productPort).deleteDropProduct(productId);
         verify(dropRepository).delete(existingDrop);
         verify(todayDropCache).refresh();
+        verify(applicationEventPublisher).publishEvent(any(DropCacheInvalidatedEvent.class));
     }
 
     @Test
@@ -237,6 +247,7 @@ class DropServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         verify(todayDropCache, never()).refresh();
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     @Test

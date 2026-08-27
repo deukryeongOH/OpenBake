@@ -3,6 +3,7 @@ package com.openbake.drop.application.service;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.drop.application.dto.*;
+import com.openbake.drop.application.cache.DropCacheInvalidatedEvent;
 import com.openbake.drop.application.cache.TodayDropCache;
 import com.openbake.drop.application.port.CurrentSellerPort;
 import com.openbake.drop.application.port.ProductPort;
@@ -12,6 +13,7 @@ import com.openbake.drop.domain.repository.DropRepository;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ public class DropService {
     private final TodayDropCache todayDropCache;
     private final CurrentSellerPort currentSellerPort;
     private final ProductPort productPort;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public DropInfoResult registerDrop(DropInfoCommand command) {
@@ -47,6 +50,8 @@ public class DropService {
 
         // 자정 캐시가 오늘 새로 등록된 드롭을 놓치지 않도록 즉시 갱신
         todayDropCache.refresh();
+        // 이 요청을 받지 않은 다른 Pod에게도 갱신을 알린다(커밋 후 전파. docs/11번 문서)
+        applicationEventPublisher.publishEvent(new DropCacheInvalidatedEvent());
 
         return result;
     }
@@ -136,6 +141,18 @@ public class DropService {
         return dropRepository.reviveFromSoldOut(dropId);
     }
 
+    // 재고 확정: 드롭당 정확히 1회만 실행되도록 조건부 UPDATE로 막는다. 이미 확정돼 있었으면 false.
+    @Transactional
+    public boolean markStockFinalized(Long dropId) {
+        return dropRepository.markStockFinalized(dropId, LocalDateTime.now()) > 0;
+    }
+
+    // 재고 확정 유예 시간이 지났는데 아직 확정 안 된 드롭들. DropStockFinalizeScheduler가 호출한다.
+    @Transactional(readOnly = true)
+    public List<Drop> findStockFinalizationCandidates(LocalDateTime cutoff) {
+        return dropRepository.findStockFinalizationCandidates(cutoff);
+    }
+
     private Drop findDrop(Long dropId) {
         return dropRepository.findById(dropId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DROP_NOT_FOUND));
@@ -219,6 +236,7 @@ public class DropService {
 
         // 오늘 드롭의 시작/마감 시각이 바뀌었을 수 있으므로 캐시를 즉시 갱신
         todayDropCache.refresh();
+        applicationEventPublisher.publishEvent(new DropCacheInvalidatedEvent());
 
         return DropInfoResult.of(drop.getDropStart(), drop.getDropEnd(), drop.getLimitQuantity(), drop.getDropStatus(),
                 result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
@@ -239,6 +257,7 @@ public class DropService {
 
         // 삭제된 드롭이 캐시에 남아 스케줄러가 존재하지 않는 드롭을 참조하지 않도록 즉시 갱신
         todayDropCache.refresh();
+        applicationEventPublisher.publishEvent(new DropCacheInvalidatedEvent());
     }
 
     private void validateOwner(Drop drop, Long sellerId) {

@@ -4,6 +4,7 @@ import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import com.openbake.order.application.port.CartPort;
 import com.openbake.order.application.port.ProductPort;
+import com.openbake.order.application.port.ReservationPort;
 import com.openbake.order.application.port.dto.ProductInfo;
 import com.openbake.order.domain.Order;
 import com.openbake.order.domain.OrderItem;
@@ -48,17 +49,20 @@ class OrderPayTransactionsTest {
     private CartPort cartPort;
     @Mock
     private OrderStockRestorer stockRestorer;
+    @Mock
+    private ReservationPort reservationPort;
 
     private OrderPayTransactions tx;
 
     private static final Long BUYER_ID = 5L;
     private static final Long ORDER_ID = 101L;
     private static final Long PRODUCT_ID = 30L;
+    private static final Long DROP_ID = 7L;
     private static final LocalDate PICK_UP_DATE = LocalDate.now().plusDays(1);
 
     @BeforeEach
     void setUp() {
-        tx = new OrderPayTransactions(orderRepository, productPort, cartPort, stockRestorer);
+        tx = new OrderPayTransactions(orderRepository, productPort, cartPort, stockRestorer, reservationPort);
     }
 
     @Test
@@ -168,6 +172,33 @@ class OrderPayTransactionsTest {
         verify(productPort, never()).decreaseStock(any(), anyInt());
     }
 
+    /**
+     * docs/10 3.1절. 재고를 다시 깎지는 않지만, drop_entry 선점은 확정해야 한다 —
+     * 안 하면 2단계(선점 TTL 스위퍼)가 결제 완료 건까지 방치된 선점으로 오판해 회수한다.
+     */
+    @Test
+    @DisplayName("드롭 주문은 결제 성공 시 선점을 확정한다 — RESERVED를 COMPLETED로 옮긴다")
+    void dropCompletesReservationOnPayment() {
+        Order order = dropOrder();
+        when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
+
+        tx.decreaseStockAndMarkPaid(ORDER_ID);
+
+        verify(reservationPort).complete(DROP_ID, BUYER_ID);
+    }
+
+    @Test
+    @DisplayName("일반 상품 주문은 선점 확정을 호출하지 않는다 — 드롭 전용 계약이다")
+    void generalOrderDoesNotCompleteReservation() {
+        Order order = pendingOrderFromCart();
+        when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
+        when(productPort.decreaseStock(PRODUCT_ID, 2)).thenReturn(true);
+
+        tx.decreaseStockAndMarkPaid(ORDER_ID);
+
+        verify(reservationPort, never()).complete(any(), any());
+    }
+
     @Test
     @DisplayName("결제 응답 전에 주문이 만료됐으면 재고를 건드리지 않고 종료 상태를 알린다")
     void paymentSuccessAfterExpiration() {
@@ -196,7 +227,7 @@ class OrderPayTransactionsTest {
     }
 
     private Order dropOrder() {
-        return order("2500", SalesType.DROP, 7L, null);
+        return order("2500", SalesType.DROP, DROP_ID, null);
     }
 
     private Order order(String unitPrice, SalesType salesType, Long dropId, Long cartItemId) {

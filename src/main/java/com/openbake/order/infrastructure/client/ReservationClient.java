@@ -46,8 +46,15 @@ public class ReservationClient implements ReservationPort {
         dropLockService.rollbackStock(dropId, memberId);
     }
 
-    // TODO 드롭 결제 성공 시 DropEntry 를 RESERVED → COMPLETED 로 옮기는 계약이 아직 없다.
-    //  DropEntry.completeEntry() 는 있지만 서비스·저장소 호출 경로가 없어 order 가 부를 수 없다.
-    //  drop 담당자와 계약을 확정한 뒤 여기에 complete(dropId, memberId) 를 추가한다.
-    //  (정상 결제와 타임아웃 후 뒤늦은 PAID 복원 양쪽에서 같은 계약을 호출해야 한다.)
+    /**
+     * 결제 성공 시 선점을 확정한다(RESERVED -> COMPLETED). docs/10 3.1절.
+     *
+     * completeReservation은 실패해도 예외를 던지지 않는다 — 결제 성공 트랜잭션
+     * (OrderPayTransactions.decreaseStockAndMarkPaid) 안에서 호출되므로, 여기서
+     * 예외가 올라가면 이미 끝난 결제까지 롤백된다.
+     */
+    @Override
+    public void complete(Long dropId, Long memberId) {
+        dropLockService.completeReservation(dropId, memberId);
+    }
 }

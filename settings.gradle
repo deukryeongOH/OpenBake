@@ -1,6 +1,8 @@
 rootProject.name = 'openbake'
 
 include 'common'
+// 서블릿 의존성이 없는 로깅 공통 모듈. api-gateway(WebFlux)도 쓸 수 있어야 한다.
+include 'common-logging'
 include 'member-service'
 include 'payment-service'
 include 'api-gateway'

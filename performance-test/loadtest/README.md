@@ -194,22 +194,199 @@ performance-test/results/loadtest/
 
 ---
 
-## 알려진 측정 왜곡
+## 측정 신뢰도
 
-`diagnose.py`가 매 리포트 하단에 이 두 개를 항상 적는다.
+`diagnose.py`가 매 리포트 하단 `[측정 신뢰도]`에 적는다. 추측이 아니라 매 실행마다 실측한다.
 
-1. **SQL 로그가 켜져 있다.** `backend-config.yaml`에 `SPRING_JPA_SHOW_SQL` 오버라이드가
-   없어 `application.yml`의 `show-sql: true`, `hibernate.orm.jdbc.bind: trace`가 그대로
-   적용된다. 모든 요청이 쿼리와 바인딩 파라미터를 stdout에 쓰고, 그 과정에서 스레드가
-   콘솔 락에 직렬화된다. 끄려면 ConfigMap에 추가한다.
+1. **SQL 로깅** — `_common.sh`가 실행마다 실제 Pod에서 확인해 넘긴다.
 
-   ```yaml
-   SPRING_JPA_SHOW_SQL: "false"
-   SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "false"
-   LOGGING_LEVEL_ORG_HIBERNATE_ORM_JDBC_BIND: "warn"
+   ```bash
+   kubectl -n openbake exec deployment/backend -c backend -- printenv SPRING_PROFILES_ACTIVE
+   kubectl -n openbake logs deployment/backend --tail=500 | grep -c '^Hibernate:'
    ```
 
-2. **버스트가 짧아 HPA는 반응하지 못한다.** metrics-server 수집 주기 + `scaleUp`
-   30초당 1개 + `startupProbe` 최대 240초가 필요하다. 이 시나리오로 얻는 것은
-   **단일 인스턴스 기준선**이고, 오토스케일 효과는 분 단위로 지속되는 시나리오가
-   따로 있어야 측정된다.
+   `application-prod.yml`이 `show-sql: false` / `bind: WARN`으로 `application.yml`을
+   덮으므로 **prod 프로파일에서는 꺼져 있는 것이 정상**이다. ConfigMap에 오버라이드가
+   없다는 사실만으로 "켜져 있다"고 단정하면 오진이다(실제로 그렇게 잘못 적은 적이 있다).
+
+2. **부하 생성기 위치** — 같은 호스트면 CPU 경쟁이 응답시간에 섞인다. 리포트에 기록된다.
+
+3. **P99 측정 여부** — k6 기본 `summaryTrendStats`에 `p(99)`가 없어 그냥 실행하면
+   summary에서 빠진다. 빠진 경우 판정은 `PASS`가 아니라 **`UNKNOWN`** 이다.
+   `_common.sh`와 `run-sustained.sh`는 `K6_SUMMARY_TREND_STATS`로 강제 포함시킨다.
+
+4. **오토스케일** — `[오토스케일 관측]` 섹션은 판정이 아니라 사실 기록이다.
+   테스트가 60초 미만이면 HPA 평가 주기(15초)와 Pod 기동 시간을 못 채우므로,
+   `replica 1 → 1`은 "HPA가 반응 안 했다"가 아니라 **"반응할 시간이 없었다"** 로 읽어야
+   한다. HPA 자체가 미배포면(`hpa_exists=false`) 그 사실을 따로 적는다.
+
+   > `k8s/openbake/autoscaling/`은 배포 workflow가 apply하지 않는 디렉터리라
+   > 현재 클러스터에 HPA가 없다. `k8s/openbake/config/`도 마찬가지다.
+   > CI가 배포하는 건 `data/`와 `apps/` 뿐이다.
+---
+
+# 지속 부하 테스트 (외부 실행)
+
+`run-<N>.sh`는 버스트(수 초)라 단일 인스턴스 기준선만 준다. 도착률을 유지하며 분 단위로
+미는 시나리오는 별도다.
+
+| 파일 | 역할 |
+| --- | --- |
+| `drop-sustained-load.js` | `ramping-arrival-rate` 지속 부하 시나리오 |
+| `run-sustained.sh` | 외부 호스트(노트북)에서 실행하는 러너. kubectl 불필요 |
+
+## 왜 executor가 다른가
+
+기존 시나리오는 `per-vu-iterations` / `ramping-vus` — **closed model**이다. VU는 이전
+요청이 끝나야 다음을 보내므로, 서버가 느려지면 **k6가 스스로 요청을 줄인다.** 포화가
+지표에 안 드러난다.
+
+`ramping-arrival-rate`는 **open model**이다. 서버 응답 속도와 무관하게 목표 도착률을
+유지하려 하고, VU가 모자라면 `dropped_iterations`로 남는다. 실제 사용자는 서버가 느리다고
+요청을 늦추지 않으므로 이쪽이 현실에 가깝다.
+
+**핵심 판별식**: 도착률은 올리는데 실제 처리량이 안 오르면 그 지점이 인스턴스 한계다.
+
+## 왜 각 단계를 90초 유지하는가
+
+HPA는 기본 15초마다 평가하고 backend Pod는 `startupProbe` 유예가 240초다. 단계를 30초씩
+끊으면 HPA가 판단하기도 전에 다음 단계로 넘어간다. `STEP_HOLD` 기본값 90초는 이 때문이며
+오토스케일을 관측하려면 줄이면 안 된다.
+
+기본 계획: `20 → 40 → 60 → 80 → 100 req/s`, 총 약 7.5분.
+
+## 왜 서버 밖에서 돌리는가
+
+노드가 2 vCPU라 서버 안에서 k6를 돌리면 부하 생성기가 측정 대상과 CPU를 다툰다. 실제
+측정에서 `http_req_blocked` p95가 전체 p95를 넘겼다 — TLS 핸드셰이크와 커넥션 수립이 CPU
+경쟁에 밀렸다는 뜻이고, 그만큼 응답시간이 부풀어 보인다.
+
+---
+
+## 실행 절차
+
+### 1. 노트북에 k6 설치
+
+```powershell
+winget install k6 --source winget     # Windows
+```
+```bash
+brew install k6                        # macOS
+```
+
+### 2. 대상 확인
+
+Traefik Ingress로 외부에 열려 있다. 포트 개방이나 터널이 필요 없다.
+
+```bash
+curl -s https://3.38.24.67.sslip.io/actuator/health
+```
+
+### 3. 드롭 준비 (서버)
+
+```bash
+cd ~/beadv7_7_BakerySite6_BE/performance-test/prepare
+PERF_DROP_STOCK=1000 ./prepare-drop.sh server 100
+```
+
+출력의 `dropId`를 적어둔다.
+
+### 4. 계정 준비 (TARGET=confirm일 때만)
+
+`confirm-entry`는 인증이 필요하고 대상 사용자가 **그 드롭에 이미 ENTERED** 여야 한다.
+
+```bash
+# 서버
+cd ~/beadv7_7_BakerySite6_BE/performance-test
+python3 loadtest/create-users.py --count 100 --output users.json
+./run-k6.sh server confirm        # 전원 ENTERED 로 만든다
+```
+```powershell
+# 노트북 (레포의 performance-test/ 안으로)
+scp ubuntu@3.38.24.67:~/beadv7_7_BakerySite6_BE/performance-test/users.json .
+```
+
+> **JWT는 만료된다.** 시간이 지난 뒤 다시 돌릴 거면 `create-users.py`를 재실행해 토큰을
+> 새로 받는다(계정은 재사용되고 토큰만 갱신된다).
+
+계정 준비 없이 인프라만 재려면 이 단계를 건너뛰고 `TARGET=info`를 쓴다.
+
+### 5. 서버 지표 수집 시작 (서버, 별도 터미널)
+
+k6는 클라이언트 쪽만 본다. 스레드 풀·CPU·Hikari·replica는 서버에서 따로 받아야 한다.
+
+```bash
+cd ~/beadv7_7_BakerySite6_BE/performance-test/loadtest
+python3 sample-backend.py --out sustained-sample.csv
+```
+
+부하가 끝나면 `Ctrl+C`.
+
+### 6. 부하 실행 (노트북)
+
+```bash
+cd performance-test/loadtest
+CORE_BASE_URL=https://3.38.24.67.sslip.io DROP_ID=32 ./run-sustained.sh
+```
+
+계정 없이:
+```bash
+CORE_BASE_URL=https://3.38.24.67.sslip.io DROP_ID=32 TARGET=info ./run-sustained.sh
+```
+
+Git Bash 없이 PowerShell에서:
+```powershell
+k6 run `
+  -e CORE_BASE_URL=https://3.38.24.67.sslip.io `
+  -e DROP_ID=32 -e TARGET=info `
+  -e START_RATE=20 -e PEAK_RATE=100 -e STEP_COUNT=5 -e STEP_HOLD=90s `
+  --summary-export summary.json `
+  drop-sustained-load.js
+```
+
+### 7. 판정
+
+```bash
+scp ubuntu@3.38.24.67:~/beadv7_7_BakerySite6_BE/performance-test/loadtest/sustained-sample.csv .
+
+python3 diagnose.py \
+  --summary ../results/sustained/<run>/summary.json \
+  --sample sustained-sample.csv \
+  --scenario confirm --users 100 \
+  --load-generator-location '노트북 (외부 호스트)'
+```
+
+---
+
+## 조정값
+
+| 환경변수 | 기본 | 용도 |
+| --- | --- | --- |
+| `START_RATE` / `PEAK_RATE` | 20 / 100 | 도착률 범위(req/s) |
+| `STEP_COUNT` | 5 | 단계 수 |
+| `STEP_HOLD` | 90s | 단계별 유지 시간. **HPA 관측하려면 줄이지 말 것** |
+| `MAX_VUS` | 800 | `dropped_iterations`가 나오면 올린다 |
+| `SLOW_THRESHOLD_MS` | 1500 | "느리다" 판정 기준 |
+
+## 결과 읽는 법
+
+```
+  ---- 무너진 지점 ----
+  1500ms 초과 최초 : 60 req/s 구간 (215초)
+  오류 최초 발생   : 80 req/s 구간 (338초)
+
+  ---- 처리량 ----
+  목표 최대 도착률 : 100 req/s
+  실제 평균 처리량 : 62.4 req/s
+  미발사(dropped)  : 0건
+```
+
+| 관측 | 뜻 |
+| --- | --- |
+| 도착률 오르는데 처리량 평평 | 포화. **그 지점이 인스턴스 한계** |
+| `dropped_iterations` 증가 | `MAX_VUS` 부족. 올리고 재측정 (측정 실패지 서버 문제 아님) |
+| 504 / 연결 실패 | 큐 한계 초과 |
+| Pod 늘어난 뒤 p99 회복 | 오토스케일이 실제로 먹힘 |
+
+`dropped_iterations`가 0이 아니면 그 실행은 **계획한 부하를 못 밀어넣은 것**이므로 서버
+한계로 해석하면 안 된다. `MAX_VUS`를 올려 다시 재야 한다.

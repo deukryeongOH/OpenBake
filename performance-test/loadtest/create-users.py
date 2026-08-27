@@ -191,8 +191,17 @@ def main() -> int:
     load_env_file(PREPARE_DIR / f".env.{args.profile}", override=True)
     load_env_file(PERF_DIR / f".env.k6.{args.profile}")
 
-    # server 프로파일은 SERVER_BASE_URL 하나로 게이트웨이를 가리킨다.
-    member_base = (env("MEMBER_BASE_URL") or env("SERVER_BASE_URL", required=True)).rstrip("/")
+    # server 프로파일은 SERVER_BASE_URL 하나로 게이트웨이(Traefik Ingress)를 가리킨다.
+    # prepare/perf-data.py 의 configure() 와 같은 규칙: server 프로파일에서는
+    # SERVER_BASE_URL 이 항상 우선한다. .env.k6.server 에 남아있는 옛 CORE_BASE_URL/
+    # MEMBER_BASE_URL(예: docker-compose 시절의 localhost:8088)이 있어도 무시해야
+    # 한다 — 안 그러면 죽은 주소로 조용히 연결을 시도해 "Connection refused"만
+    # 남기고 원인을 알 수 없게 된다.
+    server_override = env("SERVER_BASE_URL")
+    if args.profile == "server" and server_override:
+        member_base = server_override.rstrip("/")
+    else:
+        member_base = (env("MEMBER_BASE_URL") or env("SERVER_BASE_URL", required=True)).rstrip("/")
 
     login_path = env("LOGIN_PATH", "/api/v1/auth/login")
     signup_path = env("SIGNUP_PATH", "/api/v1/auth/signup")

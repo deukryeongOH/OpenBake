@@ -234,6 +234,27 @@ data:
             target_label: __address__
             replacement: "$1:9308"
 
+      # Tempo 자신의 상태. 추적이 안 보일 때 원인이 둘이다 — 애플리케이션이
+      # 안 보냈거나, Tempo가 못 받았거나. tempo_distributor_spans_received_total이
+      # 있어야 그 둘을 구별할 수 있다. 없으면 "추적이 안 된다"에서 더 좁히지 못한다.
+      - job_name: "tempo"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "tempo"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:3200"
+
       # Elasticsearch 내부. 회로 차단기는 "ES가 이상하다"까지만 알려준다.
       # cluster health가 yellow인지 red인지, 힙이 찼는지, thread pool이 요청을
       # 거부하는지를 구분해야 조치를 정할 수 있다.

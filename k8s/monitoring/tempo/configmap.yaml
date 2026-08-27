@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  tempo.yaml: |
+    # Tempo 단일 바이너리(monolithic) 구성.
+    #
+    # 왜 분산 구성이 아닌가: distributor/ingester/querier를 나누는 구성은 Pod가
+    # 여럿 필요하다. 노드가 2대이고 Node B 메모리 여유가 1.4GB인 환경에서는
+    # 단일 바이너리가 맞다. 규모가 커지면 그때 나눈다.
+
+    server:
+      http_listen_port: 3200
+      # 기본 로그가 debug라 정상 동작에도 줄이 계속 쌓인다.
+      log_level: info
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            # 애플리케이션은 gRPC(4317)로 보낸다. HTTP(4318)도 열어두는 이유는
+            # 디버깅할 때 curl로 직접 span을 밀어넣어 볼 수 있어서다.
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+
+    ingester:
+      # 블록을 자주 잘라야 최근 trace가 빨리 검색된다. 기본값(30분)이면
+      # 방금 발생한 장애를 조사할 때 아직 안 보인다.
+      max_block_duration: 5m
+
+    compactor:
+      compaction:
+        # 추적 보관 기간. 지표(30일)보다 훨씬 짧게 잡는다.
+        #
+        # span은 시계열보다 훨씬 크다. 그리고 추적은 "지금 무슨 일이 벌어지는가"를
+        # 보는 도구이지 장기 추세를 보는 도구가 아니다. 장기 추세는 지표가 담당한다.
+        #
+        # 48시간이면 어제 있었던 장애까지 조사할 수 있다. E8 훈련에도 충분하다.
+        block_retention: 48h
+
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/blocks
+        wal:
+          path: /var/tempo/wal
+        # 최근 blocklist를 메모리에 들고 있는 양. 기본값은 이 규모에 과하다.
+        pool:
+          max_workers: 20
+          queue_depth: 200
+
+    # 사용량 지표를 Prometheus가 긁어갈 수 있게 한다. Tempo 자신이 죽거나
+    # 밀리는 것을 알아야 "추적이 안 보이는 이유"를 구분할 수 있다.
+    usage_report:
+      reporting_enabled: false

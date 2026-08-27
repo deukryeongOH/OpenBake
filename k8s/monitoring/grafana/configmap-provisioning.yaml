@@ -24,6 +24,22 @@ data:
         editable: false
         jsonData:
           timeInterval: 15s
+      # 분산 추적 저장소. 로그에서 찾은 traceId를 여기 넣으면 그 요청이 서비스를
+      # 가로지른 구간별 소요 시간이 보인다. 지표는 "느리다"까지 답하고,
+      # 추적은 "어디서 느린가"까지 답한다.
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo:3200
+        editable: false
+        jsonData:
+          # trace 화면에서 그 서비스의 지표로 바로 넘어갈 수 있게 한다.
+          tracesToMetrics:
+            datasourceUid: prometheus
+          # 서비스 간 호출 관계를 그림으로 보여준다.
+          nodeGraph:
+            enabled: true
 ---
 apiVersion: v1
 kind: ConfigMap

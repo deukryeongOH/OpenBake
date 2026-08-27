@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tempo
+  ports:
+    # Grafana가 trace를 조회하는 포트.
+    - name: http
+      port: 3200
+      targetPort: 3200
+      protocol: TCP
+    # 애플리케이션이 span을 보내는 포트. Spring Boot의
+    # management.otlp.tracing.endpoint가 이쪽을 가리킨다.
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    # 디버깅용. curl로 span을 직접 밀어넣어 경로를 확인할 때 쓴다.
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP

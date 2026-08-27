@@ -71,10 +71,19 @@ spec:
               cpu: 50m
               memory: 256Mi
             limits:
-              # Node B 메모리 여유가 1.4GB다. 512Mi는 그 안에서 안전하다.
-              # 부족하면 ingester가 OOM되는데, 그러면 최근 trace를 잃는다.
               cpu: 300m
-              memory: 512Mi
+              # 512Mi로 시작했다가 **조회할 때 OOM으로 죽었다**(2026-08-27, Exit 137).
+              #
+              #   평상시      172Mi
+              #   trace 조회  510Mi  <- 여기서 한계에 닿았다
+              #   저장 데이터  11MB   <- 저장량이 아니라 조회가 원인이다
+              #
+              # Grafana가 태그 목록을 limit=5000으로 긁고 trace를 펼치는 순간
+              # 메모리가 3배로 뛴다. 아래 설정에서 조회 한도를 낮췄지만, 발표 중
+              # 여러 명이 동시에 열 수 있으므로 상한도 함께 올린다.
+              #
+              # Node B 메모리 여유가 1.7GB라 768Mi는 그 안에서 안전하다.
+              memory: 768Mi
           livenessProbe:
             httpGet:
               path: /ready

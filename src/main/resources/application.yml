@@ -160,6 +160,7 @@ openbake:
       timeout: PT0.5S
       pool-multiplier: 2
       candidate-max: 200
+      max-results: 10
     rrf:
       k: 60
 

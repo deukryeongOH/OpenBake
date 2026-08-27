@@ -30,7 +30,7 @@ class SemanticSearchServiceTest {
 
     @BeforeEach
     void setUp() {
-        SemanticSearchProperties properties = new SemanticSearchProperties(50, 100, 200);
+        SemanticSearchProperties properties = new SemanticSearchProperties(50, 100, 200, 0.30);
         service = new SemanticSearchService(embeddingClient, embeddingIndex, properties);
     }
 
@@ -107,12 +107,52 @@ class SemanticSearchServiceTest {
         given(embeddingClient.embed(any())).willReturn(List.of(0.1f));
         given(embeddingIndex.findGeneralNearest(any(), anyInt(), any())).willReturn(List.of(
                 new ProductEmbeddingSnapshot(10L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.9),
-                new ProductEmbeddingSnapshot(20L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.5)));
+                new ProductEmbeddingSnapshot(20L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.7)));
 
         SemanticSearchResult result = service.search(new SemanticSearchRequest("query", null, null));
 
         assertThat(result.items()).extracting(SemanticSearchResult.Item::rank).containsExactly(1, 2);
         assertThat(result.items()).extracting(SemanticSearchResult.Item::productId).containsExactly(10L, 20L);
+    }
+
+    @Test
+    void filtersBelowRawCosineFloorAndReranksRemainingItemsContinuously() {
+        given(embeddingClient.embed(any())).willReturn(List.of(0.1f));
+        given(embeddingIndex.findGeneralNearest(any(), anyInt(), any())).willReturn(List.of(
+                new ProductEmbeddingSnapshot(10L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.80),
+                new ProductEmbeddingSnapshot(20L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.64),
+                new ProductEmbeddingSnapshot(30L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.70)));
+
+        SemanticSearchResult result = service.search(new SemanticSearchRequest("query", null, null));
+
+        assertThat(result.items()).extracting(SemanticSearchResult.Item::productId)
+                .containsExactly(10L, 30L);
+        assertThat(result.items()).extracting(SemanticSearchResult.Item::rank)
+                .containsExactly(1, 2);
+    }
+
+    @Test
+    void returnsEmptyListWhenEveryCandidateIsBelowFloor() {
+        given(embeddingClient.embed(any())).willReturn(List.of(0.1f));
+        given(embeddingIndex.findGeneralNearest(any(), anyInt(), any())).willReturn(List.of(
+                new ProductEmbeddingSnapshot(10L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.60)));
+
+        SemanticSearchResult result = service.search(new SemanticSearchRequest("query", null, null));
+
+        assertThat(result.items()).isEmpty();
+    }
+
+    @Test
+    void zeroFloorRestoresUnfilteredBehavior() {
+        service = new SemanticSearchService(
+                embeddingClient, embeddingIndex, new SemanticSearchProperties(50, 100, 200, 0.0));
+        given(embeddingClient.embed(any())).willReturn(List.of(0.1f));
+        given(embeddingIndex.findGeneralNearest(any(), anyInt(), any())).willReturn(List.of(
+                new ProductEmbeddingSnapshot(10L, "MEAL_BREADS", "GENERAL", List.of(0.1f), 0.10)));
+
+        SemanticSearchResult result = service.search(new SemanticSearchRequest("query", null, null));
+
+        assertThat(result.items()).extracting(SemanticSearchResult.Item::productId).containsExactly(10L);
     }
 
     @Test

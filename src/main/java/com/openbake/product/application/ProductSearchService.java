@@ -119,9 +119,10 @@ public class ProductSearchService {
 
         // 의미 검색은 OpenAI 임베딩 왕복을 포함해 가장 느리다.
         // 키워드 검색과 겹쳐 실행해 두 지연이 더해지지 않게 한다.
+        int semanticPoolSize = Math.min(poolSize, searchProperties.semantic().maxResults());
         CompletableFuture<List<Long>> semanticFuture =
                 CompletableFuture.supplyAsync(
-                        () -> fetchSemanticIds(keyword, category, poolSize), semanticSearchExecutor);
+                        () -> fetchSemanticIds(keyword, category, semanticPoolSize), semanticSearchExecutor);
 
         List<Long> lexicalPoolIds = productSearchPort.searchIds(keyword, category, PageRequest.of(0, poolSize));
         long lexicalTotal = productSearchPort.countBySearch(keyword, category);

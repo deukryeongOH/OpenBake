@@ -40,6 +40,37 @@ data:
           # 서비스 간 호출 관계를 그림으로 보여준다.
           nodeGraph:
             enabled: true
+          # trace 화면에서 "Logs for this span" 버튼으로 그 요청의 로그를 연다.
+          # **지표 -> 추적 -> 로그 흐름의 마지막 연결이 이것이다.**
+          tracesToLogsV2:
+            datasourceUid: loki
+            # trace 시각 앞뒤로 이만큼 넓혀 찾는다. 정확히 같은 순간의 로그만
+            # 보면 앞뒤 맥락이 빠져 원인을 놓친다.
+            spanStartTimeShift: '-2m'
+            spanEndTimeShift: '2m'
+            # 라벨로 좁힌 뒤 본문에서 traceId를 찾는다.
+            # traceId를 라벨로 만들지 않은 이유는 promtail 설정 주석 참고
+            # (값이 무한해서 스트림이 폭발한다).
+            filterByTraceID: true
+            tags:
+              - key: 'service.name'
+                value: 'svc'
+      # 중앙 로그. Tempo의 trace 화면에서 traceId를 눌러 그 요청의 로그로
+      # 바로 넘어갈 수 있다(아래 Tempo의 tracesToLogsV2 설정과 짝이다).
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        editable: false
+        jsonData:
+          # 로그에서 traceId를 찾아 Tempo로 넘어가는 반대 방향 연결.
+          derivedFields:
+            - name: TraceID
+              # ECS JSON 로그의 traceId 필드에서 값을 뽑는다.
+              matcherRegex: '"traceId":"([a-f0-9]+)"'
+              url: '$${__value.raw}'
+              datasourceUid: tempo
 ---
 apiVersion: v1
 kind: ConfigMap

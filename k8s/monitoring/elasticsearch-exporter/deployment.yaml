@@ -54,11 +54,16 @@ spec:
             # 인덱스별 지표. 어느 인덱스가 커지는지 봐야 디스크 예측이 된다.
             - --es.indices
             - --es.indices_settings
-            # 샤드 단위까지는 켜지 않는다. 단일 노드라 샤드가 노드를 옮겨다니지 않아
-            # 얻는 정보에 비해 시계열만 늘어난다.
-            - --es.shards=false
-            # 스냅샷 저장소를 쓰지 않으므로 끈다. 켜두면 매번 실패 로그가 쌓인다.
-            - --es.snapshots=false
+            # 샤드 단위 지표(--es.shards)는 켜지 않는다. 단일 노드라 샤드가 노드를
+            # 옮겨다니지 않아 얻는 정보에 비해 시계열만 늘어난다. 기본값이 off이므로
+            # 명시하지 않는 것으로 충분하다.
+            #
+            # ⚠️ 이 exporter의 불리언 플래그는 `--[no-]es.shards` 형식이다.
+            # `--es.shards=false`로 쓰면 false가 위치 인자로 해석되어
+            # "error: unexpected false"로 기동에 실패한다(2026-08-27 실측).
+            # 끄려면 값을 주는 것이 아니라 `--no-es.shards`를 쓰거나 생략해야 한다.
+            #
+            # --es.snapshots는 v1.7.0에 존재하지 않는다(--help로 확인).
             - --es.timeout=10s
             - --web.listen-address=:9114
           ports:

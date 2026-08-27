@@ -81,8 +81,11 @@ public class RecommendationService {
                             profile.get(),
                             embeddingIndex.findGeneralNearest(profile.get().interestVector(), candidateCount));
                     if (!candidates.isEmpty()) {
-                        return validateCandidates(
+                        Calculation personalized = validateCandidates(
                                 memberId, RecommendationStrategy.PERSONALIZED, candidates);
+                        return personalized.entry().candidates().isEmpty()
+                                ? personalized
+                                : fillPersonalizedShortfall(memberId, size, now, personalized);
                     }
                 }
             } catch (RuntimeException exception) {
@@ -123,6 +126,48 @@ public class RecommendationService {
             return empty(RecommendationStrategy.POPULAR);
         }
         return validateCandidates(memberId, RecommendationStrategy.POPULAR, candidates);
+    }
+
+    private Calculation fillPersonalizedShortfall(
+            Long memberId,
+            int size,
+            Instant now,
+            Calculation personalized) {
+        if (personalized.entry().candidates().size() >= size) {
+            return personalized;
+        }
+
+        Calculation popular;
+        try {
+            popular = popular(memberId, size, now);
+        } catch (RuntimeException exception) {
+            log.warn("인기 추천 부족분 계산 실패, 검증된 개인화 후보만 반환 memberId={}", memberId, exception);
+            return personalized;
+        }
+
+        LinkedHashMap<Long, Candidate> mergedCandidates = new LinkedHashMap<>();
+        personalized.entry().candidates().forEach(
+                candidate -> mergedCandidates.putIfAbsent(candidate.productId(), candidate));
+        for (Candidate candidate : popular.entry().candidates()) {
+            if (mergedCandidates.size() >= size) {
+                break;
+            }
+            mergedCandidates.putIfAbsent(
+                    candidate.productId(),
+                    new Candidate(candidate.productId(), RecommendationReason.POPULAR));
+        }
+
+        LinkedHashMap<Long, CoreProductCard> mergedProducts = new LinkedHashMap<>();
+        personalized.products().forEach(
+                product -> mergedProducts.putIfAbsent(product.productId(), product));
+        popular.products().forEach(
+                product -> mergedProducts.putIfAbsent(product.productId(), product));
+
+        return new Calculation(
+                new RecommendationCacheEntry(
+                        RecommendationStrategy.PERSONALIZED,
+                        List.copyOf(mergedCandidates.values())),
+                List.copyOf(mergedProducts.values()));
     }
 
     private Calculation validateCandidates(

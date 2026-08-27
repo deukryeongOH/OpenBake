@@ -55,7 +55,7 @@ class ProductSearchServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-08-20T00:00:00Z"), ZoneOffset.UTC);
         SearchProperties properties = new SearchProperties(
-                new SearchProperties.Semantic(true, Duration.ofMillis(500), 2, 200),
+                new SearchProperties.Semantic(true, Duration.ofMillis(500), 2, 200, 10),
                 new SearchProperties.Rrf(60));
         service = new ProductSearchService(
                 productSearchPort, productRepository, productInventoryRepository,
@@ -141,7 +141,7 @@ class ProductSearchServiceTest {
     @Test
     void semanticSearchDisabledSkipsCallAndBehavesLikeLexicalOnly() {
         SearchProperties disabled = new SearchProperties(
-                new SearchProperties.Semantic(false, Duration.ofMillis(500), 2, 200),
+                new SearchProperties.Semantic(false, Duration.ofMillis(500), 2, 200, 10),
                 new SearchProperties.Rrf(60));
         service = new ProductSearchService(
                 productSearchPort, productRepository, productInventoryRepository,
@@ -171,12 +171,12 @@ class ProductSearchServiceTest {
         given(productSearchPort.searchIds(eq("bread"), eq(null), any(Pageable.class)))
                 .willReturn(List.of());
         given(productSearchPort.countBySearch("bread", null)).willReturn(0L);
-        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(200))).willReturn(List.of());
+        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(10))).willReturn(List.of());
 
         service.search("bread", null, deepPage);
 
         verify(productSearchPort).searchIds(eq("bread"), eq(null), eq(PageRequest.of(0, 200)));
-        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(200));
+        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(10));
     }
 
     @Test
@@ -186,12 +186,34 @@ class ProductSearchServiceTest {
         given(productSearchPort.searchIds(eq("bread"), eq(null), any(Pageable.class)))
                 .willReturn(List.of());
         given(productSearchPort.countBySearch("bread", null)).willReturn(0L);
-        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(20))).willReturn(List.of());
+        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(10))).willReturn(List.of());
 
         service.search("bread", null, firstPage);
 
         verify(productSearchPort).searchIds(eq("bread"), eq(null), eq(PageRequest.of(0, 20)));
-        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(20));
+        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(10));
+    }
+
+    @Test
+    void restoringSemanticLimitToCandidateMaxRestoresOriginalPoolSize() {
+        SearchProperties rollback = new SearchProperties(
+                new SearchProperties.Semantic(true, Duration.ofMillis(500), 2, 200, 200),
+                new SearchProperties.Rrf(60));
+        service = new ProductSearchService(
+                productSearchPort, productRepository, productInventoryRepository,
+                semanticSearchPort, rollback,
+                Clock.fixed(Instant.parse("2026-08-20T00:00:00Z"), ZoneOffset.UTC),
+                Runnable::run);
+        Pageable deepPage = PageRequest.of(5, 20);
+        given(productSearchPort.searchIds(eq("bread"), eq(null), any(Pageable.class)))
+                .willReturn(List.of());
+        given(productSearchPort.countBySearch("bread", null)).willReturn(0L);
+        given(semanticSearchPort.findNearest(eq("bread"), eq(null), eq(200))).willReturn(List.of());
+
+        service.search("bread", null, deepPage);
+
+        verify(productSearchPort).searchIds(eq("bread"), eq(null), eq(PageRequest.of(0, 200)));
+        verify(semanticSearchPort).findNearest(eq("bread"), eq(null), eq(200));
     }
 
     @Test
@@ -271,7 +293,7 @@ class ProductSearchServiceTest {
                     productSearchPort, productRepository, productInventoryRepository,
                     semanticSearchPort,
                     new SearchProperties(
-                            new SearchProperties.Semantic(true, Duration.ofSeconds(5), 2, 200),
+                            new SearchProperties.Semantic(true, Duration.ofSeconds(5), 2, 200, 10),
                             new SearchProperties.Rrf(60)),
                     Clock.fixed(Instant.parse("2026-08-20T00:00:00Z"), ZoneOffset.UTC),
                     pool);

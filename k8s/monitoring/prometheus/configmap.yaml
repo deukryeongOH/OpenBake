@@ -234,6 +234,51 @@ data:
             target_label: __address__
             replacement: "$1:9308"
 
+      # Elasticsearch 내부. 회로 차단기는 "ES가 이상하다"까지만 알려준다.
+      # cluster health가 yellow인지 red인지, 힙이 찼는지, thread pool이 요청을
+      # 거부하는지를 구분해야 조치를 정할 수 있다.
+      - job_name: "elasticsearch-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: "elasticsearch-exporter"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9114"
+
+      # PostgreSQL 4대. HikariCP로 "앱이 커넥션을 기다린다"까지는 보였지만
+      # DB가 왜 느린지는 볼 수 없었다. 락 대기·서버 측 커넥션·긴 트랜잭션이 드러난다.
+      #
+      # exporter가 openbake에 있는 이유는 자격증명 Secret이 거기 있기 때문이다.
+      # 4대를 openbake.io/exporter=postgres 라벨 하나로 잡고, 어느 DB인지는 exporter가
+      # 붙이는 datastore 라벨(PG_EXPORTER_CONSTANT_LABELS)로 구분한다.
+      - job_name: "postgres-exporter"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - openbake
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_openbake_io_exporter]
+            regex: "postgres"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: "Running"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: "(.+)"
+            target_label: __address__
+            replacement: "$1:9187"
+
       # Pod 재시작·OOMKilled·HPA replica 변화는 애플리케이션 /actuator/prometheus에
       # 나오지 않는다. kube-state-metrics가 API server 상태를 metric으로 바꿔준다.
       - job_name: "kube-state-metrics"
@@ -514,6 +559,136 @@ data:
 
       # 회로가 열린 것 자체는 설계대로 격리가 동작한 것이다. 문제는 오래 열려 있는
       # 경우이므로 지속 시간으로 판단한다. 임계값이 아니라 상태라서 추정이 필요 없다.
+      # 재시도 후에도 실패해 DLT로 격리된 이벤트. 사람이 봐야 하는 대상이다.
+      - name: kafka-dlt
+        rules:
+          # 왜 "누적 개수 > 0"이 아니라 "1시간 증가분"인가.
+          #
+          # current_offset은 high water mark라 한 번 올라가면 내려오지 않는다.
+          # `> 0`으로 걸면 과거에 한 번이라도 실패한 순간부터 영원히 발화한다.
+          # 그런 경보는 며칠 안에 무시당하고, 그러면 진짜 새 실패도 함께 묻힌다.
+          #
+          # 2026-08-27 실측: product.changed.v1.dlt 5건, product.viewed.v1.dlt 7건이
+          # 이미 쌓여 있다(합 12건). 이 12건은 **경보 대상이 아니라 일회성 정리
+          # 대상**이다. 사람이 원인을 보고 재처리하거나 폐기해야 한다.
+          # 이 규칙이 잡는 것은 그 이후에 **새로 생기는** 실패다.
+          - alert: KafkaDltMessagesAppearing
+            expr: sum by (topic) (increase(kafka_topic_partition_current_offset{topic=~".+\\.dlt"}[1h])) > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.topic }}에 새 DLT 메시지"
+              description: "최근 1시간 동안 {{ $value | printf \"%.0f\" }}건이 DLT로 격리됐다. 재시도로도 처리되지 않은 이벤트이므로 원인을 확인하고 재처리 여부를 정한다."
+
+      # Pod가 설계와 다른 노드에 떠도 Running이고 지표도 정상이라 아무 신호가 없다.
+      # DB 접근이 노드를 넘어 지연만 조용히 늘어난다.
+      - name: placement
+        rules:
+          # backend는 일부러 제외한다. HPA가 replica 2개째를 Node B에 띄우는 것이
+          # 정상 동작이라(03번 문서) 여기 넣으면 확장할 때마다 오탐이 된다.
+          #
+          # 잡는 것은 둘이다.
+          #   ① service 풀 워크로드가 core 노드에 뜬 경우
+          #      Node A는 CPU 예약 여유가 200m뿐이라 이쪽이 실제로 해롭다.
+          #   ② api-gateway(단일 replica)가 core를 벗어난 경우
+          #
+          # for를 30분으로 길게 둔 이유: 롤링 배포 중에는 잠깐 다른 노드에 뜰 수 있다.
+          # 그 전환 구간까지 깨우면 배포할 때마다 울린다.
+          - alert: PodOnWrongNodePool
+            expr: |
+              (
+                kube_pod_info{namespace="openbake", pod=~"member-service-.+|payment-service-.+|ai-service-.+"}
+                and on (node) kube_node_labels{label_openbake_io_node_pool="core"}
+              )
+              or
+              (
+                kube_pod_info{namespace="openbake", pod=~"api-gateway-.+"}
+                and on (node) kube_node_labels{label_openbake_io_node_pool!="core"}
+              )
+            for: 30m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.pod }}가 설계와 다른 노드에 있다"
+              description: "{{ $labels.node }}에 떠 있다. nodeAffinity가 preferred라 배치가 어긋나도 Running이다. DB가 다른 노드면 접근마다 노드를 넘는다."
+
+      - name: elasticsearch
+        rules:
+          # ⚠️ yellow에는 경보를 걸지 않는다.
+          #
+          # 단일 노드(discovery.type=single-node)인데 인덱스 복제본이 1이라
+          # 복제 샤드를 배정할 노드가 없다. 그래서 **정상 상태가 영구히 yellow**다.
+          # 2026-08-27 실측: status=yellow, active_shards=2, unassigned_shards=2.
+          # 여기에 경보를 걸면 24시간 울리고, 그러면 red도 함께 무시당한다.
+          #
+          # red는 다르다. **주 샤드가 배정되지 않았다**는 뜻이라 그 인덱스는 검색도
+          # 색인도 되지 않는다. 회로 차단기가 열리기 전에 알아야 한다.
+          - alert: ElasticsearchClusterRed
+            expr: elasticsearch_cluster_health_status{color="red"} == 1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Elasticsearch 클러스터 red"
+              description: "주 샤드가 배정되지 않았다. 해당 인덱스는 검색·색인이 되지 않는다. 상품 검색이 폴백으로 떨어진다."
+          - alert: ElasticsearchDown
+            expr: elasticsearch_cluster_health_up == 0
+            for: 3m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Elasticsearch 응답 없음"
+              description: "exporter가 클러스터에 접근하지 못한다. 상품 검색이 폴백 경로로 처리된다."
+          # ES_JAVA_OPTS가 -Xmx512m으로 고정이라 힙이 늘어날 여지가 없다.
+          # 임계값은 가설이며 실측으로 교체한다.
+          - alert: ElasticsearchHeapHigh
+            expr: |
+              elasticsearch_jvm_memory_used_bytes{area="heap"}
+              / elasticsearch_jvm_memory_max_bytes{area="heap"} > 0.85
+            for: 15m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "Elasticsearch 힙 {{ $value | humanizePercentage }}"
+              description: "힙이 512m 고정이다. 계속 높으면 GC가 길어지고 검색 지연이 늘어난다."
+
+      - name: postgres
+        rules:
+          - alert: PostgresDown
+            expr: pg_up == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.datastore }} PostgreSQL 응답 없음"
+              description: "exporter가 접속하지 못한다. 해당 서비스의 모든 쓰기·읽기가 실패한다."
+          # 서버 측 커넥션이 상한에 가까워지면 새 연결이 거부된다. HikariCP 지표로는
+          # "앱이 기다린다"까지만 보이고 서버 쪽 한계는 보이지 않았다.
+          # 임계값 0.8은 가설이다.
+          - alert: PostgresConnectionsHigh
+            expr: |
+              sum by (datastore) (pg_stat_database_numbackends)
+              / max by (datastore) (pg_settings_max_connections) > 0.8
+            for: 10m
+            labels:
+              severity: warning
+              threshold_status: provisional
+            annotations:
+              summary: "{{ $labels.datastore }} PostgreSQL 커넥션 {{ $value | humanizePercentage }}"
+              description: "상한에 닿으면 새 연결이 거부된다. 커넥션 누수나 긴 트랜잭션을 의심한다."
+          # 데드락은 정상값이 0이라 임계값 추정이 필요 없다. 발생 자체가 신호다.
+          - alert: PostgresDeadlocks
+            expr: sum by (datastore) (increase(pg_stat_database_deadlocks[15m])) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.datastore }} PostgreSQL 데드락 발생"
+              description: "15분간 {{ $value | printf \"%.0f\" }}건. 락 순서가 어긋나는 경로가 있다는 뜻이다."
+
       - name: circuit-breaker
         rules:
           - alert: CircuitBreakerOpen

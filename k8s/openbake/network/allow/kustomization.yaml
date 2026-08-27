@@ -30,6 +30,12 @@ resources:
   - allow-prometheus-to-kafka-exporter.yaml
   - allow-prometheus-to-alertmanager.yaml
   - allow-prometheus-to-blackbox-exporter.yaml
+  - allow-prometheus-to-elasticsearch-exporter.yaml
+  # exporter는 monitoring, 대상 ES는 openbake다. 두 파일이 짝이다.
+  - allow-elasticsearch-exporter-to-elasticsearch.yaml
+  # postgres-exporter 4대는 자격증명 Secret 때문에 openbake에 있다.
+  - allow-prometheus-to-postgres-exporter.yaml
+  - allow-postgres-exporter-to-postgres.yaml
   # Traefik(kube-system)에는 의도적으로 NetworkPolicy를 두지 않는다.
   #
   # kube-system에는 default-deny가 없어 Traefik은 격리되지 않은 상태이고, Prometheus는

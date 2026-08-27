@@ -42,6 +42,16 @@ spec:
             # rbac.yaml이 부여한 자원만 수집한다. 기본값은 전체 자원이라 권한 없는 객체마다
             # 오류를 반복 기록한다.
             - --resources=pods,nodes,namespaces,persistentvolumeclaims,deployments,statefulsets,daemonsets,horizontalpodautoscalers,cronjobs,jobs
+            # 노드의 워크로드 풀 라벨을 지표에 붙인다.
+            #
+            # nodeAffinity가 preferred라 Pod가 설계와 다른 노드에 떠도 Running이고
+            # 지표도 정상이라 아무 신호가 없다. DB 접근이 노드를 넘어 지연만 조용히
+            # 늘어난다. 이 라벨이 있어야 "core 풀에 있어야 할 Pod가 service 풀에 있다"를
+            # 질의로 판정할 수 있다.
+            #
+            # allowlist는 기본이 전부 비허용이라 명시한 라벨만 노출된다. 라벨을 통째로
+            # 열면 카디널리티가 크게 늘어난다.
+            - --metric-labels-allowlist=nodes=[openbake.io/node-pool]
           ports:
             - containerPort: 8080
               name: metrics

@@ -1,6 +1,7 @@
 package com.openbake.drop.application.dto;
 
 import com.openbake.drop.domain.DropStatus;
+import com.openbake.product.domain.Category;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -13,14 +14,14 @@ public record DropInfoResult(
         String name, String description, String imageUrl,
         Set<LocalDate> pickUpAvailableDates,
         int price, int totalQuantity, int remainQuantity,
-        Long sellerId, Long productId, Long dropId) {
+        Long sellerId, Long productId, Long dropId, Category category) {
     public static DropInfoResult of(
                              LocalDateTime dropStart, LocalDateTime dropEnd,
                              int limitQuantity, DropStatus dropStatus, String name, String description, String imageUrl,
                              Set<LocalDate> pickUpAvailableDates,
                              int price, int totalQuantity, int remainQuantity,
-                             Long sellerId, Long productId, Long dropId){
+                             Long sellerId, Long productId, Long dropId, Category category){
         return new DropInfoResult(dropStart, dropEnd, limitQuantity, dropStatus, name,description, imageUrl,
-                new HashSet<>(pickUpAvailableDates), price, totalQuantity, remainQuantity, sellerId, productId, dropId);
+                new HashSet<>(pickUpAvailableDates), price, totalQuantity, remainQuantity, sellerId, productId, dropId, category);
     }
 }

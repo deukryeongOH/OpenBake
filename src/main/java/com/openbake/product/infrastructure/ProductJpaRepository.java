@@ -45,8 +45,11 @@ public interface ProductJpaRepository extends JpaRepository<Product, Long> {
             @Param("sellerId") Long sellerId,
             Pageable pageable);
 
+    // ES 장애 시 폴백 검색. 드롭 상품은 ES에 색인된 적이 없어 정상 경로에서는 안 보이지만,
+    // 이 쿼리는 RDB를 직접 읽으므로 type 조건이 없으면 SELLING 상태인 드롭 상품이 새어 들어온다.
     @Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.pickUpAvailableDates "
-         + "WHERE p.status = com.openbake.product.domain.ProductStatus.SELLING "
+         + "WHERE p.type = com.openbake.product.domain.Type.GENERAL "
+         + "AND p.status = com.openbake.product.domain.ProductStatus.SELLING "
          + "AND (:keyword IS NULL OR p.name LIKE %:keyword%) "
          + "AND (:category IS NULL OR p.category = :category)")
     List<Product> fallbackSearch(@Param("keyword") String keyword,

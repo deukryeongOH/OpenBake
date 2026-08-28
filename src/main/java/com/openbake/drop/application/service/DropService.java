@@ -53,11 +53,10 @@ public class DropService {
         // 이 요청을 받지 않은 다른 Pod에게도 갱신을 알린다(커밋 후 전파. docs/11번 문서)
         applicationEventPublisher.publishEvent(new DropCacheInvalidatedEvent());
 
-        // registerProduct 시점엔 Drop이 아직 없어 dropId를 몰랐다(dropId=null) — 저장 후
-        // IDENTITY로 발급된 실제 ID를 채워 돌려준다.
+        // productPort.registerProduct 시점엔 Drop이 아직 없어 dropId가 비어 있었다. 저장 후 채워 돌려준다.
         return DropInfoResult.of(result.dropStart(), result.dropEnd(), result.limitQuantity(), result.dropStatus(),
                 result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
-                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), drop.getId());
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), drop.getId(), result.category());
     }
 
     private Drop createDrop(DropInfoResult result) {
@@ -171,7 +170,7 @@ public class DropService {
         DropProductInfoResult result = productPort.getProductInfo(findDrop.getProductId());
         return DropInfoResult.of(findDrop.getDropStart(), findDrop.getDropEnd(), findDrop.getLimitQuantity(), findDrop.getDropStatus(),
                 result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
-                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), findDrop.getId());
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), findDrop.getId(), result.category());
     }
 
     // 판매자 본인이 등록한 드롭 목록 조회
@@ -189,7 +188,7 @@ public class DropService {
             Drop findDrop = dropRepository.findByProductId(result.productId());
             dropInfoResultList.add(DropInfoResult.of(findDrop.getDropStart(), findDrop.getDropEnd(), findDrop.getLimitQuantity(), findDrop.getDropStatus(),
                     result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(), result.totalQuantity(),
-                    result.remainQuantity(), result.sellerId(), result.productId(), findDrop.getId()));
+                    result.remainQuantity(), result.sellerId(), result.productId(), findDrop.getId(), result.category()));
         }
 
         return dropInfoResultList;
@@ -212,7 +211,7 @@ public class DropService {
                     DropProductInfoResult result = productPort.getProductInfo(drop.getProductId());
                     return DropInfoResult.of(drop.getDropStart(), drop.getDropEnd(), drop.getLimitQuantity(), drop.getDropStatus(),
                             result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(), result.totalQuantity(),
-                            result.remainQuantity(), result.sellerId(), result.productId(), drop.getId());
+                            result.remainQuantity(), result.sellerId(), result.productId(), drop.getId(), result.category());
                 })
                 .toList();
     }
@@ -244,7 +243,7 @@ public class DropService {
 
         return DropInfoResult.of(drop.getDropStart(), drop.getDropEnd(), drop.getLimitQuantity(), drop.getDropStatus(),
                 result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
-                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), drop.getId());
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), drop.getId(), result.category());
     }
 
     // 판매자 본인의 드롭 삭제 (시작 전인 드롭만 가능)

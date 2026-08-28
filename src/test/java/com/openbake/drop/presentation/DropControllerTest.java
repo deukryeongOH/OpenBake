@@ -5,6 +5,7 @@ import com.openbake.drop.application.service.DropDetailService;
 import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.domain.DropStatus;
 import com.openbake.drop.presentation.controller.DropController;
+import com.openbake.product.domain.Category;
 import com.openbake.seller.application.CurrentSellerProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,8 @@ class DropControllerTest {
                 200,
                 1L,
                 12L,
-                5L
+                99L,
+                Category.COOKIES_BAKES
         );
 
         when(dropService.getUpcomingDrops(7))
@@ -65,7 +67,7 @@ class DropControllerTest {
         mockMvc.perform(get("/api/v1/drops/upcoming"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].dropId").value(5))
+                .andExpect(jsonPath("$.data[0].dropId").value(99))
                 .andExpect(jsonPath("$.data[0].name").value("버터떡"))
                 .andExpect(jsonPath("$.data[0].dropStatus").value("UPCOMING"))
                 .andExpect(jsonPath("$.data[0].remainQuantity").value(200));

@@ -5,6 +5,7 @@ import com.openbake.drop.application.port.ProductPort;
 import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.repository.DropRepository;
 import com.openbake.drop.domain.DropStatus;
+import com.openbake.product.domain.Category;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,7 +49,7 @@ class TodayDropCacheTest {
 
     private static DropProductInfoResult product(Long productId) {
         return DropProductInfoResult.of("두쫀쿠", "원물 맛이 많이 나요.", "image.jpg",
-                Set.of(LocalDate.of(2028, 7, 28)), 8000, 100, 97, 1L, productId);
+                Set.of(LocalDate.of(2028, 7, 28)), 8000, 100, 97, 1L, productId, Category.COOKIES_BAKES);
     }
 
     @Test

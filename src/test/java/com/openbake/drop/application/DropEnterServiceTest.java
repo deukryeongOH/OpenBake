@@ -15,6 +15,7 @@ import com.openbake.drop.domain.entity.Drop;
 import com.openbake.drop.domain.entity.DropEntry;
 import com.openbake.drop.domain.repository.DropEntryRepository;
 import com.openbake.drop.domain.repository.DropRepository;
+import com.openbake.product.domain.Category;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -105,7 +106,7 @@ class DropEnterServiceTest {
     private DropProductInfoResult productInfo() {
         return DropProductInfoResult.of(
                 "두쫀쿠", "원물 맛이 많이 나요.", "image.jpg",
-                Set.of(LocalDate.of(2028, 7, 28)), 8000, 100, 97, 1L, productId);
+                Set.of(LocalDate.of(2028, 7, 28)), 8000, 100, 97, 1L, productId, Category.COOKIES_BAKES);
     }
 
     @Test

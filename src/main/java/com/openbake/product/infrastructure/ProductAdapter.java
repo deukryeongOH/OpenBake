@@ -37,7 +37,7 @@ public class ProductAdapter implements ProductPort {
         return DropInfoResult.of(command.dropStart(), command.dropEnd(),
                 command.limitQuantity(), command.dropStatus(), result.name(),
                 result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
-                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), null
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), null, result.category()
         );
     }
 
@@ -48,7 +48,7 @@ public class ProductAdapter implements ProductPort {
 
         return DropProductInfoResult.of(result.name(), result.description(), result.imageUrl(),
                 result.pickUpAvailableDates(), result.price(), result.totalQuantity(), result.remainQuantity(),
-                result.sellerId(), result.productId()
+                result.sellerId(), result.productId(), result.category()
         );
     }
 
@@ -60,7 +60,7 @@ public class ProductAdapter implements ProductPort {
                 .map(productInfoResult -> DropProductInfoResult.of(productInfoResult.name(),
                         productInfoResult.description(), productInfoResult.imageUrl(), productInfoResult.pickUpAvailableDates(),
                         productInfoResult.price(), productInfoResult.totalQuantity(), productInfoResult.remainQuantity(),
-                        productInfoResult.sellerId(), productInfoResult.productId()))
+                        productInfoResult.sellerId(), productInfoResult.productId(), productInfoResult.category()))
                 .toList();
     }
 
@@ -72,7 +72,7 @@ public class ProductAdapter implements ProductPort {
         ProductInfoResult result = productService.updateDropProduct(productInfoCommand, productId);
 
         return DropProductInfoResult.of(result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
-                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId());
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), result.category());
     }
 
     @Override

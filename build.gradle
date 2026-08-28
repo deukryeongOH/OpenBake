@@ -68,9 +68,6 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-restclient'
 	/** Spring Batch 의존성 추가 */
 	testImplementation 'org.springframework.batch:spring-batch-test'
-	// DropCacheInvalidationPropagationIntegrationTest의 Redis pub/sub 검증용 (docs/11).
-	// ai-service 모듈에서 이미 쓰는 것과 같은 Testcontainers 모듈이다.
-	testImplementation 'org.testcontainers:testcontainers'
 	testCompileOnly 'org.projectlombok:lombok'
 	testAnnotationProcessor 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

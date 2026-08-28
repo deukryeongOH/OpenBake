@@ -273,7 +273,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(openbake_drop_stock_drift_total[5m]))",
+          "expr": "sum(rate(openbake_drop_stock_drift_total[5m])) or vector(0)",
           "legendFormat": "drift/초",
           "refId": "A"
         }
@@ -399,9 +399,18 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (topic) (rate(openbake_ai_dlt_total[5m]))",
+          "expr": "sum by (topic) (rate(openbake_ai_dlt_total[5m])) or vector(0)",
           "legendFormat": "{{topic}}",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (topic) (kafka_topic_partition_current_offset{topic=~\".*[.]dlt\"})",
+          "legendFormat": "{{topic}} 누적",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -483,7 +492,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (topic) (kafka_consumer_fetch_manager_records_lag{topic=~\".*\\..*\"})",
+          "expr": "max by (topic) (kafka_consumer_fetch_manager_records_lag{topic=~\".*[.].*\"})",
           "legendFormat": "{{topic}}",
           "refId": "A"
         }

@@ -135,8 +135,15 @@ public class ProductService {
         if (product.getType() != type) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
         }
-        product.markDeleted();
-        productChangedOutboxWriter.deleted(productId);
+
+        if(type == Type.GENERAL){
+            product.markDeleted();
+            productChangedOutboxWriter.deleted(productId);
+        }else{
+            ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+            productInventoryRepository.delete(productInventory);
+            productRepository.delete(product);
+        }
 
     }
 

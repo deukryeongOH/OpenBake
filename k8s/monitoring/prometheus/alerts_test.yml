@@ -244,6 +244,14 @@ tests:
         values: '1x30'
       - series: 'up{job="kafka-exporter"}'
         values: '1x30'
+      - series: 'up{job="elasticsearch-exporter"}'
+        values: '1x30'
+      - series: 'up{job="postgres-exporter"}'
+        values: '1x30'
+      - series: 'up{job="traefik"}'
+        values: '1x30'
+      - series: 'up{job="blackbox-http"}'
+        values: '1x30'
     alert_rule_test:
       - eval_time: 20m
         alertname: ScrapeJobAbsent
@@ -423,3 +431,305 @@ tests:
             exp_annotations:
               summary: "openbake-core Outbox 미발행 이벤트 정체"
               description: "가장 오래된 PENDING 이벤트가 600초. 발행기·브로커·DB 락을 확인한다. count가 적어도 age가 크면 특정 데이터가 계속 낡는다."
+
+  # ── DLT: 누적 오프셋 함정 ─────────────────────────────────────────────
+  # current_offset은 high water mark라 내려오지 않는다. "> 0"으로 걸면 과거에
+  # 한 번 실패한 순간부터 영원히 울린다. 새로 늘어난 경우에만 울려야 한다.
+  #
+  # 여기서는 오프셋이 12에서 **멈춰 있는** 상태를 넣는다. 이미 쌓인 12건이
+  # 그대로 있는 지금 상황이며, 이때 울리면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
+        values: '12x90'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: KafkaDltMessagesAppearing
+        exp_alerts: []
+
+  # 같은 토픽에 새 메시지가 들어오면 울려야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
+        values: '12x30 13+1x40'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: KafkaDltMessagesAppearing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              topic: "product.changed.v1.dlt"
+            # increase()는 구간 경계를 추정으로 보정해 42.x 같은 소수가 나온다.
+            # printf "%.0f"가 그것을 정수로 다듬는지 여기서 함께 확인한다.
+            # 2026-08-26에 "4.133333회"가 그대로 찍혀 나갔던 적이 있다.
+            exp_annotations:
+              summary: "product.changed.v1.dlt에 새 DLT 메시지"
+              description: "최근 1시간 동안 42건이 DLT로 격리됐다. 재시도로도 처리되지 않은 이벤트이므로 원인을 확인하고 재처리 여부를 정한다."
+
+  # ── Elasticsearch: yellow는 정상 상태다 ───────────────────────────────
+  # 단일 노드라 복제 샤드를 배정할 곳이 없어 영구히 yellow다.
+  # red 경보가 yellow에 반응하면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_cluster_health_status{color="yellow"}'
+        values: '1x30'
+      - series: 'elasticsearch_cluster_health_status{color="red"}'
+        values: '0x30'
+      - series: 'elasticsearch_cluster_health_status{color="green"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ElasticsearchClusterRed
+        exp_alerts: []
+
+  # red면 울려야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_cluster_health_status{color="red"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ElasticsearchClusterRed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              color: red
+            exp_annotations:
+              summary: "Elasticsearch 클러스터 red"
+              description: "주 샤드가 배정되지 않았다. 해당 인덱스는 검색·색인이 되지 않는다. 상품 검색이 폴백으로 떨어진다."
+
+  # ── 배치 어긋남: 정상 배치에서는 조용해야 한다 ────────────────────────
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_info{namespace="openbake",pod="member-service-abc-1",node="node-b"}'
+        values: '1x60'
+      - series: 'kube_pod_info{namespace="openbake",pod="api-gateway-abc-1",node="node-a"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-a",label_openbake_io_node_pool="core"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-b",label_openbake_io_node_pool="service"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: PodOnWrongNodePool
+        exp_alerts: []
+
+  # service 풀 워크로드가 core 노드에 뜨면 울려야 한다.
+  # backend는 HPA로 Node B에 뜨는 것이 정상이라 함께 넣어도 울리면 안 된다.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_info{namespace="openbake",pod="member-service-abc-1",node="node-a"}'
+        values: '1x60'
+      - series: 'kube_pod_info{namespace="openbake",pod="backend-xyz-2",node="node-b"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-a",label_openbake_io_node_pool="core"}'
+        values: '1x60'
+      - series: 'kube_node_labels{node="node-b",label_openbake_io_node_pool="service"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: PodOnWrongNodePool
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              threshold_status: provisional
+              namespace: openbake
+              pod: "member-service-abc-1"
+              node: "node-a"
+            exp_annotations:
+              summary: "member-service-abc-1가 설계와 다른 노드에 있다"
+              description: "node-a에 떠 있다. nodeAffinity가 preferred라 배치가 어긋나도 Running이다. DB가 다른 노드면 접근마다 노드를 넘는다."
+
+  # ── PostgreSQL: 데드락은 발생 자체가 신호 ─────────────────────────────
+  - interval: 1m
+    input_series:
+      - series: 'pg_stat_database_deadlocks{datastore="core",datname="openbake"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PostgresDeadlocks
+        exp_alerts: []
+
+  # ── 경보가 참조하는 지표가 사라진 경우 ────────────────────────────────
+  # 이름이 틀린 경보는 오류 없이 조용히 죽는다. 이 규칙이 그것을 잡는다.
+  # 먼저: 전부 존재하면 침묵해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_cluster_health_status{color="yellow"}'
+        values: '1x50'
+      - series: 'elasticsearch_node_stats_up'
+        values: '1x50'
+      - series: 'elasticsearch_jvm_memory_used_bytes{area="heap"}'
+        values: '100x50'
+      - series: 'pg_up{datastore="core"}'
+        values: '1x50'
+      - series: 'pg_stat_database_numbackends{datastore="core",datname="openbake"}'
+        values: '5x50'
+      - series: 'pg_settings_max_connections{datastore="core"}'
+        values: '100x50'
+      - series: 'pg_stat_database_deadlocks{datastore="core",datname="openbake"}'
+        values: '0x50'
+      - series: 'kube_node_labels{node="node-a",label_openbake_io_node_pool="core"}'
+        values: '1x50'
+      - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
+        values: '12x50'
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_execution_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_idempotency_conflict_total{operation="pay"}'
+        values: '0x50'
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '1000x50'
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x50'
+      - series: 'openbake_ai_embedding_oldest_pending_age_seconds'
+        values: '60x50'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: AlertInputMetricMissing
+        exp_alerts: []
+
+  # pg_up만 빠뜨리면 발화해야 한다. exporter 판올림으로 이름이 바뀐 상황을 흉내낸다.
+  - interval: 1m
+    input_series:
+      - series: 'elasticsearch_cluster_health_status{color="yellow"}'
+        values: '1x50'
+      - series: 'elasticsearch_node_stats_up'
+        values: '1x50'
+      - series: 'elasticsearch_jvm_memory_used_bytes{area="heap"}'
+        values: '100x50'
+      - series: 'pg_stat_database_numbackends{datastore="core",datname="openbake"}'
+        values: '5x50'
+      - series: 'pg_settings_max_connections{datastore="core"}'
+        values: '100x50'
+      - series: 'pg_stat_database_deadlocks{datastore="core",datname="openbake"}'
+        values: '0x50'
+      - series: 'kube_node_labels{node="node-a",label_openbake_io_node_pool="core"}'
+        values: '1x50'
+      - series: 'kafka_topic_partition_current_offset{topic="product.changed.v1.dlt",partition="0"}'
+        values: '12x50'
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_execution_failed_total'
+        values: '0x50'
+      - series: 'openbake_payment_idempotency_conflict_total{operation="pay"}'
+        values: '0x50'
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '1000x50'
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x50'
+      - series: 'openbake_ai_embedding_oldest_pending_age_seconds'
+        values: '60x50'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: AlertInputMetricMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "경보가 참조하는 지표가 없다"
+              description: "해당 경보는 조용히 죽은 상태다. exporter 판올림으로 지표 이름이 바뀌었거나 처음부터 이름이 틀렸을 수 있다. 규칙의 expr과 실제 지표 이름을 대조한다."
+
+  # ── 결제 Saga ─────────────────────────────────────────────────────────
+  # 환불 실패는 정상값이 0이다. 0이면 침묵해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PaymentRefundFailed
+        exp_alerts: []
+
+  # 한 건이라도 생기면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_refund_failed_total'
+        values: '0x20 1x20'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PaymentRefundFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "환불 실패 1건"
+              description: "15분간 발생. 사용자 돈이 돌아가지 않은 상태다. payment_record의 실패 사유와 PG 콘솔을 대조한다."
+
+  # 정합성 배치: 5분 주기로 정상 갱신되면 침묵해야 한다.
+  # time()은 테스트에서 0부터 흐르므로, 시각을 따라 올라가는 값을 넣는다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '0+60x60'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: PaymentReconcileStalled
+        exp_alerts: []
+
+  # 배치가 멈추면(값이 고정) 15분을 넘긴 시점에 발화한다.
+  # 20분째에 마지막 성공이 멈췄다고 두면, 그 뒤 15분 + for 5분이 지나야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_reconcile_last_success_timestamp_seconds'
+        values: '0+60x20 1200x60'
+    alert_rule_test:
+      # 40분 시점: 마지막 성공이 1200초(=20분)이고 현재 2400초 -> 1200초 경과.
+      # 900초를 넘겼고 for 5분도 지났다.
+      - eval_time: 45m
+        alertname: PaymentReconcileStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            # humanizeDuration이 초를 사람이 읽는 형식으로 바꾸는지 함께 확인한다.
+            # 경보 문구에 25분이 "1500"으로 찍히면 새벽에 판단이 늦어진다.
+            exp_annotations:
+              summary: "결제 정합성 배치가 25m 0s째 돌지 않았다"
+              description: "미결 충전을 수렴시키는 마지막 방어선이다. 멈추면 사용자 돈이 묶인 채로 남는다. 스케줄러 스레드와 Pod 상태를 확인한다."
+
+  # 멱등 경합은 정상 동작이다. 낮은 빈도에서는 침묵해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_payment_idempotency_conflict_total{operation="pay"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: PaymentIdempotencyConflictSpike
+        exp_alerts: []
+
+  # ── AI worker 중단 (E8 O6) ────────────────────────────────────────────
+  # 정상: lease 만료 0건이면 침묵해야 한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AiWorkerLeaseExpired
+        exp_alerts: []
+
+  # worker가 죽어 lease가 만료되고 회수도 안 되면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_ai_embedding_expired_lease'
+        values: '0x10 3x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AiWorkerLeaseExpired
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "AI 임베딩 lease 만료 3건"
+              description: "worker가 작업을 잡은 채 사라졌고 회수도 되지 않았다. 10분간 지속되면 회수 배치까지 멈춘 것이다. 상품 검색 색인이 갱신되지 않는다."
+
+  # 대기 나이가 짧으면 침묵해야 한다. 건수가 많아도 빨리 돌면 정상이다.
+  - interval: 1m
+    input_series:
+      - series: 'openbake_ai_embedding_oldest_pending_age_seconds'
+        values: '120x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AiEmbeddingBacklogStale
+        exp_alerts: []

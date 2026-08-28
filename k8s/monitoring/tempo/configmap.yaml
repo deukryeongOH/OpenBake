@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  tempo.yaml: |
+    # Tempo 단일 바이너리(monolithic) 구성.
+    #
+    # 왜 분산 구성이 아닌가: distributor/ingester/querier를 나누는 구성은 Pod가
+    # 여럿 필요하다. 노드가 2대이고 Node B 메모리 여유가 1.4GB인 환경에서는
+    # 단일 바이너리가 맞다. 규모가 커지면 그때 나눈다.
+
+    server:
+      http_listen_port: 3200
+      # 기본 로그가 debug라 정상 동작에도 줄이 계속 쌓인다.
+      log_level: info
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            # 애플리케이션은 gRPC(4317)로 보낸다. HTTP(4318)도 열어두는 이유는
+            # 디버깅할 때 curl로 직접 span을 밀어넣어 볼 수 있어서다.
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+
+    ingester:
+      # 블록을 자주 잘라야 최근 trace가 빨리 검색된다. 기본값(30분)이면
+      # 방금 발생한 장애를 조사할 때 아직 안 보인다.
+      max_block_duration: 5m
+
+    compactor:
+      compaction:
+        # 추적 보관 기간. 지표(30일)보다 훨씬 짧게 잡는다.
+        #
+        # span은 시계열보다 훨씬 크다. 그리고 추적은 "지금 무슨 일이 벌어지는가"를
+        # 보는 도구이지 장기 추세를 보는 도구가 아니다. 장기 추세는 지표가 담당한다.
+        #
+        # 48시간이면 어제 있었던 장애까지 조사할 수 있다. E8 훈련에도 충분하다.
+        block_retention: 48h
+
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/blocks
+        wal:
+          path: /var/tempo/wal
+        # 최근 blocklist를 메모리에 들고 있는 양. 기본값은 이 규모에 과하다.
+        pool:
+          max_workers: 20
+          queue_depth: 200
+
+    # ── 조회가 메모리를 터뜨리지 않게 한다 ─────────────────────────────
+    #
+    # 2026-08-27에 Tempo가 두 번 OOM으로 죽었다(Exit 137). 원인은 저장량이 아니라
+    # **조회**였다. 저장된 데이터가 11MB인데 메모리는 510Mi까지 갔다.
+    #
+    # Grafana Explore를 열면 태그 목록을 limit=5000으로 긁는다. 그 결과를 전부
+    # 메모리에 올리면서 터졌다. 한 번은 trace 조회 하나가 38초 걸렸다.
+    query_frontend:
+      # 조회를 몇 조각으로 나눠 병렬 처리할지. 기본값이 이 규모에 과하다.
+      # 조각이 많을수록 동시에 메모리에 올라오는 양이 늘어난다.
+      max_outstanding_per_tenant: 200
+      search:
+        # 한 번에 훑을 시간 범위를 제한한다. 기본은 전체를 훑는다.
+        # 조사할 때는 시각을 알고 오므로 넓게 훑을 필요가 없다.
+        max_duration: 24h
+        # 동시에 도는 조회 작업 수. 낮추면 느려지지만 메모리가 안정된다.
+        concurrent_jobs: 200
+
+    querier:
+      # 단일 바이너리 모드에서 querier가 자기 자신(query-frontend)에 붙는 주소.
+      # 명시하지 않으면 Tempo가 추측하는데, 기동 로그에 경고가 남고
+      # "error contacting frontend" 오류가 실제로 발생했다.
+      frontend_worker:
+        frontend_address: 127.0.0.1:9095
+      # 한 조회가 동시에 열 수 있는 블록 수. 이게 메모리 사용량을 직접 좌우한다.
+      max_concurrent_queries: 10
+
+    # 사용량 지표를 Prometheus가 긁어갈 수 있게 한다. Tempo 자신이 죽거나
+    # 밀리는 것을 알아야 "추적이 안 보이는 이유"를 구분할 수 있다.
+    usage_report:
+      reporting_enabled: false

@@ -20,4 +20,18 @@ public class RequestIdMdcConfig {
         registration.setOrder(new RequestIdMdcFilter().getOrder());
         return registration;
     }
+
+    /**
+     * 요청 하나당 로그 한 줄. {@link RequestIdMdcFilter} 바로 뒤에 온다.
+     *
+     * <p>이것이 없으면 traceId를 로그에 넣어도 <b>흘려보낼 로그 자체가 없어</b>
+     * 추적에서 로그로 넘어갈 수 없다.
+     */
+    @Bean
+    public FilterRegistrationBean<RequestLoggingFilter> requestLoggingFilter() {
+        FilterRegistrationBean<RequestLoggingFilter> registration =
+                new FilterRegistrationBean<>(new RequestLoggingFilter());
+        registration.setOrder(new RequestLoggingFilter().getOrder());
+        return registration;
+    }
 }

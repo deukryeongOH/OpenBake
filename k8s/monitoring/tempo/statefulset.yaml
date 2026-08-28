@@ -1,0 +1,131 @@
+# Tempo — 분산 추적 저장소.
+#
+# 왜 필요한가: micrometer-tracing-bridge-otel을 넣어 traceId가 로그에 찍히기
+# 시작했지만, 그것만으로는 **"어느 구간이 몇 ms 걸렸는가"를 알 수 없다.**
+# span을 저장하는 곳이 있어야 게이트웨이 12ms / backend 340ms / ES 280ms 같은
+# 분해가 나온다. 지금은 "느리다"까지만 알고 어디서 느린지는 모른다.
+#
+# 왜 StatefulSet인가: trace 블록을 로컬 디스크에 쓴다. Deployment + PVC 조합은
+# 롤링 중 두 Pod가 같은 PVC를 잡으려 해서 막힌다(ReadWriteOnce).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tempo
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  serviceName: tempo
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tempo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tempo
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+      annotations:
+        # ConfigMap이 바뀌면 Pod가 다시 뜨도록 한다. Tempo는 설정을 자동
+        # 재적재하지 않으므로 이게 없으면 바꿔도 반영되지 않는다.
+        checksum/config: "replace-on-change"
+    spec:
+      # 관측 스택이 모여 있는 service 풀에 둔다.
+      #
+      # 2026-08-27 실측: Node A는 CPU 예약 85%(여유 300m), Node B는 61%(여유 775m).
+      # Node A는 드롭 트래픽을 받는 노드라 추적 저장소가 CPU를 다투면 안 된다.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - service
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: tempo
+          image: grafana/tempo:2.6.1
+          args:
+            - -config.file=/etc/tempo/tempo.yaml
+          ports:
+            - containerPort: 3200
+              name: http
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              # 512Mi로 시작했다가 **조회할 때 OOM으로 죽었다**(2026-08-27, Exit 137).
+              #
+              #   평상시      172Mi
+              #   trace 조회  510Mi  <- 여기서 한계에 닿았다
+              #   저장 데이터  11MB   <- 저장량이 아니라 조회가 원인이다
+              #
+              # Grafana가 태그 목록을 limit=5000으로 긁고 trace를 펼치는 순간
+              # 메모리가 3배로 뛴다. 아래 설정에서 조회 한도를 낮췄지만, 발표 중
+              # 여러 명이 동시에 열 수 있으므로 상한도 함께 올린다.
+              #
+              # Node B 메모리 여유가 1.7GB라 768Mi는 그 안에서 안전하다.
+              memory: 768Mi
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3200
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3200
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+            - name: data
+              mountPath: /var/tempo
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: tempo-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        # retain을 쓰는 이유는 prometheus와 같다. Pod를 지웠다 다시 만들 때
+        # 조사 중이던 trace가 사라지면 안 된다.
+        storageClassName: local-path-retain
+        resources:
+          requests:
+            # 48시간 보관에 2Gi. 샘플링 0.1이고 트래픽이 크지 않아 여유가 있다.
+            # 부족하면 compactor가 오래된 블록부터 지운다.
+            storage: 2Gi

@@ -42,9 +42,21 @@ spec:
           args:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus
-            # 03번 문서 9장: Node B PVC 3Gi를 넘지 않도록 retention 3일·TSDB 크기 상한 1GB.
-            - --storage.tsdb.retention.time=3d
-            - --storage.tsdb.retention.size=1GB
+            # 보관 기간. 03번 문서 9장은 PVC 3Gi를 넘지 않도록 3일·1GB를 잡았으나,
+            # 그 값으로는 **7일·28일 오류 예산을 계산할 수 없다**. SLO는 기간을 두고
+            # 판정하는 것이라 3일치만으로는 원리적으로 불가능하다.
+            #
+            # 2026-08-26 실측으로 여유가 확인됐다.
+            #   TSDB 현재     61.6MB (약 36시간치)  -> 하루 약 40MB
+            #   28일 추정     약 1.2GB
+            #   PVC           3Gi
+            #   Node B 디스크  23.2GB 여유
+            #
+            # 히스토그램(게이트웨이 routeId, Traefik)과 exporter 2종(ES·PostgreSQL)이
+            # 늘면서 하루 증가량이 커질 수 있으므로, size 상한을 안전장치로 함께 올린다.
+            # time과 size 중 **먼저 걸리는 쪽이 적용**되므로 size가 디스크를 지킨다.
+            - --storage.tsdb.retention.time=30d
+            - --storage.tsdb.retention.size=2GB
             # 16번 문서 k6 remote write가 사용하는 경로.
             - --web.enable-remote-write-receiver
           ports:

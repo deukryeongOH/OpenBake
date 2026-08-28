@@ -223,7 +223,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"openbake\"}[5m]))",
+          "expr": "label_replace(\n  sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"openbake\"}[5m])),\n  \"pod\", \"$1-$2\", \"pod\", \"^(.+?)-[a-z0-9]*[0-9][a-z0-9]*-([a-z0-9]{5})$\"\n)",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -265,7 +265,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"openbake\"})",
+          "expr": "label_replace(\n  sum by (pod) (container_memory_working_set_bytes{namespace=\"openbake\"}),\n  \"pod\", \"$1-$2\", \"pod\", \"^(.+?)-[a-z0-9]*[0-9][a-z0-9]*-([a-z0-9]{5})$\"\n)",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -309,7 +309,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"openbake|monitoring\"}[15m]))",
+          "expr": "label_replace(\n  sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"openbake|monitoring\"}[15m])),\n  \"pod\", \"$1-$2\", \"pod\", \"^(.+?)-[a-z0-9]*[0-9][a-z0-9]*-([a-z0-9]{5})$\"\n)",
           "legendFormat": "{{namespace}}/{{pod}}",
           "refId": "A"
         }
@@ -351,9 +351,20 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"})",
+          "expr": "label_replace(\n  sum by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"}),\n  \"pod\", \"$1-$2\", \"pod\", \"^(.+?)-[a-z0-9]*[0-9][a-z0-9]*-([a-z0-9]{5})$\"\n)",
           "legendFormat": "{{namespace}}/{{pod}}",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "vector(0)",
+          "legendFormat": "없음 (정상)",
+          "range": true,
+          "refId": "Z"
         }
       ],
       "fieldConfig": {
@@ -393,7 +404,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (rate(container_cpu_cfs_throttled_seconds_total{namespace=\"openbake\"}[5m]))",
+          "expr": "label_replace(\n  sum by (pod) (rate(container_cpu_cfs_throttled_seconds_total{namespace=\"openbake\"}[5m])),\n  \"pod\", \"$1-$2\", \"pod\", \"^(.+?)-[a-z0-9]*[0-9][a-z0-9]*-([a-z0-9]{5})$\"\n)",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }

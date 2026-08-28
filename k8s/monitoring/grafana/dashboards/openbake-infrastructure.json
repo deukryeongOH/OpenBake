@@ -234,9 +234,8 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "hidden",
+          "showLegend": false
         },
         "tooltip": {
           "mode": "multi",
@@ -278,9 +277,8 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "hidden",
+          "showLegend": false
         },
         "tooltip": {
           "mode": "multi",
@@ -417,9 +415,8 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "hidden",
+          "showLegend": false
         },
         "tooltip": {
           "mode": "multi",

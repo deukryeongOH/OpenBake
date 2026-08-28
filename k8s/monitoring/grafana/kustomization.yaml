@@ -22,6 +22,13 @@ resources:
 configMapGenerator:
   - name: grafana-dashboards
     files:
+      # 발표용. 패널 9개만 둔다 — 프로젝터에서는 축 레이블이 먼저 읽히지 않는다.
+      # 자동 새로고침을 꺼 두었다. 말하는 중에 숫자가 바뀌면 흐름이 끊긴다.
+      - dashboards/openbake-presentation.json
+      # k6 지표는 부하 시험을 돌릴 때만 들어온다. 상시 대시보드에 두면 "No data"가
+      # 계속 떠서 모니터링이 안 붙어 있는 것처럼 보인다. 지우지 않고 옮긴 이유는
+      # 시험을 돌리면 볼 곳이 필요해서다.
+      - dashboards/openbake-load-test.json
       - dashboards/openbake-performance-overview.json
       - dashboards/openbake-infrastructure.json
       - dashboards/openbake-business-backlog.json

@@ -62,7 +62,15 @@ public interface ProductJpaRepository extends JpaRepository<Product, Long> {
 
     List<Product> findAllBySellerId(Long sellerId);
 
-    Long findSellerIdById(Long id);
+    // 질의를 반드시 명시한다.
+    //
+    // 이름만으로 두면 Spring Data가 find와 By 사이의 "SellerId"를 설명으로 보고 버려서
+    // findById와 똑같이 해석한다. 그러면 Product가 반환되는데 선언은 Long이라
+    // 호출하는 쪽에서 ClassCastException이 난다. 컴파일은 통과하므로 실행해야만 드러난다.
+    //
+    // 2026-08-28 운영에서 90분간 25회 발생했다.
+    @Query("SELECT p.sellerId FROM Product p WHERE p.id = :id")
+    Long findSellerIdById(@Param("id") Long id);
 
     @Query("SELECT p FROM Product p "
          + "WHERE p.sellerId = :sellerId AND p.type = :type "

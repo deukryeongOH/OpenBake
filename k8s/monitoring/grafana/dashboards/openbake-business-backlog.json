@@ -315,7 +315,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (job) (rate(kafka_producer_record_send_total[5m]))",
+          "expr": "sum by (job) (rate(kafka_producer_record_send_total[5m])) or vector(0)",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -357,7 +357,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (job) (rate(kafka_producer_record_error_total[5m]))",
+          "expr": "sum by (job) (rate(kafka_producer_record_error_total[5m])) or vector(0)",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -420,8 +420,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "placement": "right"
         },
         "tooltip": {
           "mode": "multi",

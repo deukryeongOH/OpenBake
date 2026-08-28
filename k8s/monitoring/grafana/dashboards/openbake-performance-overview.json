@@ -308,7 +308,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * (sum by (job) (rate(http_server_requests_seconds_count{job=~\"$job\",status=~\"5..\"}[$__rate_interval])) / clamp_min(sum by (job) (rate(http_server_requests_seconds_count{job=~\"$job\"}[$__rate_interval])), 0.001))",
+          "expr": "100 * ((sum by (job) (rate(http_server_requests_seconds_count{job=~\"$job\",status=~\"5..\"}[$__rate_interval])) or (sum by (job) (rate(http_server_requests_seconds_count{job=~\"$job\"}[$__rate_interval])) * 0)) / clamp_min(sum by (job) (rate(http_server_requests_seconds_count{job=~\"$job\"}[$__rate_interval])), 0.001))",
           "legendFormat": "{{job}}",
           "refId": "A"
         }

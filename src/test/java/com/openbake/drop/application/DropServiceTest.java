@@ -110,15 +110,29 @@ class DropServiceTest {
         DropInfoResult productResult = DropInfoResult.of(
                 command.dropStart(), command.dropEnd(), command.limitQuantity(), UPCOMING,
                 command.name(), command.description(), command.image(), command.pickupDates(),
-                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId
+                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId, null, command.category()
         );
         given(productPort.registerProduct(command)).willReturn(productResult);
+
+        // 저장 시점에 IDENTITY로 채번되는 실제 동작을 흉내낸다 — 실제 JPA는 save() 직후 id를 채워준다.
+        Long savedDropId = 999L;
+        given(dropRepository.save(any(Drop.class))).willAnswer(invocation -> {
+            Drop savedDrop = invocation.getArgument(0);
+            ReflectionTestUtils.setField(savedDrop, "id", savedDropId);
+            return savedDrop;
+        });
 
         // when
         DropInfoResult response = dropService.registerDrop(command);
 
         // then
-        assertThat(response).isEqualTo(productResult);
+        DropInfoResult expected = DropInfoResult.of(
+                productResult.dropStart(), productResult.dropEnd(), productResult.limitQuantity(), productResult.dropStatus(),
+                productResult.name(), productResult.description(), productResult.imageUrl(), productResult.pickUpAvailableDates(),
+                productResult.price(), productResult.totalQuantity(), productResult.remainQuantity(),
+                productResult.sellerId(), productResult.productId(), savedDropId, productResult.category()
+        );
+        assertThat(response).isEqualTo(expected);
         verify(dropRepository).save(any(Drop.class));
         verify(todayDropCache).refresh();
         verify(applicationEventPublisher).publishEvent(any(DropCacheInvalidatedEvent.class));
@@ -161,7 +175,7 @@ class DropServiceTest {
 
         DropProductInfoResult productResult = DropProductInfoResult.of(
                 command.name(), command.description(), command.image(), command.pickupDates(),
-                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId
+                command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId, command.category()
         );
         given(productPort.updateProduct(eq(productId), eq(command))).willReturn(productResult);
 
@@ -264,7 +278,7 @@ class DropServiceTest {
 
         DropProductInfoResult productResult = DropProductInfoResult.of(
                 "버터떡", "버터를 많이 써서 향이 좋아요.", "https://cdn.openbake.com/drops/12.jpg",
-                Set.of(LocalDate.parse("2028-08-02")), 3000, 200, 200, 1L, productId
+                Set.of(LocalDate.parse("2028-08-02")), 3000, 200, 200, 1L, productId, Category.COOKIES_BAKES
         );
         given(productPort.getProductInfo(productId)).willReturn(productResult);
 
@@ -306,9 +320,9 @@ class DropServiceTest {
         given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
 
         DropProductInfoResult dropProduct = DropProductInfoResult.of(
-                "두쫀쿠", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 8000, 100, 100, sellerId, dropProductId);
+                "두쫀쿠", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 8000, 100, 100, sellerId, dropProductId, Category.COOKIES_BAKES);
         DropProductInfoResult generalProduct = DropProductInfoResult.of(
-                "머핀", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 3000, 50, 50, sellerId, generalProductId);
+                "머핀", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 3000, 50, 50, sellerId, generalProductId, Category.MEAL_BREADS);
 
         given(productPort.findProductListBySellerId(sellerId))
                 .willReturn(new ArrayList<>(List.of(dropProduct, generalProduct)));

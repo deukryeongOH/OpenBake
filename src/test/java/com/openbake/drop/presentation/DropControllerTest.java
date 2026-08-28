@@ -5,6 +5,7 @@ import com.openbake.drop.application.service.DropDetailService;
 import com.openbake.drop.application.dto.DropInfoResult;
 import com.openbake.drop.domain.DropStatus;
 import com.openbake.drop.presentation.controller.DropController;
+import com.openbake.product.domain.Category;
 import com.openbake.seller.application.CurrentSellerProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,9 @@ class DropControllerTest {
                 200,
                 200,
                 1L,
-                12L
+                12L,
+                99L,
+                Category.COOKIES_BAKES
         );
 
         when(dropService.getUpcomingDrops(7))

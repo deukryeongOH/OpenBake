@@ -32,10 +32,11 @@ public class ProductAdapter implements ProductPort {
 
         ProductInfoResult result = productService.registerDropProduct(request);
 
+        // 이 시점엔 Drop이 아직 저장 전이라 id가 없다. DropService.registerDrop이 저장 후 채운다.
         return DropInfoResult.of(command.dropStart(), command.dropEnd(),
                 command.limitQuantity(), command.dropStatus(), result.name(),
                 result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
-                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId()
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), null, result.category()
         );
     }
 
@@ -46,7 +47,7 @@ public class ProductAdapter implements ProductPort {
 
         return DropProductInfoResult.of(result.name(), result.description(), result.imageUrl(),
                 result.pickUpAvailableDates(), result.price(), result.totalQuantity(), result.remainQuantity(),
-                result.sellerId(), result.productId()
+                result.sellerId(), result.productId(), result.category()
         );
     }
 
@@ -58,7 +59,7 @@ public class ProductAdapter implements ProductPort {
                 .map(productInfoResult -> DropProductInfoResult.of(productInfoResult.name(),
                         productInfoResult.description(), productInfoResult.imageUrl(), productInfoResult.pickUpAvailableDates(),
                         productInfoResult.price(), productInfoResult.totalQuantity(), productInfoResult.remainQuantity(),
-                        productInfoResult.sellerId(), productInfoResult.productId()))
+                        productInfoResult.sellerId(), productInfoResult.productId(), productInfoResult.category()))
                 .toList();
     }
 
@@ -70,7 +71,7 @@ public class ProductAdapter implements ProductPort {
         ProductInfoResult result = productService.updateDropProduct(productInfoCommand, productId);
 
         return DropProductInfoResult.of(result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
-                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId());
+                result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), result.category());
     }
 
     @Override

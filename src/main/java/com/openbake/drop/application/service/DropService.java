@@ -237,6 +237,7 @@ public class DropService {
         DropProductInfoResult result = productPort.updateProduct(drop.getProductId(), command);
         drop.update(result.productId(), command.limitQuantity(), command.dropStart(), command.dropEnd());
 
+        dropRepository.save(drop);
         // 오늘 드롭의 시작/마감 시각이 바뀌었을 수 있으므로 캐시를 즉시 갱신
         todayDropCache.refresh();
         applicationEventPublisher.publishEvent(new DropCacheInvalidatedEvent());

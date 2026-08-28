@@ -92,18 +92,19 @@ public class ProductService {
         }
 
         product.updateProduct(command); // 수량 외 필드만 엔티티로 저장
-        productRepository.save(product);
 
         // 판매자가 수정하고 있을 때 사용자가 사고 판매자 수정 끝나면 사용자가 산 내용 반영 안됨.
         // 따라서 그 순간의 실제 DB의 값을 적용해야 함.
         if(productInventoryRepository.adjustTotalQuantity(productId, command.totalQuantity()) == 0){ // 수량은 원자적 UPDATE로 나중에
             throw new BusinessException(ErrorCode.INVALID_TOTAL_QUANTITY);
         }
+        productRepository.save(product);
 
         Product updated = getProduct(productId); // adjustTotalQuantity는 별도 UPDATE이기 떄문에 최신값 다시 조회 해야함.
         ProductInventory productInventory = productInventoryRepository.findByProductId(updated.getId());
 
         productChangedOutboxWriter.updated(updated);
+
 
         return ProductInfoResult.of(updated.getName(), updated.getDescription(), updated.getImageUrl(),
                 productInventory.getTotalQuantity(), updated.getPrice(), updated.getPickUpAvailableDates(), updated.getCategory(),
@@ -135,8 +136,15 @@ public class ProductService {
         if (product.getType() != type) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_TYPE);
         }
-        product.markDeleted();
-        productChangedOutboxWriter.deleted(productId);
+
+        if(type == Type.GENERAL){
+            product.markDeleted();
+            productChangedOutboxWriter.deleted(productId);
+        }else{
+            ProductInventory productInventory = productInventoryRepository.findByProductId(productId);
+            productInventoryRepository.delete(productInventory);
+            productRepository.delete(product);
+        }
 
     }
 

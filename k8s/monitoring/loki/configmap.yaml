@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+data:
+  loki.yaml: |
+    # Loki 단일 바이너리 구성.
+    #
+    # 왜 필요한가: 지금 로그는 Pod 안에만 있어 **Pod가 죽으면 함께 사라진다.**
+    # 장애를 조사할 시점에는 이미 재시작된 뒤인 경우가 많다. 그리고 서비스가
+    # 5개라 kubectl logs를 다섯 번 따로 열어야 한다.
+    #
+    # 구조화 로그에 traceId가 이미 들어 있으므로(2026-08-27), Loki를 붙이면
+    # **추적 화면에서 그 요청의 로그로 바로 넘어갈 수 있다.**
+    # 지표 -> 추적 -> 로그 흐름이 완성된다.
+
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9096
+      # 기본 로그가 시끄럽다. 정상 동작에도 줄이 계속 쌓인다.
+      log_level: warn
+
+    common:
+      instance_addr: 127.0.0.1
+      path_prefix: /var/loki
+      storage:
+        filesystem:
+          chunks_directory: /var/loki/chunks
+          rules_directory: /var/loki/rules
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+
+    schema_config:
+      configs:
+        - from: 2024-01-01
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    limits_config:
+      # ── 메모리를 지키는 설정들 ────────────────────────────────────────
+      # Tempo가 조회 중 OOM으로 죽은 적이 있다(2026-08-27). 같은 실수를
+      # 반복하지 않도록 조회 한도를 처음부터 좁게 잡는다.
+      #
+      # 한 번에 훑을 시간 범위. 조사할 때는 시각을 알고 오므로 넓을 필요가 없다.
+      max_query_length: 24h
+      # 한 조회가 돌려줄 최대 줄 수. 넘으면 잘라서 준다.
+      max_entries_limit_per_query: 5000
+      # 동시 조회 조각 수. 낮추면 느려지지만 메모리가 안정된다.
+      max_query_parallelism: 8
+      # 너무 오래된 로그는 거부한다. 시계가 어긋난 Pod가 과거 로그를 밀어넣는 것을 막는다.
+      reject_old_samples: true
+      reject_old_samples_max_age: 24h
+      # 서비스 하나가 로그를 폭주시켜 전체를 마비시키지 않게 한다.
+      ingestion_rate_mb: 8
+      ingestion_burst_size_mb: 16
+      # 보관 기간. 추적(48시간)과 맞춘다.
+      #
+      # 로그는 지표보다 훨씬 크다. 그리고 로그도 추적과 마찬가지로 "지금 무슨 일이
+      # 벌어지는가"를 보는 도구다. 장기 추세는 지표(30일)가 담당한다.
+      retention_period: 48h
+
+    compactor:
+      working_directory: /var/loki/compactor
+      delete_request_store: filesystem
+      retention_enabled: true
+      # 보관 기간이 지난 것을 실제로 지운다. 이게 없으면 retention_period를
+      # 설정해도 디스크가 계속 찬다.
+      retention_delete_delay: 1h
+
+    # 사용량 통계를 밖으로 보내지 않는다.
+    analytics:
+      reporting_enabled: false

@@ -14,9 +14,13 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: grafana
+        # 실제 수집기 이름은 promtail이다. 이 정책이 먼저 작성될 때는 구현이
+        # 정해지지 않아 log-agent로 적혀 있었다(2026-08-27 정정).
+        # 이름이 안 맞으면 promtail이 로그를 밀어넣지 못하고, 그러면
+        # **Loki가 떠 있는데 비어 있는** 상태가 된다.
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: log-agent
+              app.kubernetes.io/name: promtail
       ports:
         - protocol: TCP
           port: 3100

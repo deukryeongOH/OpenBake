@@ -26,6 +26,9 @@ configMapGenerator:
       - dashboards/openbake-infrastructure.json
       - dashboards/openbake-business-backlog.json
       - dashboards/openbake-backing-services.json
+      # 저장소 내부와 결제 Saga. Backing Services와 나눈 이유: 그쪽은 회로 차단기·
+      # Redis·Kafka로 이미 14패널이라, 여기 더 넣으면 "무엇을 보러 왔는가"가 흐려진다.
+      - dashboards/openbake-datastores.json
 
 generatorOptions:
   disableNameSuffixHash: true

@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  serviceName: loki
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loki
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      # ⚠️ 다른 관측 스택과 달리 **Node A(core 풀)에 둔다.**
+      #
+      # 2026-08-27 실측:
+      #   Node A  allocatable 7.8GB, 메모리 예약 57%, 여유 약 3.3GB
+      #   Node B  allocatable 3.8GB, 메모리 예약 56%, 여유 약 1.7GB
+      #
+      # Node B에는 Prometheus·Grafana·Tempo·alertmanager·exporter가 이미 몰려
+      # 있고 limits 합계가 allocatable의 123%다. 평소엔 괜찮지만 여러 개가 동시에
+      # 치솟으면 OOM이 난다. 실제로 Grafana와 Tempo가 그렇게 죽었다.
+      #
+      # Node A는 CPU가 빠듯하지만(95%) **Loki는 CPU를 거의 쓰지 않는다.**
+      # 로그를 받아 압축해 저장하는 일이다. 그래서 CPU 요청을 50m으로 낮게 잡아
+      # Node A의 남은 여유 안에 들어가게 한다.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - core
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: loki
+          image: grafana/loki:3.3.2
+          args:
+            - -config.file=/etc/loki/loki.yaml
+          ports:
+            - containerPort: 3100
+              name: http
+            - containerPort: 9096
+              name: grpc
+          resources:
+            requests:
+              # Node A의 CPU 여유가 100m 남짓이다. 여기를 넘으면 스케줄이 막힌다.
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              cpu: 300m
+              # Tempo가 512Mi로 시작했다가 조회 중 OOM으로 죽었다. 같은 실수를
+              # 하지 않도록 처음부터 여유를 준다. Node A 메모리 여유가 3.3GB라
+              # 512Mi는 그 안에서 안전하다.
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+            - name: data
+              mountPath: /var/loki
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: local-path-retain
+        resources:
+          requests:
+            # 48시간 보관. 서비스 5개가 JSON 로그를 내는 규모라 여유가 있다.
+            # 부족하면 compactor가 오래된 것부터 지운다.
+            storage: 3Gi

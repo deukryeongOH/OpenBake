@@ -59,6 +59,7 @@ class DropControllerTest {
                 12L,
                 99L,
                 Category.COOKIES_BAKES
+
         );
 
         when(dropService.getUpcomingDrops(7))
@@ -67,6 +68,7 @@ class DropControllerTest {
         mockMvc.perform(get("/api/v1/drops/upcoming"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].dropId").value(5))
                 .andExpect(jsonPath("$.data[0].name").value("버터떡"))
                 .andExpect(jsonPath("$.data[0].dropStatus").value("UPCOMING"))
                 .andExpect(jsonPath("$.data[0].remainQuantity").value(200));

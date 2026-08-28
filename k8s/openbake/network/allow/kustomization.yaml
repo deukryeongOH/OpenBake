@@ -24,12 +24,24 @@ resources:
   - allow-backend-to-elasticsearch.yaml
   - allow-to-kafka.yaml
   - allow-grafana-to-prometheus.yaml
+  # 부하 테스트를 클러스터 안 Pod로 돌릴 때 remote write 경로를 연다.
+  # Pod에 openbake.io/role=load-test 라벨이 있어야 적용된다.
+  - allow-k6-to-prometheus.yaml
+  # 추적: 앱이 span을 보내는 경로와, grafana/prometheus가 Tempo를 읽는 경로.
+  - allow-apps-to-tempo.yaml
+  - allow-grafana-and-prometheus-to-tempo.yaml
   - allow-prometheus-to-node-exporter.yaml
   - allow-prometheus-to-kube-state-metrics.yaml
   - allow-prometheus-to-redis-exporter.yaml
   - allow-prometheus-to-kafka-exporter.yaml
   - allow-prometheus-to-alertmanager.yaml
   - allow-prometheus-to-blackbox-exporter.yaml
+  - allow-prometheus-to-elasticsearch-exporter.yaml
+  # exporter는 monitoring, 대상 ES는 openbake다. 두 파일이 짝이다.
+  - allow-elasticsearch-exporter-to-elasticsearch.yaml
+  # postgres-exporter 4대는 자격증명 Secret 때문에 openbake에 있다.
+  - allow-prometheus-to-postgres-exporter.yaml
+  - allow-postgres-exporter-to-postgres.yaml
   # Traefik(kube-system)에는 의도적으로 NetworkPolicy를 두지 않는다.
   #
   # kube-system에는 default-deny가 없어 Traefik은 격리되지 않은 상태이고, Prometheus는

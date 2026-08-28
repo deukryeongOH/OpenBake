@@ -11,17 +11,31 @@ import org.springframework.stereotype.Component;
 @Component
 public class PersonalizedRecommendationScorer {
 
+    private final RecommendationProperties properties;
+
+    public PersonalizedRecommendationScorer(RecommendationProperties properties) {
+        this.properties = properties;
+    }
+
     public List<RecommendationCandidate> score(
             RecommendationProfile profile,
             List<ProductEmbeddingSnapshot> candidates) {
+        // Elasticsearch cosine _score를 raw cosine으로 되돌린 뒤 먼저 거른다.
+        // min-max 정규화 후 필터링하면 약한 후보 집합의 1등도 항상 1.0이 되어 하한선이 무력화된다.
+        List<ProductEmbeddingSnapshot> relevantCandidates = candidates.stream()
+                .filter(candidate -> properties.minCosine() <= 0.0
+                        || 2.0 * candidate.similarity() - 1.0 >= properties.minCosine())
+                .toList();
         List<Double> normalizedSimilarities = RecommendationMath.minMaxNormalize(
-                candidates.stream().map(ProductEmbeddingSnapshot::similarity).toList());
-        double categoryWeight = profile.validInteractionCount() < 3 ? 0.60 : 0.30;
+                relevantCandidates.stream().map(ProductEmbeddingSnapshot::similarity).toList());
+        double categoryWeight = profile.validInteractionCount() < properties.coldStartThreshold()
+                ? properties.coldStartCategoryWeight()
+                : properties.establishedCategoryWeight();
         double vectorWeight = 1.0 - categoryWeight;
-        List<RecommendationCandidate> scored = new ArrayList<>(candidates.size());
+        List<RecommendationCandidate> scored = new ArrayList<>(relevantCandidates.size());
 
-        for (int index = 0; index < candidates.size(); index++) {
-            ProductEmbeddingSnapshot candidate = candidates.get(index);
+        for (int index = 0; index < relevantCandidates.size(); index++) {
+            ProductEmbeddingSnapshot candidate = relevantCandidates.get(index);
             double categoryContribution = categoryWeight
                     * profile.categoryAffinity().getOrDefault(candidate.category(), 0.0);
             double vectorContribution = vectorWeight * normalizedSimilarities.get(index);

@@ -111,6 +111,7 @@ class DropServiceTest {
                 command.dropStart(), command.dropEnd(), command.limitQuantity(), UPCOMING,
                 command.name(), command.description(), command.image(), command.pickupDates(),
                 command.price(), command.totalQuantity(), command.totalQuantity(), sellerId, productId, null, command.category()
+
         );
         given(productPort.registerProduct(command)).willReturn(productResult);
 
@@ -133,6 +134,7 @@ class DropServiceTest {
                 productResult.sellerId(), productResult.productId(), savedDropId, productResult.category()
         );
         assertThat(response).isEqualTo(expected);
+
         verify(dropRepository).save(any(Drop.class));
         verify(todayDropCache).refresh();
         verify(applicationEventPublisher).publishEvent(any(DropCacheInvalidatedEvent.class));

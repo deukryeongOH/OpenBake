@@ -1,6 +1,7 @@
 package com.openbake.payment.application;
 
 import com.openbake.payment.application.dto.PaymentIdempotentResult;
+import com.openbake.payment.application.port.PaymentMetricsPort;
 import com.openbake.common.exception.BusinessException;
 import com.openbake.common.exception.ErrorCode;
 import java.math.BigDecimal;
@@ -18,6 +19,7 @@ public class PaymentService {
     private static final String REFUND_EXECUTION_FAILED_MESSAGE = "환불 처리 중 오류가 발생했습니다.";
 
     private final PaymentTransactions transactions;
+    private final PaymentMetricsPort metrics;
 
     public PaymentIdempotentResult payIdempotent(
             String idempotencyKey,
@@ -31,10 +33,13 @@ public class PaymentService {
             return executePayWithConflictRetry(idempotencyKey, orderId, memberId, amount);
         } catch (BusinessException exception) {
             rethrowIfInvalidRequest(exception);
+            metrics.payFailed();
             return recordPayFailure(idempotencyKey, orderId, memberId, amount, exception.getMessage());
         } catch (PaymentExecutionException exception) {
             log.error("결제 실행 중 예기치 않은 오류가 발생했습니다. orderId={}, idempotencyKey={}",
                     orderId, idempotencyKey, exception);
+            metrics.executionFailed();
+            metrics.payFailed();
             return recordPayFailure(
                     idempotencyKey, orderId, memberId, amount, PAYMENT_EXECUTION_FAILED_MESSAGE);
         }
@@ -51,10 +56,13 @@ public class PaymentService {
             return executeRefundWithConflictRetry(idempotencyKey, orderId, memberId, amount);
         } catch (BusinessException exception) {
             rethrowIfInvalidRequest(exception);
+            metrics.refundFailed();
             return recordRefundFailure(idempotencyKey, orderId, memberId, amount, exception.getMessage());
         } catch (PaymentExecutionException exception) {
             log.error("환불 실행 중 예기치 않은 오류가 발생했습니다. orderId={}, idempotencyKey={}",
                     orderId, idempotencyKey, exception);
+            metrics.executionFailed();
+            metrics.refundFailed();
             return recordRefundFailure(
                     idempotencyKey, orderId, memberId, amount, REFUND_EXECUTION_FAILED_MESSAGE);
         }
@@ -85,6 +93,7 @@ public class PaymentService {
         try {
             return transactions.executePay(idempotencyKey, orderId, memberId, amount);
         } catch (DataIntegrityViolationException exception) {
+            metrics.idempotencyConflict("pay");
             log.debug("결제 멱등 레코드 생성 경합을 재조회합니다. idempotencyKey={}", idempotencyKey);
             try {
                 return transactions.executePay(idempotencyKey, orderId, memberId, amount);
@@ -103,6 +112,7 @@ public class PaymentService {
         try {
             return transactions.executeRefund(idempotencyKey, orderId, memberId, amount);
         } catch (DataIntegrityViolationException exception) {
+            metrics.idempotencyConflict("refund");
             log.debug("환불 멱등 레코드 생성 경합을 재조회합니다. idempotencyKey={}", idempotencyKey);
             try {
                 return transactions.executeRefund(idempotencyKey, orderId, memberId, amount);

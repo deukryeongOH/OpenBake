@@ -1,0 +1,67 @@
+// 로깅 공통 모듈.
+//
+// 왜 common에서 떼어냈나: common은 `api 'spring-boot-starter-webmvc'`를 노출한다.
+// 그것을 api-gateway에 넣으면 **Netty 대신 Tomcat이 뜨면서 WebFlux 게이트웨이가
+// 깨진다.** 그런데 구조화 로그 마스킹은 서블릿과 아무 관계가 없다.
+//
+// 2026-08-27에 마스킹 커스터마이저를 common에 두었다가 api-gateway 배포가
+// ClassNotFoundException으로 실패했다. 그때는 common을 추가하는 선택지가 있었지만,
+// 서블릿 의존성을 리액티브 앱에 끌어오는 쪽이 훨씬 위험하다.
+//
+// 이 모듈은 spring-boot 코어(JsonWriter, StructuredLoggingJsonMembersCustomizer)만
+// 쓴다. 웹 스택에 중립적이므로 서블릿 앱과 리액티브 앱이 함께 쓸 수 있다.
+plugins {
+    id 'java-library'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+}
+
+dependencies {
+    // spring-boot 코어만. starter-web/webflux 어느 쪽도 끌어오지 않는다.
+    api 'org.springframework.boot:spring-boot'
+
+    // 분산 추적. 여기 두는 이유는 마스킹 커스터마이저와 같다 — 5개 서비스가 전부
+    // (WebFlux인 api-gateway 포함) 이 모듈을 쓰고, 추적은 웹 스택에 중립적이다.
+    //
+    // bridge-otel만으로도 traceId/spanId가 생성되고 서비스 간에 전파되며 로그에
+    // 찍힌다. exporter-otlp는 그 span을 Tempo 같은 백엔드로 보낼 때 쓴다.
+    // exporter가 있어도 endpoint를 설정하지 않으면 전송하지 않는다.
+    //
+    // ⚠️ Spring Boot 4는 자동 설정 모듈을 잘게 나눴다. bridge만 넣으면 라이브러리는
+    // 있는데 **Tracer 빈이 만들어지지 않는다**(2026-08-27 실측: actuator starter가
+    // 있어도 NoSuchBeanDefinitionException). Boot 3의
+    // spring-boot-actuator-autoconfigure에 있던 tracing 자동 설정이
+    // spring-boot-micrometer-tracing-opentelemetry로 옮겨졌다.
+    api 'org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry'
+    api 'io.micrometer:micrometer-tracing-bridge-otel'
+    api 'io.opentelemetry:opentelemetry-exporter-otlp'
+
+    // 추적 자동 설정은 actuator가 켠다. 이 모듈 자체는 actuator를 노출하지 않으므로
+    // (서비스마다 이미 starter-actuator가 있다) 테스트에서만 넣어 브리지가 실제로
+    // Tracer 빈을 만드는지 확인한다.
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

@@ -106,7 +106,7 @@
       "id": 142,
       "type": "timeseries",
       "title": "회로 차단기 실패율",
-      "description": "임계치(50%)에 근접하면 곧 열린다. -1은 표본이 최소 호출 수에 못 미쳐 판정 전이라는 뜻이다.",
+      "description": "임계치(50%)에 근접하면 곧 열린다. -1은 표본이 최소 호출 수에 못 미쳐 판정 전이라는 뜻이다. resilience4j는 표본이 부족하면 -1을 반환한다(오류 아님, 미산출). >= 0으로 걸러 그 구간은 선을 그리지 않는다.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -123,14 +123,15 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (name) (resilience4j_circuitbreaker_failure_rate)",
+          "expr": "max by (name) (resilience4j_circuitbreaker_failure_rate >= 0)",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent"
+          "unit": "percent",
+          "min": 0
         },
         "overrides": []
       },

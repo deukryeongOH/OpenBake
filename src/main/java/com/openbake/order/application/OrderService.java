@@ -468,6 +468,7 @@ public class OrderService {
         return new OrderSummaryResult(
                 order.getOrderId(),
                 representative.getProductNameSnapshot(),
+                representative.getImageUrlSnapshot(),
                 items.size() - 1,
                 representative.getSellerNameSnapshot(),
                 items.stream().mapToInt(OrderItem::getQuantity).sum(),

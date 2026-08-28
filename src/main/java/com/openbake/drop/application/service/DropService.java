@@ -57,6 +57,7 @@ public class DropService {
         return DropInfoResult.of(result.dropStart(), result.dropEnd(), result.limitQuantity(), result.dropStatus(),
                 result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
                 result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), drop.getId(), result.category());
+
     }
 
     private Drop createDrop(DropInfoResult result) {
@@ -171,6 +172,7 @@ public class DropService {
         return DropInfoResult.of(findDrop.getDropStart(), findDrop.getDropEnd(), findDrop.getLimitQuantity(), findDrop.getDropStatus(),
                 result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
                 result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), findDrop.getId(), result.category());
+
     }
 
     // 판매자 본인이 등록한 드롭 목록 조회
@@ -189,6 +191,7 @@ public class DropService {
             dropInfoResultList.add(DropInfoResult.of(findDrop.getDropStart(), findDrop.getDropEnd(), findDrop.getLimitQuantity(), findDrop.getDropStatus(),
                     result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(), result.totalQuantity(),
                     result.remainQuantity(), result.sellerId(), result.productId(), findDrop.getId(), result.category()));
+
         }
 
         return dropInfoResultList;
@@ -212,6 +215,7 @@ public class DropService {
                     return DropInfoResult.of(drop.getDropStart(), drop.getDropEnd(), drop.getLimitQuantity(), drop.getDropStatus(),
                             result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(), result.totalQuantity(),
                             result.remainQuantity(), result.sellerId(), result.productId(), drop.getId(), result.category());
+
                 })
                 .toList();
     }
@@ -244,6 +248,7 @@ public class DropService {
         return DropInfoResult.of(drop.getDropStart(), drop.getDropEnd(), drop.getLimitQuantity(), drop.getDropStatus(),
                 result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(),
                 result.totalQuantity(), result.remainQuantity(), result.sellerId(), result.productId(), drop.getId(), result.category());
+
     }
 
     // 판매자 본인의 드롭 삭제 (시작 전인 드롭만 가능)

@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch-exporter
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: elasticsearch-exporter
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: openbake
+    app.kubernetes.io/instance: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: elasticsearch-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: elasticsearch-exporter
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: openbake
+        app.kubernetes.io/instance: production
+    spec:
+      # 왜 필요한가: 회로 차단기가 "ES가 이상하다"까지만 알려주고 왜 이상한지는
+      # 알려주지 않는다. cluster health가 yellow인지 red인지, 힙이 찼는지,
+      # thread pool이 요청을 거부하는지를 구분할 수 없으면 조치를 정할 수 없다.
+      #
+      # ES Pod의 사이드카로 넣지 않는 이유는 redis-exporter와 같다. 사이드카는 대상
+      # Pod의 재시작을 요구하는데, ES는 단일 노드(discovery.type=single-node)라
+      # 재시작하면 검색이 그동안 통째로 멈춘다.
+      #
+      # Node A는 CPU 예약 여유가 200m뿐이라(2026-08-26 실측 90%) Node B에 둔다.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: openbake.io/node-pool
+                    operator: In
+                    values:
+                      - service
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 59000
+        runAsGroup: 59000
+      containers:
+        - name: elasticsearch-exporter
+          image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.7.0
+          args:
+            # xpack.security.enabled=false라 인증 정보가 필요 없다
+            # (2026-08-26 StatefulSet env에서 확인).
+            - --es.uri=http://elasticsearch.openbake.svc.cluster.local:9200
+            # 인덱스별 지표. 어느 인덱스가 커지는지 봐야 디스크 예측이 된다.
+            - --es.indices
+            - --es.indices_settings
+            # 샤드 단위 지표(--es.shards)는 켜지 않는다. 단일 노드라 샤드가 노드를
+            # 옮겨다니지 않아 얻는 정보에 비해 시계열만 늘어난다. 기본값이 off이므로
+            # 명시하지 않는 것으로 충분하다.
+            #
+            # ⚠️ 이 exporter의 불리언 플래그는 `--[no-]es.shards` 형식이다.
+            # `--es.shards=false`로 쓰면 false가 위치 인자로 해석되어
+            # "error: unexpected false"로 기동에 실패한다(2026-08-27 실측).
+            # 끄려면 값을 주는 것이 아니라 `--no-es.shards`를 쓰거나 생략해야 한다.
+            #
+            # --es.snapshots는 v1.7.0에 존재하지 않는다(--help로 확인).
+            - --es.timeout=10s
+            - --web.listen-address=:9114
+          ports:
+            - containerPort: 9114
+              name: metrics
+          resources:
+            requests:
+              # Node A 사고(2026-08-25)를 반복하지 않도록 요청을 낮게 잡는다.
+              # Node B는 여유가 있으나 습관을 유지한다.
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 96Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9114
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9114
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

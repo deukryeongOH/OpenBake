@@ -23,5 +23,6 @@ public record DropInfoResult(
                              Long sellerId, Long productId, Long dropId, Category category){
         return new DropInfoResult(dropStart, dropEnd, limitQuantity, dropStatus, name,description, imageUrl,
                 new HashSet<>(pickUpAvailableDates), price, totalQuantity, remainQuantity, sellerId, productId, dropId, category);
+
     }
 }

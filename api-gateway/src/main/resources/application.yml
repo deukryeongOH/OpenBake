@@ -105,7 +105,26 @@ spring:
             connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:2000}
             response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:10s}
 
+
+# 분산 추적. micrometer-tracing-bridge-otel이 traceId/spanId를 만들고 서비스 간에
+# 전파한다.
+#
+# 왜 필요한가: X-Request-Id를 MDC에 넣는 RequestIdMdcFilter는 서블릿 필터이고 MDC는
+# ThreadLocal이라 **api-gateway(WebFlux)의 리액터 스레드 전환을 넘지 못한다.**
+# 게이트웨이 로그에 상관관계 ID를 남길 방법이 그것 말고 없었다. Micrometer Tracing은
+# Reactor Context 전파를 지원하므로 그 빈틈을 메운다.
+#
+# 그리고 requestId와 달리 traceId는 **구간(span)을 나눈다.** 어느 서비스에서 몇 ms가
+# 걸렸는지 알 수 있다. requestId는 "같은 요청의 로그를 묶는" 것까지가 전부였다.
+#
+# ⚠️ 여기서는 exporter endpoint를 설정하지 않는다. 그러면 span이 **어디로도 전송되지
+# 않고** traceId 전파와 로그 기록만 동작한다. 추적 백엔드(Tempo)가 준비되면
+# management.otlp.tracing.endpoint를 켠다. 백엔드 없이 endpoint를 켜면 전송 실패
+# 로그가 계속 쌓인다.
 management:
+  tracing:
+    sampling:
+      probability: 1.0
   endpoint:
     health:
       probes:
@@ -126,9 +145,28 @@ management:
     distribution:
       percentiles-histogram:
         "[http.server.requests]": true
+        # 게이트웨이에서 경로별 지연을 보려면 이쪽이 필요하다.
+        #
+        # http.server.requests의 uri 라벨은 프록시 트래픽에서 전부 UNKNOWN으로 찍힌다
+        # (2026-08-26 실측: 실제 URI가 붙는 것은 actuator 엔드포인트뿐이었다).
+        # WebFlux 프록시 경로는 핸들러 매칭을 거치지 않아 Micrometer가 URI를 특정할
+        # 수 없기 때문이다. 그래서 게이트웨이만은 이 지표로 경로를 나눌 수 없다.
+        #
+        # spring.cloud.gateway.requests는 routeId·routeUri 라벨을 붙여 나오므로
+        # "core-api 경로가 느린가"를 판정할 수 있다. 다만 기본이 Timer라
+        # _bucket이 없어 p95를 계산할 수 없었다. 히스토그램을 켠다.
+        "[spring.cloud.gateway.requests]": true
 
       slo:
         "[http.server.requests]":
+          - 100ms
+          - 300ms
+          - 500ms
+          - 1s
+          - 2s
+        # 뒤쪽 서비스와 같은 경계를 쓴다. 게이트웨이 값에서 뒤쪽 서비스 값을 빼면
+        # 게이트웨이 자체가 더한 시간이 나오는데, 경계가 다르면 그 비교가 성립하지 않는다.
+        "[spring.cloud.gateway.requests]":
           - 100ms
           - 300ms
           - 500ms
@@ -138,12 +176,14 @@ management:
 logging:
   # 뒤쪽 서비스와 같은 형식으로 맞춰 로그를 나란히 읽을 수 있게 한다.
   #
-  # ⚠️ 게이트웨이는 WebFlux라 이 자리는 현재 항상 비어 있다. common의
-  # RequestIdMdcFilter는 서블릿 필터(OncePerRequestFilter)이고, MDC는
-  # ThreadLocal이라 리액터의 스레드 전환을 넘지 못한다. 게이트웨이 로그에 ID를
-  # 남기려면 Reactor Context 전파(ContextRegistry/Hooks)를 따로 붙여야 한다.
+  # ⚠️ %X{requestId}는 게이트웨이에서 **여전히 비어 있다.** common의
+  # RequestIdMdcFilter는 서블릿 필터(OncePerRequestFilter)이고 MDC는 ThreadLocal이라
+  # 리액터의 스레드 전환을 넘지 못한다. 이건 원리적으로 못 고친다.
   #
-  # 그래도 자리를 비워 두는 이유: RequestIdFilter가 헤더는 정확히 넣어 보내므로
+  # 대신 [traceId,spanId]는 채워진다. Micrometer Tracing이 Reactor Context 전파를
+  # 지원하기 때문이다. **게이트웨이의 상관관계 ID는 이쪽을 봐야 한다.**
+  #
+  # requestId 자리를 남겨두는 이유: RequestIdFilter가 헤더는 정확히 넣어 보내므로
   # 뒤쪽 서비스 로그에는 값이 찍힌다. 형식이 같아야 두 로그를 같은 눈으로 본다.
   pattern:
-    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"

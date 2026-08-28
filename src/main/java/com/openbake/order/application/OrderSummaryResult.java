@@ -16,6 +16,8 @@ import java.time.LocalDateTime;
 public record OrderSummaryResult(
         Long orderId,
         String representativeProductName,
+        //대표 상품 이미지. 주문 시점 스냅샷이라 값이 없던 주문은 null 이다.
+        String representativeImageUrl,
         //대표 상품을 뺀 나머지 항목 수. 0 이면 단일 항목 주문이다.
         int otherItemCount,
         String representativeSellerName,

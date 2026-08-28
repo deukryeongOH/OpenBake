@@ -20,6 +20,9 @@ public record OrderSummaryResponse(
         @Schema(description = "대표 상품명(첫 항목)", example = "소금빵")
         String representativeProductName,
 
+        @Schema(description = "대표 상품 이미지 URL(주문 시점 스냅샷)")
+        String representativeImageUrl,
+
         @Schema(description = "대표 상품을 뺀 나머지 항목 수. 0이면 단일 항목 주문.", example = "2")
         int otherItemCount,
 
@@ -42,6 +45,7 @@ public record OrderSummaryResponse(
         return new OrderSummaryResponse(
                 result.orderId(),
                 result.representativeProductName(),
+                result.representativeImageUrl(),
                 result.otherItemCount(),
                 result.representativeSellerName(),
                 result.totalQuantity(),

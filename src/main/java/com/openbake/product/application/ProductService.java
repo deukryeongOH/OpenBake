@@ -285,8 +285,8 @@ public class ProductService {
 
 
     @Transactional(readOnly = true)
-    public List<ProductInfoResult> findProductListBySellerId(Long sellerId) {
-        List<Product> productList = productRepository.findAllBySellerId(sellerId);
+    public List<ProductInfoResult> findDropProductListBySellerId(Long sellerId) {
+        List<Product> productList = productRepository.findDropProductListBySellerId(sellerId);
 
         return productList.stream()
                 .map(product -> {
@@ -302,13 +302,6 @@ public class ProductService {
     @Transactional(readOnly = true)
     public Long getSellerIdByProductId(Long productId) {
         return productRepository.findSellerIdById(productId);
-    }
-
-    @Transactional(readOnly = true)
-    public boolean isGeneralProduct(Long productId) {
-        Product product = getProduct(productId);
-
-        return product.getType() == Type.GENERAL;
     }
 
     @Transactional

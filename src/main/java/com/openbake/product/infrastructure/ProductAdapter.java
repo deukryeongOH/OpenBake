@@ -53,8 +53,8 @@ public class ProductAdapter implements ProductPort {
     }
 
     @Override
-    public List<DropProductInfoResult> findProductListBySellerId(Long sellerId) {
-        List<ProductInfoResult> productList = productService.findProductListBySellerId(sellerId);
+    public List<DropProductInfoResult> findDropProductListBySellerId(Long sellerId) {
+        List<ProductInfoResult> productList = productService.findDropProductListBySellerId(sellerId);
 
         return productList.stream()
                 .map(productInfoResult -> DropProductInfoResult.of(productInfoResult.name(),
@@ -93,11 +93,6 @@ public class ProductAdapter implements ProductPort {
     @Override
     public Long getSellerIdByProductId(Long productId) {
         return productService.getSellerIdByProductId(productId);
-    }
-
-    @Override
-    public boolean isGeneralProduct(Long productId) {
-        return productService.isGeneralProduct(productId);
     }
 
     @Override

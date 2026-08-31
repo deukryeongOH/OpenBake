@@ -20,8 +20,8 @@ public interface ProductRepository {
 
     void delete(Product product);
 
-    // 단순 조회 용
-    List<Product> findAllBySellerId(Long sellerId);
+    // 드롭 상품 조회 용
+    List<Product> findDropProductListBySellerId(Long sellerId);
 
     Long findSellerIdById(Long id);
 

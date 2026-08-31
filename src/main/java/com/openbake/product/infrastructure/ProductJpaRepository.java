@@ -60,10 +60,9 @@ public interface ProductJpaRepository extends JpaRepository<Product, Long> {
          + "WHERE p.id IN :productIds")
     List<Product> findAllByIdWithPickupDates(@Param("productIds") Collection<Long> productIds);
 
-    @Query(value = "Select p From Product p WHERE p.sellerId = :sellerId")
-    Page<Product> findAllBySellerId(@Param("sellerId") Long sellerId, Pageable pageable);
 
-    List<Product> findAllBySellerId(Long sellerId);
+    @Query("SELECT p FROM Product p WHERE p.sellerId = :sellerId AND p.type = com.openbake.product.domain.Type.DROP")
+    List<Product> findDropProductListBySellerId(@Param("sellerId") Long sellerId);
 
     // 질의를 반드시 명시한다.
     //

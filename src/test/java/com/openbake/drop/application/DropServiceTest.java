@@ -309,36 +309,68 @@ class DropServiceTest {
         verifyNoInteractions(dropRepository);
     }
 
+    /**
+     * 일반 상품을 걸러내는 책임은 이 서비스에 없다.
+     *
+     * <p>예전에는 판매자의 상품을 전부 가져온 뒤 {@code isGeneralProduct}로 하나씩 물어보며
+     * 건너뛰었는데, 그 질의가 소프트 삭제된 상품에 대해 예외를 던져 드롭 목록 전체가 404가
+     * 됐다. 지금은 {@code findDropProductListBySellerId} 질의가 타입으로 걸러 오므로
+     * 이 서비스는 받은 것을 그대로 매핑하기만 한다.
+     *
+     * <p>타입 필터가 실제로 도는지는 질의를 직접 태우는
+     * {@code ProductDropListQueryTest}가 검증한다 — 목으로는 확인할 수 없는 부분이다.
+     */
     @Test
-    @DisplayName("일반(GENERAL) 타입 상품은 내 드롭 목록에서 제외된다")
-    void getMyDrops_FiltersOutGeneralProducts() {
+    @DisplayName("내 드롭 목록 조회 - 받아온 드롭 상품마다 해당 드롭 정보를 채워 반환한다")
+    void getMyDrops_MapsEveryDropProduct() {
         // given
         Long sellerId = 1L;
-        Long dropProductId = 10L;
-        Long generalProductId = 20L;
+        Long firstProductId = 10L;
+        Long secondProductId = 20L;
 
         given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
 
-        DropProductInfoResult dropProduct = DropProductInfoResult.of(
-                "두쫀쿠", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 8000, 100, 100, sellerId, dropProductId, Category.COOKIES_BAKES);
-        DropProductInfoResult generalProduct = DropProductInfoResult.of(
-                "머핀", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 3000, 50, 50, sellerId, generalProductId, Category.MEAL_BREADS);
+        DropProductInfoResult firstProduct = DropProductInfoResult.of(
+                "두쫀쿠", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-01")), 8000, 100, 100, sellerId, firstProductId, Category.COOKIES_BAKES);
+        DropProductInfoResult secondProduct = DropProductInfoResult.of(
+                "버터떡", "d", "i.jpg", Set.of(LocalDate.parse("2028-08-02")), 3000, 50, 50, sellerId, secondProductId, Category.MEAL_BREADS);
 
-        given(productPort.findProductListBySellerId(sellerId))
-                .willReturn(new ArrayList<>(List.of(dropProduct, generalProduct)));
-        given(productPort.isGeneralProduct(dropProductId)).willReturn(false);
-        given(productPort.isGeneralProduct(generalProductId)).willReturn(true);
+        given(productPort.findDropProductListBySellerId(sellerId))
+                .willReturn(new ArrayList<>(List.of(firstProduct, secondProduct)));
 
-        Drop drop = drop(200L, dropProductId, UPCOMING,
+        Drop firstDrop = drop(200L, firstProductId, UPCOMING,
                 LocalDateTime.parse("2028-08-01T09:00:00"), LocalDateTime.parse("2028-08-01T10:00:00"));
-        given(dropRepository.findByProductId(dropProductId)).willReturn(drop);
+        Drop secondDrop = drop(201L, secondProductId, UPCOMING,
+                LocalDateTime.parse("2028-08-02T09:00:00"), LocalDateTime.parse("2028-08-02T10:00:00"));
+        given(dropRepository.findByProductId(firstProductId)).willReturn(firstDrop);
+        given(dropRepository.findByProductId(secondProductId)).willReturn(secondDrop);
 
         // when
         List<DropInfoResult> result = dropService.getMyDrops();
 
         // then
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).productId()).isEqualTo(dropProductId);
-        verify(dropRepository, never()).findByProductId(generalProductId);
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(DropInfoResult::productId)
+                .containsExactly(firstProductId, secondProductId);
+        // 드롭 자체의 값(dropId·시각)은 상품이 아니라 Drop에서 와야 한다
+        assertThat(result).extracting(DropInfoResult::dropId)
+                .containsExactly(200L, 201L);
+        assertThat(result.get(0).dropStart()).isEqualTo(LocalDateTime.parse("2028-08-01T09:00:00"));
+    }
+
+    @Test
+    @DisplayName("내 드롭 목록 조회 - 등록한 드롭이 없으면 빈 목록을 반환한다")
+    void getMyDrops_NoDropProducts_ReturnsEmptyList() {
+        // given
+        Long sellerId = 1L;
+        given(currentSellerPort.getCurrentSellerId()).willReturn(sellerId);
+        given(productPort.findDropProductListBySellerId(sellerId)).willReturn(new ArrayList<>());
+
+        // when
+        List<DropInfoResult> result = dropService.getMyDrops();
+
+        // then
+        assertThat(result).isEmpty();
+        verify(dropRepository, never()).findByProductId(any());
     }
 }

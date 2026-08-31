@@ -48,8 +48,8 @@ public class ProductRepositoryAdapter implements ProductRepository {
     }
 
     @Override
-    public List<Product> findAllBySellerId(Long sellerId) {
-        return productJpaRepository.findAllBySellerId(sellerId);
+    public List<Product> findDropProductListBySellerId(Long sellerId) {
+        return productJpaRepository.findDropProductListBySellerId(sellerId);
     }
 
 

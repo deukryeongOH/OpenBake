@@ -11,7 +11,7 @@ public interface ProductPort {
 
     DropProductInfoResult getProductInfo(Long productId);
 
-    List<DropProductInfoResult> findProductListBySellerId(Long sellerId);
+    List<DropProductInfoResult> findDropProductListBySellerId(Long sellerId);
 
     DropProductInfoResult updateProduct(Long productId, DropInfoCommand command);
 
@@ -27,7 +27,5 @@ public interface ProductPort {
     int getTotalQuantity(Long productId);
 
     Long getSellerIdByProductId(Long productId);
-
-    boolean isGeneralProduct(Long aLong);
 }
 

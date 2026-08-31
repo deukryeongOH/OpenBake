@@ -178,13 +178,10 @@ public class DropService {
     public List<DropInfoResult> getMyDrops() {
         Long sellerId = currentSellerPort.getCurrentSellerId();
 
-        List<DropProductInfoResult> dropProductInfoResultList = productPort.findProductListBySellerId(sellerId);
+        List<DropProductInfoResult> dropProductInfoResultList = productPort.findDropProductListBySellerId(sellerId);
         List<DropInfoResult> dropInfoResultList = new ArrayList<>();
 
         for (DropProductInfoResult result : dropProductInfoResultList) {
-            if (productPort.isGeneralProduct(result.productId())) {
-                continue;
-            }
             Drop findDrop = dropRepository.findByProductId(result.productId());
             dropInfoResultList.add(DropInfoResult.of(findDrop.getDropStart(), findDrop.getDropEnd(), findDrop.getLimitQuantity(), findDrop.getDropStatus(),
                     result.name(), result.description(), result.imageUrl(), result.pickUpAvailableDates(), result.price(), result.totalQuantity(),

@@ -1,6 +1,9 @@
 # 🥐 OpenBake
 
-![OpenBake 메인 화면 — 한정 드롭 상품 목록](assets/readme/openbake-main.png)
+![OpenBake 메인 화면]
+<img width="1266" height="696" alt="스크린샷 2026-09-02 101749" src="https://github.com/user-attachments/assets/6c6f0418-665f-43fe-99ad-84689bc57ffa" />
+
+Link: https://bakery-site6-fe.vercel.app/
 
 # 🥐 프로젝트 소개
 
